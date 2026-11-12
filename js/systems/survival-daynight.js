@@ -1,32 +1,117 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 主角帳篷睡袋、日出動畫與夜行狂暴魔物模組 (survival-daynight.js - v7.1)
- * 模組化獨立擴充檔：
- *   1. 自動註冊像素圖示：主角藍金帳篷 (hero_tent)、舒適睡袋 (sleeping_bag)、溫習書桌 (study_desk)
- *   2. 於曙光營地 (camp_hub) 中央注入【主角專屬帳篷】及內部地圖 (tent_hero)
- *   3. 睡袋互動與「🌙 黑夜星空 ➔ 🌅 破曉日出 ➔ ☀️ 天亮」全屏漸變過場動畫
- *   4. 參考《Survival RPG》黑夜外出魔物難度提升 (Lv+3、HP+35%、ATK+30%、護盾+1、火把克制與豐厚夜戰掉落)
+ * Project J：艾瑟瑞亞的破曉 — 標籤簡化、按鍵人體工學優化與日夜帳篷模組 (survival-daynight.js - v7.2)
+ * 升級：1.全面簡化上半屏地圖標籤（帳篷、設施、NPC、魔物、頂部HUD），消除文字重疊
+ *       2.修復下半屏控制區排版，十字鍵靠左、A鍵與2x2求生鍵靠右且預留安全邊距，絕不裁切
+ *       3.包含主角專屬帳篷、睡袋「黑夜轉天亮」日出動畫與夜行狂暴魔物機制
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入專屬 CSS 樣式与睡眠日出動畫 DOM =================
+  // ================= 1. 注入介面優化 CSS（含下半框按鍵修正與睡眠日出動畫） =================
   function injectSurvivalStylesAndDOM() {
     if (!document.getElementById("survival-v71-styles")) {
       const style = document.createElement("style");
       style.id = "survival-v71-styles";
       style.textContent = `
-        /* 夜行狂暴魔物頭頂標籤 */
+        /* 頂部 HUD 緊湊單行化 */
+        #hud-overlay {
+          top: 5px !important;
+          left: 56px !important;
+          right: 5px !important;
+          display: flex !important;
+          flex-wrap: nowrap !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          gap: 3px !important;
+        }
+        #hud-overlay .na-badge {
+          padding: 2px 5px !important;
+          font-size: 10.5px !important;
+          line-height: 1.2 !important;
+        }
+
+        /* 上半屏地圖標籤精簡防重疊 */
+        .dom-label {
+          font-size: 10px !important;
+          padding: 1px 5px !important;
+          border-radius: 4px !important;
+          letter-spacing: 0px !important;
+        }
         .dom-label.night-fiend-lbl {
           background: linear-gradient(90deg, #3c096c 0%, #9d0208 100%);
           color: #ffd166;
           border: 1.5px solid #ff758f;
-          box-shadow: 0 0 8px rgba(224, 60, 75, 0.85);
+          box-shadow: 0 0 6px rgba(224, 60, 75, 0.8);
           animation: bobQuest 0.8s infinite ease-in-out;
         }
         .dom-label.bed-lbl {
           background: #1d3557;
           color: #fff3b0;
           border-color: #8ce0ff;
+        }
+
+        /* 下半屏控制區：強制左右分佈，解決右邊按鈕被裁切問題 */
+        #panel-explore .controls-pads {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: flex !important;
+          flex-direction: row !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          padding: 4px 12px 6px !important;
+          margin: auto 0 !important;
+          gap: 8px !important;
+          box-sizing: border-box !important;
+        }
+
+        /* 左手拇指區：十字方向鍵靠左對齊 */
+        #panel-explore .dpad {
+          display: grid !important;
+          grid-template-columns: repeat(3, 52px) !important;
+          grid-template-rows: repeat(3, 46px) !important;
+          gap: 4px !important;
+          margin: 0 !important;
+          flex-shrink: 0 !important;
+        }
+        #panel-explore .dpad-btn {
+          width: 52px !important;
+          height: 46px !important;
+          font-size: 20px !important;
+        }
+
+        /* 右手拇指區：A鍵 + 2x2求生快捷鍵完整靠右且不超出邊界 */
+        #panel-explore .action-cluster {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: center !important;
+          gap: 6px !important;
+          margin: 0 !important;
+          width: 150px !important;
+          max-width: 150px !important;
+          flex-shrink: 0 !important;
+        }
+
+        #panel-explore .btn-action-a {
+          width: 76px !important;
+          height: 76px !important;
+          margin: 0 auto !important;
+        }
+        #panel-explore .action-main-txt { font-size: 16px !important; }
+        #panel-explore .action-sub-txt  { font-size: 10.5px !important; }
+
+        #panel-explore .survival-mini-grid {
+          display: grid !important;
+          grid-template-columns: 1fr 1fr !important;
+          gap: 4px !important;
+          width: 100% !important;
+        }
+        #panel-explore .survival-mini-grid .na-btn {
+          padding: 5px 2px !important;
+          font-size: 11.5px !important;
+          text-align: center !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
         }
 
         /* 睡眠「黑夜轉天亮」全屏漸變過場層 */
@@ -127,7 +212,45 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 2. 註冊主角帳篷、睡袋與書桌像素圖示 =================
+  // ================= 2. 輔助函式：將冗長的地圖與傳送門名稱精簡為短標籤 =================
+  function simplifyPortalName(rawName) {
+    if (!rawName) return "";
+    if (rawName.indexOf("公會帳篷") !== -1) return "公會帳篷";
+    if (rawName.indexOf("主角帳篷") !== -1) return "主角帳篷";
+    if (rawName.indexOf("鐵匠帳篷") !== -1) return "鐵匠帳篷";
+    if (rawName.indexOf("離開帳篷") !== -1) return "離開帳篷 ▾";
+
+    return rawName
+      .replace(/進入【|前往【|返回【|挑戰【|潛入【|登上【/g, "")
+      .replace(/】/g, "")
+      .replace(/[0-9]+(-B)?\.\s*/g, "")
+      .replace("曙光露營基地", "曙光營地")
+      .replace("翠風迷霧森林", "翠風森林")
+      .replace("微光蘑菇洞窟", "蘑菇洞窟")
+      .replace("流沙繩索峽谷", "流沙峽谷")
+      .replace("翡翠沉船海岸", "翡翠海岸")
+      .replace("霜語極寒雪原", "霜語雪原")
+      .replace("赤紅熔岩火山", "熔岩火山")
+      .replace("天界浮空聖殿", "天界聖殿")
+      .replace("無盡試煉之塔", "試煉之塔");
+  }
+
+  function simplifyZoneTitle(rawZoneName) {
+    if (!rawZoneName) return "曙光營地";
+    return rawZoneName
+      .replace(/^[0-9]+(-B)?\.\s*/g, "")
+      .replace("曙光露營基地", "曙光營地")
+      .replace("翠風迷霧森林", "翠風森林")
+      .replace("微光蘑菇洞窟", "蘑菇洞窟")
+      .replace("流沙繩索峽谷", "流沙峽谷")
+      .replace("翡翠沉船海岸", "翡翠海岸")
+      .replace("霜語極寒雪原", "霜語雪原")
+      .replace("赤紅熔岩火山", "熔岩火山")
+      .replace("天界浮空聖殿", "天界聖殿")
+      .replace("無盡試煉之塔", "試煉塔");
+  }
+
+  // ================= 3. 註冊主角帳篷、睡袋與書桌像素圖示 =================
   function registerCustomTentSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -150,7 +273,6 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    // 藍金主角專屬帳篷 (16x16)
     const heroTentUrl = buildGridDataUrl([
       ".......YY.......",
       "......YYYY......",
@@ -172,7 +294,6 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", B: "#1d5eb8", Y: "#f5b700", W: "#8ce0ff", O: "#2b2118"
     });
 
-    // 舒適紅金睡袋與枕頭 (16x16)
     const sleepingBagUrl = buildGridDataUrl([
       "..KKKKKKKKKKKK..",
       ".KWWWWWWWWWWWWK.",
@@ -194,7 +315,6 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", W: "#8f563b", P: "#ffffff", Y: "#f5b700", R: "#e03c4b", D: "#5c3824"
     });
 
-    // 冒險者溫習書桌與油燈 (16x16)
     const studyDeskUrl = buildGridDataUrl([
       "...........YY...",
       "..........YYYY..",
@@ -229,12 +349,12 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 注入【主角專屬帳篷】至營地與地圖庫 =================
+  // ================= 4. 注入【主角專屬帳篷】至營地與地圖庫 =================
   function buildHeroTentInterior() {
     return {
       id: "tent_hero",
       _refreshToken: Date.now(),
-      name: "主角專屬帳篷",
+      name: "主角帳篷",
       recLv: 1,
       bgm: "forest",
       theme: "canyon",
@@ -246,8 +366,8 @@ window.Aetheria = window.Aetheria || {};
       dirtBlobs: [{ x: 30, y: 30, w: 300, h: 200 }],
       trees: [],
       decos: [
-        { id: "bed_hero_bag",    x: 166, y: 80, sprite: "sleeping_bag", w: 30, h: 30, solid: true, isHeroBed: true,  name: "舒適睡袋 [按A睡覺]" },
-        { id: "desk_hero_study", x: 92,  y: 82, sprite: "study_desk",   w: 28, h: 28, solid: true, isHeroDesk: true, name: "冒險書桌 [按A溫習]" },
+        { id: "bed_hero_bag",    x: 166, y: 80, sprite: "sleeping_bag", w: 30, h: 30, solid: true, isHeroBed: true,  name: "睡袋" },
+        { id: "desk_hero_study", x: 92,  y: 82, sprite: "study_desk",   w: 28, h: 28, solid: true, isHeroDesk: true, name: "書桌" },
         { x: 248, y: 78, sprite: "campfire",     w: 22, h: 22, solid: true },
         { x: 165, y: 140, sprite: "deco_bench",  w: 30, h: 16, solid: false }
       ],
@@ -255,7 +375,7 @@ window.Aetheria = window.Aetheria || {};
       npcs: [],
       monsters: [],
       portals: [
-        { id: "p_exit_hero_tent", name: "離開帳篷返回營地 ▾", x: 180, y: 228, targetZone: "camp_hub", targetX: 312, targetY: 182, icon: "stairs" }
+        { id: "p_exit_hero_tent", name: "離開帳篷 ▾", x: 180, y: 228, targetZone: "camp_hub", targetX: 312, targetY: 182, icon: "stairs" }
       ]
     };
   }
@@ -264,7 +384,6 @@ window.Aetheria = window.Aetheria || {};
     if (!campMap || campMap._heroTentInjected) return campMap;
     campMap._heroTentInjected = true;
 
-    // 移開原本在 (295, 115) 擋住主角帳篷門口的尖銳燧石
     (campMap.nodes || []).forEach(function(n) {
       if (n.id === "camp_fl1") {
         n.x = 248;
@@ -272,7 +391,6 @@ window.Aetheria = window.Aetheria || {};
       }
     });
 
-    // 加入藍金主角帳篷外觀
     campMap.decos = campMap.decos || [];
     campMap.decos.push({
       id: "deco_hero_tent_ext",
@@ -284,11 +402,10 @@ window.Aetheria = window.Aetheria || {};
       solid: true
     });
 
-    // 加入進入主角帳篷的傳送門
     campMap.portals = campMap.portals || [];
     campMap.portals.push({
       id: "p_enter_hero_tent",
-      name: "進入【主角帳篷・睡袋】",
+      name: "主角帳篷",
       x: 312,
       y: 138,
       targetZone: "tent_hero",
@@ -327,12 +444,11 @@ window.Aetheria = window.Aetheria || {};
       if (camp) injectHeroTentIntoCamp(camp);
     };
 
-    // 立即為當前 camp_hub 注入主角帳篷
     const initialCamp = origGetMap("camp_hub");
     if (initialCamp) injectHeroTentIntoCamp(initialCamp);
   }
 
-  // ================= 4. 睡袋互動、日出漸變動畫與書桌溫習功能 =================
+  // ================= 5. 睡袋互動、日出漸變動畫與書桌溫習功能 =================
   const SurvivalDayNight = {
     isSleepingAnim: false,
 
@@ -353,11 +469,10 @@ window.Aetheria = window.Aetheria || {};
       statusCard.innerHTML =
         '<b>🛏️ 溫暖的個人行軍睡袋</b>' +
         '<div style="font-size:12px; margin-top:4px; color:#5c3824;">' +
-          '在自己的睡袋中休息，不僅能將<b>生命值與飽食度 100% 恢復</b>，睡醒後更可獲得<b>【晨間活力】</b>（接下來 3 場戰鬥攻擊力 +15%），並刷新全大陸資源！' +
+          '在自己的睡袋中休息，不僅能將<b>生命值與飽食度 100% 恢復</b>，睡醒後更可獲得<b>【晨間活力】</b>（接下來 3 場戰鬥開局削弱敵人 12% HP），並刷新全大陸資源！' +
         '</div>';
       body.appendChild(statusCard);
 
-      // 選項 1：睡到天亮（播放黑夜轉天亮日出動畫）
       const morningCard = document.createElement("div");
       morningCard.className = "sys-card";
       morningCard.style.borderColor = "#5ac54f";
@@ -371,7 +486,6 @@ window.Aetheria = window.Aetheria || {};
         '</div>';
       body.appendChild(morningCard);
 
-      // 選項 2：休息至黑夜（方便想挑戰《Survival RPG》高難度夜行狂暴魔物的玩家）
       if (!phase.isNight) {
         const nightCard = document.createElement("div");
         nightCard.className = "sys-card";
@@ -395,7 +509,6 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
 
-      // 先切回探索面板，讓玩家清楚看見上半屏的日出過場與地圖光影變化
       window.Aetheria.UI.closePanelToExplore();
 
       const overlay = document.getElementById("sleep-transition-overlay");
@@ -426,7 +539,6 @@ window.Aetheria = window.Aetheria || {};
 
       const self = this;
 
-      // 階段 1 (1.3秒後)：月亮落下，天空轉為破曉晨曦金紅色，太陽升起
       setTimeout(function() {
         overlay.className = "phase-dawn";
         if (celestial) {
@@ -435,16 +547,14 @@ window.Aetheria = window.Aetheria || {};
         }
         if (titleEl) titleEl.innerText = "🌅 破曉時分，晨曦照亮艾瑟瑞亞大陸……";
 
-        // 同步更新底層遊戲狀態至清晨白晝
         window.Aetheria.State.sleepUntilMorning();
-        s.wellRestedBattles = 3; // 睡袋專屬：3場戰鬥晨間活力加成
+        s.wellRestedBattles = 3;
         window.Aetheria.State.save();
         window.Aetheria.Audio.sfxLevelUp();
         window.Aetheria.UI.updateAllHud();
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.renderWorld();
       }, 1300);
 
-      // 階段 2 (2.5秒後)：太陽高掛，天空轉為蔚藍白晝
       setTimeout(function() {
         overlay.className = "phase-morning";
         if (celestial) {
@@ -453,10 +563,9 @@ window.Aetheria = window.Aetheria || {};
         }
         if (zzzTag) zzzTag.style.display = "none";
         if (titleEl) titleEl.innerText = "☀️ 第 " + s.dayCount + " 天清晨天亮了！";
-        if (subEl) subEl.innerText = "生命值與飽食度 100% 恢復！獲得【晨間活力（3戰傷害+15%）】！";
+        if (subEl) subEl.innerText = "生命值與飽食度 100% 恢復！獲得【晨間活力】！";
       }, 2500);
 
-      // 階段 3 (3.7秒後)：平滑淡出過場，回到明亮的遊戲畫面
       setTimeout(function() {
         overlay.style.opacity = "0";
         setTimeout(function() {
@@ -503,7 +612,7 @@ window.Aetheria = window.Aetheria || {};
           celestial.innerText = "🌙";
           celestial.style.top = "12px";
         }
-        s.worldClock = 285; // 進入黑夜時段
+        s.worldClock = 285;
         window.Aetheria.State.restoreHunger(100, s.maxHp);
         window.Aetheria.Data.Maps.refreshAllResources();
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
@@ -512,7 +621,7 @@ window.Aetheria = window.Aetheria || {};
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.renderWorld();
 
         if (titleEl) titleEl.innerText = "🌙 黑夜降臨！野外魔物已進入【夜行狂暴】狀態！";
-        if (subEl) subEl.innerText = "魔物等級+3、攻血強化，但擊敗可獲 +50% 經驗金幣與高機率破防核心！記得攜帶【松脂火把】！";
+        if (subEl) subEl.innerText = "魔物等級+3、攻血強化，擊敗獲 +50% 經驗金幣！記得攜帶【松脂火把】！";
       }, 1400);
 
       setTimeout(function() {
@@ -540,7 +649,7 @@ window.Aetheria = window.Aetheria || {};
       card.innerHTML =
         '<b>📖 睡前知識溫習與求生筆記</b>' +
         '<div style="font-size:12px; margin-top:4px; color:#5c3824;">' +
-          '在自己的帳篷書桌前溫習題目完全不會受到傷害！每溫習答對 1 題，即可恢復 <b>+25% 飽食度</b>並獲得 <b>+25 G 獎學金</b>。' +
+          '在自己的帳篷書桌前溫習題目完全不會受到傷害！每溫習答對 1 題，即可恢復 <b>+40% 飽食度</b>並獲贈微光菇乾。' +
         '</div>' +
         '<div style="margin-top:8px;">' +
           '<button class="na-btn highlight" style="width:100%; padding:8px; font-size:14px;" onclick="Aetheria.Survival.startDeskStudyQuiz()">開始書桌溫習檢定</button>' +
@@ -569,7 +678,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Survival = SurvivalDayNight;
 
-  // ================= 5. 掛載睡袋互動、夜行狂暴魔物難度與火把克制邏輯 =================
+  // ================= 6. 掛載上半屏標籤簡化器、睡袋互動與夜戰邏輯 =================
   function hookSystemsForSurvivalV71() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
@@ -577,19 +686,16 @@ window.Aetheria = window.Aetheria || {};
     const UI  = window.Aetheria.UI;
     const St  = window.Aetheria.State;
 
-    // (A) 黑夜經驗與金幣獎勵提升至 +50%
     if (St && St.getTimePhase) {
       const origGetPhase = St.getTimePhase.bind(St);
       St.getTimePhase = function() {
         const p = origGetPhase();
-        if (p && p.isNight) {
-          p.expMult = 1.50;
-        }
+        if (p && p.isNight) p.expMult = 1.50;
         return p;
       };
     }
 
-    // (B) 擴充渲染器：渲染帳篷睡袋/書桌標籤，以及黑夜【🌙夜行狂暴】魔物標籤
+    // 精簡上半屏所有標籤文字，徹底消除重疊
     if (Ren && Ren.renderWorld) {
       const origRenderWorld = Ren.renderWorld.bind(Ren);
       Ren.renderWorld = function() {
@@ -597,45 +703,128 @@ window.Aetheria = window.Aetheria || {};
         try {
           const s = window.Aetheria.State.data;
           const isNight = window.Aetheria.State.getTimePhase().isNight;
+          const dnEl = document.getElementById("daynight-overlay");
+          if (dnEl && s && s.currentZone === "tent_hero") {
+            dnEl.className = "dn-day";
+          }
 
-          // 標示主角帳篷內的睡袋與書桌
-          Object.keys(this.domPool.decos || {}).forEach(function(k) {
-            const item = Ren.domPool.decos[k];
-            if (!item || !item.data) return;
-            if (item.data.isHeroBed) {
-              item.lbl.style.display = "block";
-              item.lbl.className = "dom-label bed-lbl";
-              item.lbl.innerText = "舒適睡袋 [按A睡覺]";
-            } else if (item.data.isHeroDesk) {
-              item.lbl.style.display = "block";
-              item.lbl.className = "dom-label portal-lbl";
-              item.lbl.innerText = "冒險書桌 [按A溫習]";
-            } else if (item.data.isCookPot) {
-              item.lbl.innerText = "料理鍋 [按A煲湯/烤糧]";
+          // 1. 簡化所有傳送門與帳篷入口標籤（如「! 鐵匠帳篷」、「主角帳篷」、「公會帳篷」）
+          Object.keys(this.domPool.portals || {}).forEach(function(pId) {
+            const item = Ren.domPool.portals[pId];
+            if (!item || !item.lbl || !item.data) return;
+            const p = item.data;
+            const shortPName = simplifyPortalName(p.name);
+            const bottomCls = p.labelBottom ? " lbl-bottom" : "";
+
+            if (p.linkedNpcId && window.Aetheria.Data.getNpcMarkerState) {
+              const marker = window.Aetheria.Data.getNpcMarkerState(s, p.linkedNpcId);
+              if (marker === "ready") {
+                item.lbl.className = "dom-label quest-ready-lbl" + bottomCls;
+                item.lbl.innerText = "✓ " + shortPName;
+              } else if (marker === "avail") {
+                item.lbl.className = "dom-label quest-avail-lbl" + bottomCls;
+                item.lbl.innerText = "! " + shortPName;
+              } else if (marker === "active") {
+                item.lbl.className = "dom-label quest-active-lbl" + bottomCls;
+                item.lbl.innerText = "⏳ " + shortPName;
+              } else {
+                item.lbl.className = "dom-label portal-lbl" + bottomCls;
+                item.lbl.innerText = shortPName;
+              }
+            } else {
+              item.lbl.className = "dom-label portal-lbl" + bottomCls;
+              item.lbl.innerText = shortPName;
             }
           });
 
-          // 黑夜時段：野外魔物顯示【🌙夜行狂暴 Lv.+3】紅紫警示標籤
-          if (isNight) {
-            Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
-              const item = Ren.domPool.monsters[mId];
-              if (!item || !item.data || item.data.alive === false) return;
-              const m = item.data;
-              const nightLv = m.lv + 3;
-              if (m.aggro) {
-                item.lbl.className = "dom-label aggro-lbl";
-                item.lbl.innerText = "[!夜行狂暴] " + m.name + " Lv." + nightLv;
-              } else if (!m.reqSeals || m.reqSeals.length === 0) {
-                item.lbl.className = "dom-label night-fiend-lbl";
-                item.lbl.innerText = "🌙[夜行狂暴] " + m.name + " Lv." + nightLv;
+          // 2. 簡化所有設施與工程標籤（如「料理鍋」、「釣魚點」、「睡袋」、「書桌」）
+          Object.keys(this.domPool.decos || {}).forEach(function(k) {
+            const item = Ren.domPool.decos[k];
+            if (!item || !item.lbl || !item.data) return;
+            const d = item.data;
+
+            if (d.isHeroBed) {
+              item.lbl.style.display = "block";
+              item.lbl.className = "dom-label bed-lbl";
+              item.lbl.innerText = "睡袋";
+            } else if (d.isHeroDesk) {
+              item.lbl.style.display = "block";
+              item.lbl.className = "dom-label portal-lbl";
+              item.lbl.innerText = "書桌";
+            } else if (d.isCookPot) {
+              item.lbl.innerText = "料理鍋";
+            } else if (d.isFishingSpot) {
+              item.lbl.innerText = "釣魚點";
+            } else if (d.isBrazier && item.lbl.style.display !== "none") {
+              item.lbl.innerText = "火盆";
+            } else if (d.isSealPillar) {
+              const unsealed = s.unlockedSeals && s.unlockedSeals[d.id];
+              item.lbl.innerText = unsealed ? "封印柱✓" : "封印柱";
+            } else if (d.isProjectSite) {
+              const built = Boolean(s.projectsBuilt && s.projectsBuilt[d.projectId]);
+              const shortProj = (d.name || "工程").replace("巴爾的受損", "").replace("極地防風", "");
+              if (!built) {
+                item.lbl.innerText = "🔨" + shortProj;
+              } else if (d.isClimbLadder) {
+                item.lbl.innerText = "木梯";
+              } else if (d.projectId === "proj_z4_shelter") {
+                item.lbl.innerText = "防風屋";
+              } else if (d.projectId === "proj_camp_forge") {
+                item.lbl.innerText = "鍛造爐";
               }
-            });
-          }
+            }
+          });
+
+          // 3. 簡化所有 NPC 頭頂標籤（只顯示名字與簡潔狀態符號）
+          Object.keys(this.domPool.npcs || {}).forEach(function(npcId) {
+            const item = Ren.domPool.npcs[npcId];
+            if (!item || !item.lbl || !item.data) return;
+            const npc = item.data;
+            const shortName = npc.name.split("・")[1] || npc.name;
+            const marker = window.Aetheria.Data.getNpcMarkerState ? window.Aetheria.Data.getNpcMarkerState(s, npc.id) : null;
+
+            if (marker === "ready") {
+              item.lbl.className = "dom-label quest-ready-lbl";
+              item.lbl.innerText = "✓ " + shortName;
+            } else if (marker === "avail") {
+              item.lbl.className = "dom-label quest-avail-lbl";
+              item.lbl.innerText = "! " + shortName;
+            } else if (marker === "active") {
+              item.lbl.className = "dom-label quest-active-lbl";
+              item.lbl.innerText = "⏳ " + shortName;
+            } else {
+              item.lbl.className = "dom-label";
+              item.lbl.innerText = shortName;
+            }
+          });
+
+          // 4. 簡化魔物與夜行狂暴標籤
+          Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
+            const item = Ren.domPool.monsters[mId];
+            if (!item || !item.lbl || !item.data || item.data.alive === false) return;
+            const m = item.data;
+            const effLv = isNight ? (m.lv + 3) : m.lv;
+            const shortMonName = (m.name || "").replace(/^翠風|^河畔|^岩窟|^流沙|^深海|^霜語|^紅蓮/, "");
+
+            if (m.aggro) {
+              item.lbl.className = "dom-label aggro-lbl";
+              item.lbl.innerText = "!" + shortMonName + " Lv." + effLv;
+            } else if (m.reqSeals && m.reqSeals.length > 0) {
+              const allUnsealed = m.reqSeals.every(function(sid) { return Boolean(s.unlockedSeals && s.unlockedSeals[sid]); });
+              item.lbl.className = "dom-label " + (allUnsealed ? "portal-lbl" : "lock-lbl");
+              item.lbl.innerText = shortMonName + (allUnsealed ? "" : "[封印]");
+            } else if (isNight) {
+              item.lbl.className = "dom-label night-fiend-lbl";
+              item.lbl.innerText = "🌙" + shortMonName + " Lv." + effLv;
+            } else {
+              item.lbl.className = "dom-label";
+              item.lbl.innerText = (m.isShiny ? "★" : "") + shortMonName + " Lv." + effLv;
+            }
+          });
         } catch (e) {}
       };
     }
 
-    // (C) 擴充探索互動：對準睡袋或書桌按 A 鍵，以及火把驅散夜魔仇恨
     if (Exp) {
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
@@ -677,7 +866,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // (D) 擴充戰鬥系統：黑夜魔物強化 (Lv+3、HP+35%、ATK+30%、護盾+1) 與松脂火把破除暗夜護盾
     if (Bat && Bat.startBattle) {
       const origStartBattle = Bat.startBattle.bind(Bat);
       Bat.startBattle = function(mapMonsterNode, customMode, customQuestionId) {
@@ -697,7 +885,6 @@ window.Aetheria = window.Aetheria || {};
             e.name = "🌙夜行・" + e.name;
           }
 
-          // 若玩家點燃了松脂火把，火光直接燒毀夜魔額外的暗夜護盾！否則夜魔護盾 +1
           if (s.torchTicks && s.torchTicks > 0) {
             setTimeout(function() {
               window.Aetheria.UI.spawnFloatingText("🔥火把克制夜魔!", "#ffd166", true);
@@ -714,20 +901,18 @@ window.Aetheria = window.Aetheria || {};
           this.updateBattleHUD();
         }
 
-        // 睡袋【晨間活力】加成提示
         if (s.wellRestedBattles && s.wellRestedBattles > 0 && this.mode === "combat") {
           s.wellRestedBattles--;
-          e.hp = Math.max(1, Math.round(e.hp * 0.88)); // 晨間活力開局先削弱敵人 12% HP
+          e.hp = Math.max(1, Math.round(e.hp * 0.88));
           this.updateBattleHUD();
         }
       };
     }
 
-    // (E) 將營地料理鍋的「睡眠」按鈕改為引導或直接進入主角帳篷睡袋動畫
+    // 精簡頂部 HUD 徽章文字（使頂部 5 個徽章穩定排成單行）
     if (UI) {
       UI.sleepAtCamp = function() {
         const s = window.Aetheria.State.data;
-        // 自動將主角移入自己的帳篷睡袋旁並播放日出睡眠動畫
         s.currentZone = "tent_hero";
         s.heroX = 166;
         s.heroY = 118;
@@ -737,13 +922,29 @@ window.Aetheria = window.Aetheria || {};
         SurvivalDayNight.playSleepToMorning();
       };
 
+      const origUpdateHud = UI.updateAllHud.bind(UI);
+      UI.updateAllHud = function() {
+        origUpdateHud();
+        const s = window.Aetheria.State.data;
+        const S = window.Aetheria.Data.Sprites;
+        const lvEl = document.getElementById("hud-lv");
+        if (lvEl && S) {
+          lvEl.innerHTML = S.iconHtml("icon_sword") + "Lv." + s.lv;
+        }
+      };
+
       const origUpdateZone = UI.updateHudZoneDynamic.bind(UI);
       UI.updateHudZoneDynamic = function(mapObj, s) {
         origUpdateZone(mapObj, s);
         const zoneBadge = document.getElementById("hud-zone");
-        if (zoneBadge && mapObj && mapObj.id === "tent_hero") {
+        if (!zoneBadge || !mapObj) return;
+
+        const shortZ = simplifyZoneTitle(mapObj.name);
+        if (mapObj.id === "camp_hub" || mapObj.id === "tent_guild" || mapObj.id === "tent_forge" || mapObj.id === "tent_hero") {
           zoneBadge.className = "na-badge danger-safe";
-          zoneBadge.innerText = "0. 主角專屬帳篷";
+          zoneBadge.innerText = shortZ;
+        } else {
+          zoneBadge.innerText = shortZ + " Lv." + (mapObj.recLv || 1);
         }
       };
     }
@@ -756,7 +957,6 @@ window.Aetheria = window.Aetheria || {};
       hookWorldMaps();
       hookSystemsForSurvivalV71();
 
-      // 1. 確保主角帳篷 (tent_hero) 視為安全室內：不耗飽食度、不受黑夜遮罩影響
       const St = window.Aetheria.State;
       if (St && St.consumeHunger) {
         const origConsume = St.consumeHunger.bind(St);
@@ -766,31 +966,23 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      const Ren = window.Aetheria.Renderer;
-      if (Ren) {
-        const origRender = Ren.renderWorld.bind(Ren);
-        Ren.renderWorld = function() {
-          origRender();
-          const s = window.Aetheria.State.data;
-          const dnEl = document.getElementById("daynight-overlay");
-          if (dnEl && s && s.currentZone === "tent_hero") {
-            dnEl.className = "dn-day";
-          }
-        };
-        // 2. 強制重置場景快取並立即重繪，確保一進營地即刻顯示【主角專屬帳篷】
-        Ren.builtZoneKey = null;
-        Ren.renderWorld();
+      if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) {
+        window.Aetheria.UI.updateAllHud();
+      }
+      if (window.Aetheria.Renderer) {
+        window.Aetheria.Renderer.builtZoneKey = null;
+        window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Survival v7.1 module init error:", err);
+      console.error("Survival v7.2 module init error:", err);
     }
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
-    setTimeout(initSurvivalExpansion, 25);
+    setTimeout(initSurvivalExpansion, 40);
   } else {
     window.addEventListener("load", function() {
-      setTimeout(initSurvivalExpansion, 25);
+      setTimeout(initSurvivalExpansion, 40);
     });
   }
 })();
