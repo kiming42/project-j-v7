@@ -1,5 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 圖標化分步任務指引 (①收集素材 ➔ ②工坊打造 ➔ ③交付) 總管 (progression-town.js - v6.5)
+ * Project J：艾瑟瑞亞的破曉 — 日夜睡眠、口糧烘烤與圖標化分步任務總管 (progression-town.js - v7.0)
+ * 新增：1.頂部 HUD 即時更新飽食度 (#hud-hunger)、天數與四時段日夜時鐘 (#hud-time)
+ *       2.營地料理鍋新增【睡眠至天亮 (回滿HP與飽食度)】及【隨身口糧快速烘烤】
+ *       3.背包介面支援直接食用【微光菇乾 / 鮮魚乾】及點燃【松脂火把】
+ *       4.保留 v6.7 全 10 位 NPC 動態四階段對話狀態機與分步任務流程
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -52,7 +56,6 @@ window.Aetheria = window.Aetheria || {};
     }).join(" ");
   }
 
-  // 問題 9 核心升級：自動判斷當前主線屬於「①收集素材」定係「②去工坊打造/去工程點建造」並輸出清晰提示！
   function buildNextStepHintHtml(s, mq, forDarkBg) {
     if (!mq || !mq.getProgressList) return "";
     const list = mq.getProgressList(s);
@@ -62,7 +65,6 @@ window.Aetheria = window.Aetheria || {};
     const hlCol = forDarkBg ? "#5ac54f" : "#1d5eb8";
     const stepCol = forDarkBg ? "#ffd166" : "#b5381a";
 
-    // 若材料已齊全，但任務尚未完成 -> 代表需要執行「步驟 ②：去工坊打造裝備 / 去工程牌投入建造」！
     if (allMatsReady && !questDone) {
       if (mq.id === "mq_03" || mq.id === "mq_04" || mq.id === "mq_10" || mq.id === "mq_13") {
         return '<span style="color:' + hlCol + ';font-weight:900;">➔ 【步驟②】材料已齊！請回營地打開上方【工坊】打造裝備！</span>';
@@ -72,7 +74,6 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // 檢查是否需要先去工坊合成「加工厚木板 / 麻繩 / 鐵釘 / 防水膠 / 風帆 / 耐火磚」
     const craftMatKeys = ["plank", "rope", "nails", "pitch", "heavySail", "firebrick"];
     const missingCraftMat = list.find(function(i) {
       return craftMatKeys.indexOf(i.key) !== -1 && i.cur < i.max;
@@ -162,7 +163,6 @@ window.Aetheria = window.Aetheria || {};
         const bagBtn   = document.getElementById("nav-btn-bag");
         const jobBtn   = document.getElementById("nav-btn-job");
         const setBtn   = document.getElementById("nav-btn-set");
-        const bombBtn  = document.getElementById("btn-use-bomb");
 
         if (mapBtn)   mapBtn.innerHTML   = S.iconHtml("icon_map") + "傳送";
         if (guildBtn) guildBtn.innerHTML = S.iconHtml("icon_scroll") + "日誌";
@@ -170,7 +170,6 @@ window.Aetheria = window.Aetheria || {};
         if (bagBtn)   bagBtn.innerHTML   = S.iconHtml("icon_bag") + "背包";
         if (jobBtn)   jobBtn.innerHTML   = S.iconHtml("icon_sword") + "職/寵";
         if (setBtn)   setBtn.innerHTML   = S.iconHtml("icon_gear") + "設定";
-        if (bombBtn)  bombBtn.innerHTML  = S.iconHtml("icon_bomb") + "炸彈";
       } catch (e) {}
     },
 
@@ -193,7 +192,7 @@ window.Aetheria = window.Aetheria || {};
           const sum = window.Aetheria.State.getSaveSummary();
           const mapObj = window.Aetheria.Data.Maps.getMap(sum.zone);
           if (btnCont) btnCont.classList.remove("disabled");
-          if (infoEl) infoEl.innerText = "存檔：Lv." + sum.lv + "｜公會 " + sum.guildRank + " 級｜位於【" + mapObj.name + "】";
+          if (infoEl) infoEl.innerText = "存檔：第" + (sum.dayCount || 1) + "天｜Lv." + sum.lv + "｜位於【" + mapObj.name + "】";
         } else {
           if (btnCont) btnCont.classList.add("disabled");
           if (infoEl) infoEl.innerText = "尚無存檔紀錄，請選擇「新遊戲」";
@@ -277,7 +276,7 @@ window.Aetheria = window.Aetheria || {};
       setTimeout(function() { el.remove(); }, 880);
     },
 
-    // ================= 更新下半屏分步任務進度框 (①收集素材 ➔ ②工坊打造 ➔ ③交付) =================
+    // ================= v7.0 更新頂部與底部 HUD（含飽食度、日夜時鐘、求生快捷鍵數量） =================
     updateAllHud: function() {
       window.Aetheria.State.recalcMaxHp();
       const s = window.Aetheria.State.data;
@@ -289,7 +288,40 @@ window.Aetheria = window.Aetheria || {};
 
       const lvEl = document.getElementById("hud-lv");
       if (lvEl) {
-        lvEl.innerHTML = S.iconHtml("icon_sword") + "Lv." + s.lv + " " + jobName + " (DEF " + window.Aetheria.State.getTotalDef() + ")";
+        lvEl.innerHTML = S.iconHtml("icon_sword") + "Lv." + s.lv + " " + jobName.slice(0, 4);
+      }
+
+      // v7.0：更新飽食度徽章
+      const hungerEl = document.getElementById("hud-hunger");
+      if (hungerEl) {
+        const curH = (s.hunger !== undefined) ? s.hunger : 100;
+        hungerEl.className = "na-badge badge-hunger" + (curH <= 20 ? " hungry-warn" : "");
+        hungerEl.innerText = "飽食 " + curH + "%";
+      }
+
+      // v7.0：更新日夜時段徽章
+      const timeEl = document.getElementById("hud-time");
+      if (timeEl && window.Aetheria.State.getTimePhase) {
+        const phase = window.Aetheria.State.getTimePhase();
+        const torchTag = (s.torchTicks && s.torchTicks > 0) ? "🔥" : "";
+        timeEl.innerText = "D" + (s.dayCount || 1) + " " + phase.label + torchTag;
+      }
+
+      // v7.0：更新右下角 2x2 求生快捷鍵數量
+      const rationBtn = document.getElementById("btn-use-ration");
+      if (rationBtn) {
+        const rCount = ((s.inventory && s.inventory.rationHerb) || 0) + ((s.inventory && s.inventory.rationFish) || 0);
+        rationBtn.innerText = rCount > 0 ? ("口糧(" + rCount + ")") : "口糧(充飢)";
+      }
+      const torchBtn = document.getElementById("btn-use-torch");
+      if (torchBtn) {
+        const tCount = (s.inventory && s.inventory.torchItem) || 0;
+        torchBtn.innerText = (s.torchTicks && s.torchTicks > 0) ? ("🔥" + s.torchTicks + "步") : ("火把(" + tCount + ")");
+      }
+      const bombBtn = document.getElementById("btn-use-bomb");
+      if (bombBtn) {
+        const bCount = (s.inventory && s.inventory.bombItem) || 0;
+        bombBtn.innerText = "炸彈(" + bCount + ")";
       }
 
       const mealEl = document.getElementById("hud-meal");
@@ -297,7 +329,7 @@ window.Aetheria = window.Aetheria || {};
         if (s.activeMeal && s.activeMeal.battlesLeft > 0 && window.Aetheria.Data.CAMP_MEALS[s.activeMeal.id]) {
           const mObj = window.Aetheria.Data.CAMP_MEALS[s.activeMeal.id];
           mealEl.style.display = "inline-block";
-          mealEl.innerText = mObj.name.slice(0, 4) + "(" + s.activeMeal.battlesLeft + "戰)";
+          mealEl.innerText = mObj.name.slice(0, 4) + "(" + s.activeMeal.battlesLeft + ")";
         } else {
           mealEl.style.display = "none";
         }
@@ -481,15 +513,16 @@ window.Aetheria = window.Aetheria || {};
       this.showToast("工程落成！【" + proj.name + "】已完工！請找對應 NPC 交付主線領獎！");
     },
 
-    // ================= 0-B. 營地燉肉鍋 =================
+    // ================= 0-B. 營地料理鍋 & 睡眠至天亮 =================
     openCookingModal: function() {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
       const inv = s.inventory;
       const Helper = window.Aetheria.Data.CraftingHelper;
+      const phase = window.Aetheria.State.getTimePhase();
 
       this.setActivePanel("panel-modal");
-      document.getElementById("modal-title").innerHTML = S.iconHtml("icon_potion") + "營地料理鍋 (HP " + s.hp + "/" + s.maxHp + ")";
+      document.getElementById("modal-title").innerHTML = S.iconHtml("icon_potion") + "營地料理與休息 (飽食 " + (s.hunger || 0) + "%｜" + phase.label + ")";
 
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
@@ -497,11 +530,42 @@ window.Aetheria = window.Aetheria || {};
       const healCard = document.createElement("div");
       healCard.className = "sys-card-scroll";
       healCard.innerHTML =
-        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-          '<b>營地熱湯休整</b>' +
-          '<button class="na-btn highlight" style="padding:4px 12px;" onclick="Aetheria.UI.restAtCampPot()">免費回滿生命</button>' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">' +
+          '<div><b>營地休息與熱湯</b><div style="font-size:11px; color:#5c3824;">睡眠可跳過黑夜並回滿HP與飽食度</div></div>' +
+          '<div style="display:flex; gap:5px;">' +
+            '<button class="na-btn" style="padding:5px 8px;" onclick="Aetheria.UI.restAtCampPot()">喝熱湯(+30%飽食)</button>' +
+            '<button class="na-btn highlight" style="padding:5px 10px;" onclick="Aetheria.UI.sleepAtCamp()">🌙 睡眠至天亮</button>' +
+          '</div>' +
         '</div>';
       body.appendChild(healCard);
+
+      // 快速烘烤隨身口糧區
+      const rationHeader = document.createElement("div");
+      rationHeader.style.cssText = "color:var(--na-gold); font-weight:900; margin:6px 0 4px; font-size:13px;";
+      rationHeader.innerText = "【隨身求生口糧烘烤】（可放入背包於野外隨時進食）";
+      body.appendChild(rationHeader);
+
+      [
+        { id: "wk_ration_herb", name: "烘烤【微光菇乾 x2】(+35%飽食)", toKey: "rationHerb", cost: { herb: 1, branch: 1 } },
+        { id: "wk_ration_fish", name: "炭烤【鮮魚乾 x2】(+60%飽食)",   toKey: "rationFish", cost: { fish: 1, branch: 1 } }
+      ].forEach(function(rk) {
+        const canMake = Helper.canAfford(inv, rk.cost);
+        const have = inv[rk.toKey] || 0;
+        const rCard = document.createElement("div");
+        rCard.className = "sys-card";
+        rCard.innerHTML =
+          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+            '<b>' + S.iconHtml(getItemSpriteKey(rk.toKey)) + rk.name + ' <span class="stat-pill">持有 ' + have + '</span></b>' +
+            '<button class="na-btn ' + (canMake ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.roastRationAtPot(\'' + rk.id + '\')">烘烤</button>' +
+          '</div>' +
+          '<div style="font-size:12px; margin-top:2px;">原料：' + formatIconCost(inv, rk.cost) + '</div>';
+        body.appendChild(rCard);
+      });
+
+      const mealHeader = document.createElement("div");
+      mealHeader.style.cssText = "color:var(--na-gold); font-weight:900; margin:6px 0 4px; font-size:13px;";
+      mealHeader.innerText = "【行前大餐料理】（回滿飽食度與HP，並獲 3 場戰鬥強化）";
+      body.appendChild(mealHeader);
 
       if (s.activeMeal && s.activeMeal.battlesLeft > 0 && window.Aetheria.Data.CAMP_MEALS[s.activeMeal.id]) {
         const curMeal = window.Aetheria.Data.CAMP_MEALS[s.activeMeal.id];
@@ -529,13 +593,33 @@ window.Aetheria = window.Aetheria || {};
 
     restAtCampPot: function() {
       const s = window.Aetheria.State.data;
-      window.Aetheria.State.recalcMaxHp();
-      s.hp = s.maxHp;
+      window.Aetheria.State.restoreHunger(30, s.maxHp);
+      window.Aetheria.Audio.sfxGather();
+      this.openCookingModal();
+      this.updateAllHud();
+      this.showToast("喝下營地免費熱湯，生命值全滿且飽食度 +30%！");
+    },
+
+    sleepAtCamp: function() {
+      window.Aetheria.State.sleepUntilMorning();
+      window.Aetheria.Audio.sfxLevelUp();
+      this.closePanelToExplore();
+      this.showToast("🌅 已在營地帳篷睡眠至第 " + window.Aetheria.State.data.dayCount + " 天清晨！生命值與飽食度 100% 恢復！");
+    },
+
+    roastRationAtPot: function(wkId) {
+      const s = window.Aetheria.State.data;
+      const wk = (window.Aetheria.Data.WORKSHOP_RECIPES || []).find(function(r) { return r.id === wkId; });
+      if (!wk || !window.Aetheria.Data.CraftingHelper.payCost(s.inventory, wk.cost)) {
+        this.showToast("烘烤口糧所需的原料不足！");
+        return;
+      }
+      s.inventory[wk.toKey] = (s.inventory[wk.toKey] || 0) + wk.toCount;
       window.Aetheria.Audio.sfxGather();
       window.Aetheria.State.save();
       this.openCookingModal();
       this.updateAllHud();
-      this.showToast("喝下營地高湯，生命值已完全恢復！");
+      this.showToast("成功烘烤：" + wk.name + "！可按右下角【口糧】隨時進食。");
     },
 
     cookCampMeal: function(mealId) {
@@ -550,16 +634,14 @@ window.Aetheria = window.Aetheria || {};
       s.questProgress.cookedOnce = true;
       if (!s.bountyStats) s.bountyStats = { kills: 0, breaks: 0, fishes: 0, meals: 0 };
       s.bountyStats.meals = (s.bountyStats.meals || 0) + 1;
-      window.Aetheria.State.recalcMaxHp();
-      s.hp = s.maxHp;
+      window.Aetheria.State.restoreHunger(100, s.maxHp);
       window.Aetheria.Audio.sfxLevelUp();
-      window.Aetheria.State.save();
       this.openCookingModal();
       this.updateAllHud();
-      this.showToast("享用【" + meal.name + "】！獲得 3 場戰鬥強化 Buff！");
+      this.showToast("享用【" + meal.name + "】！飽食度 100% 恢復並獲得 3 場戰鬥強化！");
     },
 
-    // ================= 1. NPC 對話：4 狀態分明卡片與分步任務指引 =================
+    // ================= 1. NPC 對話：v6.7 動態四階段台詞與任務卡片 =================
     openNpcDialogue: function(npcId) {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
@@ -875,7 +957,7 @@ window.Aetheria = window.Aetheria || {};
       this.showToast("已傳送至【" + mapObj.name + "】（資源已刷新）！");
     },
 
-    // ================= 3. 拓荒日誌 (零劇透單一主線 + 分步任務流程) =================
+    // ================= 3. 拓荒日誌 =================
     openGuildModal: function(activeTab) {
       activeTab = activeTab || "quest";
       window.Aetheria.State.updateGuildRank();
@@ -1318,7 +1400,7 @@ window.Aetheria = window.Aetheria || {};
       [
         { id: "weapon",   label: "武器" },
         { id: "armor",    label: "防具" },
-        { id: "workshop", label: "建材加工" },
+        { id: "workshop", label: "建材/口糧" },
         { id: "rune",     label: "符文鑲嵌" },
         { id: "tool",     label: "工具/店" }
       ].forEach(function(t) {
@@ -1427,7 +1509,7 @@ window.Aetheria = window.Aetheria || {};
       else if (activeTab === "workshop") {
         const wkHeader = document.createElement("div");
         wkHeader.style.cssText = "color:var(--na-gold); font-weight:900; margin-bottom:5px; font-size:13px;";
-        wkHeader.innerText = "【拓荒工程建材加工】（合成後可帶往各區修橋、架梯與造木筏）";
+        wkHeader.innerText = "【求生火把、口糧與拓荒工程建材加工】";
         body.appendChild(wkHeader);
 
         (window.Aetheria.Data.WORKSHOP_RECIPES || []).forEach(function(wk) {
@@ -1520,7 +1602,7 @@ window.Aetheria = window.Aetheria || {};
 
         const shopHeader = document.createElement("div");
         shopHeader.style.cssText = "color:var(--na-gold); font-weight:900; margin:8px 0 4px; font-size:13px;";
-        shopHeader.innerText = "【金幣物資店 & 煉金提煉】";
+        shopHeader.innerText = "【金幣消耗品商店 & 煉金提煉】";
         body.appendChild(shopHeader);
 
         (window.Aetheria.Data.GOLD_SHOP || []).forEach(function(item) {
@@ -1556,7 +1638,7 @@ window.Aetheria = window.Aetheria || {};
     craftWorkshopMat: function(wkId) {
       const s = window.Aetheria.State.data;
       if (!isInCampForgeZone(s)) {
-        this.showToast("需返回【0.曙光營地】找鐵匠巴爾才可加工工程建材！");
+        this.showToast("需返回【0.曙光營地】找鐵匠巴爾才可加工！");
         return;
       }
       const wk = (window.Aetheria.Data.WORKSHOP_RECIPES || []).find(function(r) { return r.id === wkId; });
@@ -1755,9 +1837,9 @@ window.Aetheria = window.Aetheria || {};
       this.updateAllHud();
     },
 
-    // ================= 5. 背包頁面 =================
+    // ================= 5. 背包頁面（支援直接使用口糧、火把與藥水） =================
     openBagModal: function(selectedKey) {
-      selectedKey = selectedKey || "branch";
+      selectedKey = selectedKey || "rationHerb";
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
       const inv = s.inventory;
@@ -1765,7 +1847,7 @@ window.Aetheria = window.Aetheria || {};
       const self = this;
 
       this.setActivePanel("panel-modal");
-      document.getElementById("modal-title").innerHTML = S.iconHtml("icon_bag") + "背包 (金幣：" + s.gold + " G｜HP：" + s.hp + "/" + s.maxHp + ")";
+      document.getElementById("modal-title").innerHTML = S.iconHtml("icon_bag") + "背包 (金幣：" + s.gold + " G｜飽食：" + (s.hunger || 0) + "%｜HP：" + s.hp + "/" + s.maxHp + ")";
 
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
@@ -1774,14 +1856,21 @@ window.Aetheria = window.Aetheria || {};
       const selCount = inv[selectedKey] || 0;
       const selSpKey = getItemSpriteKey(selectedKey);
 
+      let actionBtnHtml = '<span class="stat-pill">Tier ' + selMat.tier + '</span>';
+      if (selectedKey === "potionHeal" && selCount > 0) {
+        actionBtnHtml = '<button class="na-btn highlight" style="padding:4px 10px;" onclick="Aetheria.UI.useBagHealPotion()">飲用回復</button>';
+      } else if ((selectedKey === "rationHerb" || selectedKey === "rationFish") && selCount > 0) {
+        actionBtnHtml = '<button class="na-btn highlight" style="padding:4px 10px;" onclick="Aetheria.UI.useBagRation(\'' + selectedKey + '\')">食用充飢</button>';
+      } else if (selectedKey === "torchItem" && selCount > 0) {
+        actionBtnHtml = '<button class="na-btn highlight" style="padding:4px 10px;" onclick="Aetheria.UI.useBagTorch()">點燃火把</button>';
+      }
+
       const detailBox = document.createElement("div");
       detailBox.className = "sys-card-scroll";
       detailBox.innerHTML =
         '<div style="display:flex; justify-content:space-between; align-items:center;">' +
           '<b style="font-size:15px;">' + S.iconHtml(selSpKey, true) + '【' + selMat.name + '】 (持有：' + selCount + ')</b>' +
-          (selectedKey === "potionHeal" && selCount > 0
-            ? '<button class="na-btn highlight" style="padding:4px 10px;" onclick="Aetheria.UI.useBagHealPotion()">飲用回復</button>'
-            : '<span class="stat-pill">Tier ' + selMat.tier + '</span>') +
+          actionBtnHtml +
         '</div>' +
         '<div style="font-size:12px; margin-top:2px;">' + selMat.desc + '</div>';
       body.appendChild(detailBox);
@@ -1818,6 +1907,34 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.State.save();
       this.updateAllHud();
       this.openBagModal("potionHeal");
+    },
+
+    useBagRation: function(rKey) {
+      const s = window.Aetheria.State.data;
+      if ((s.inventory[rKey] || 0) <= 0) return;
+      s.inventory[rKey]--;
+      if (rKey === "rationFish") {
+        window.Aetheria.State.restoreHunger(60, 50);
+        this.showToast("食用【炭烤鮮魚乾】！飽食度 +60%、HP +50！");
+      } else {
+        window.Aetheria.State.restoreHunger(35, 20);
+        this.showToast("食用【烘烤微光菇乾】！飽食度 +35%、HP +20！");
+      }
+      window.Aetheria.Audio.sfxGather();
+      this.updateAllHud();
+      this.openBagModal(rKey);
+    },
+
+    useBagTorch: function() {
+      const s = window.Aetheria.State.data;
+      if ((s.inventory.torchItem || 0) <= 0) return;
+      s.inventory.torchItem--;
+      s.torchTicks = 180;
+      window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
+      this.updateAllHud();
+      this.openBagModal("torchItem");
+      this.showToast("🔥 已點燃【松脂火把】（持續 180 步照明）！");
     },
 
     // ================= 6. 職業與戰寵頁面 =================
