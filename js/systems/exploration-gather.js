@@ -1,7 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 擴大傳送門判定(36px)、A鍵過圖與永久保留釣魚點 (exploration-gather.js - v6.5)
- * 修正：1.傳送門與帳篷入口判定半徑擴大至 36px，並支援隨時按 A 鍵直接過圖，徹底解決接觸不良 (問題 7)
- *       2.釣魚點成功釣魚後保留不消失，可無限次重複垂釣 (問題 4)
+ * Project J：艾瑟瑞亞的破曉 — 日夜流轉、飽食度消耗、火把與口糧探索引擎 (exploration-gather.js - v7.0)
+ * 新增：1.野外移動與揮動工具消耗飽食度；飽食度 >= 80% 獲移動加速，0% 時需進食口糧才可砍樹挖礦
+ *       2.新增 useFieldRation() 隨身口糧進食 & 零口糧時的「知識共鳴充飢」保底機制
+ *       3.新增 useFieldTorch() 點燃松脂火把，驅散黑夜與微光洞窟迷霧
+ *       4.黃昏時段垂釣命中區加寬 25%
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -11,6 +13,7 @@ window.Aetheria = window.Aetheria || {};
     moveDX: 0,
     moveDY: 0,
     hazardTimer: 0,
+    stepFrameCounter: 0,
 
     fishingActive: false,
     fishingSpotRef: null,
@@ -110,6 +113,11 @@ window.Aetheria = window.Aetheria || {};
       if (s.currentJob === "thief") speed += 0.5;
       if (s.unlockedRelics && s.unlockedRelics.indexOf("r_cloak") !== -1) speed += 0.4;
 
+      // v7.0 飽食度對移動速度的影響：飽食 >= 80% 精力充沛加速；飽食 == 0% 飢餓減速
+      const curHunger = (s.hunger !== undefined) ? s.hunger : 100;
+      if (curHunger >= 80) speed *= 1.12;
+      else if (curHunger <= 0) speed *= 0.78;
+
       let nx = Math.max(28, Math.min(mapObj.width - 42, s.heroX + this.moveDX * speed));
       let ny = Math.max(28, Math.min(mapObj.height - 42, s.heroY + this.moveDY * speed));
 
@@ -166,12 +174,24 @@ window.Aetheria = window.Aetheria || {};
         }
       }
 
+      const movedDist = Math.hypot(nx - s.heroX, ny - s.heroY);
       s.petX += (s.heroX - this.moveDX * 20 - s.petX) * 0.2;
       s.petY += (s.heroY - this.moveDY * 18 - s.petY) * 0.2;
       s.heroX = nx;
       s.heroY = ny;
 
-      // 擴大傳送門判定半徑至 36px，行到附近或按 A 鍵即可順暢過圖 (問題 7)
+      // v7.0：隨移動步數推進日夜時鐘與消耗飽食度
+      if (movedDist > 0.5) {
+        this.stepFrameCounter = (this.stepFrameCounter || 0) + 1;
+        if (this.stepFrameCounter % 15 === 0) {
+          window.Aetheria.State.advanceTime(1);
+        }
+        if (this.stepFrameCounter % 48 === 0) {
+          window.Aetheria.State.consumeHunger(1);
+          window.Aetheria.UI.updateAllHud();
+        }
+      }
+
       if (mapObj.portals) {
         for (let j = 0; j < mapObj.portals.length; j++) {
           const p = mapObj.portals[j];
@@ -224,6 +244,8 @@ window.Aetheria = window.Aetheria || {};
       const cutEl = document.getElementById("story-cutscene-modal");
       if (cutEl && cutEl.style.display !== "none") return;
 
+      const isNight = window.Aetheria.State.getTimePhase().isNight;
+
       for (let i = 0; i < mapObj.monsters.length; i++) {
         const m = mapObj.monsters[i];
         if (m.alive === false) continue;
@@ -257,10 +279,11 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
 
-        const aggroRadius = m.isBoss ? 68 : 76;
+        // 黑夜時段魔物警戒範圍略微提高
+        const aggroRadius = (m.isBoss ? 68 : 76) + (isNight ? 12 : 0);
         if (distToHero < aggroRadius) {
           m.aggro = true;
-          const chaseSpeed = m.isBoss ? 0.95 : 1.45;
+          const chaseSpeed = m.isBoss ? 0.95 : (isNight ? 1.58 : 1.45);
           const dx = (s.heroX - m.x) / (distToHero || 1);
           const dy = (s.heroY - m.y) / (distToHero || 1);
           let nextMX = m.x + dx * chaseSpeed;
@@ -307,7 +330,7 @@ window.Aetheria = window.Aetheria || {};
       if (!hintEl) return;
 
       if (s.currentZone === "camp_hub" && Math.hypot(s.heroX - 345, s.heroY - 245) < 36) {
-        hintEl.innerText = "行前料理";
+        hintEl.innerText = "料理 / 睡眠";
         return;
       }
       if (mapObj.portals) {
@@ -334,7 +357,7 @@ window.Aetheria = window.Aetheria || {};
           if (!d.cleared && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 38) {
             if (d.isProjectSite) {
               const built = s.projectsBuilt && s.projectsBuilt[d.projectId];
-              hintEl.innerText = built ? (d.isClimbLadder ? "攀爬木梯" : "使用設施") : "拓荒建造";
+              hintEl.innerText = built ? (d.isClimbLadder ? "攀爬木梯" : "休息 / 使用") : "拓荒建造";
               return;
             }
             if (d.isSealPillar)  { hintEl.innerText = "解開封印柱"; return; }
@@ -421,7 +444,7 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
 
-      // 1. 傳送門過圖 (按 A 鍵直接過圖)
+      // 1. 傳送門過圖
       if (mapObj.portals) {
         for (let p = 0; p < mapObj.portals.length; p++) {
           const portal = mapObj.portals[p];
@@ -432,7 +455,7 @@ window.Aetheria = window.Aetheria || {};
         }
       }
 
-      // 2. 營地燉肉鍋
+      // 2. 營地燉肉鍋（支援煲湯、烤口糧與睡眠至天亮）
       if (s.currentZone === "camp_hub" && Math.hypot(s.heroX - 345, s.heroY - 245) < 36) {
         window.Aetheria.Audio.sfxTalkBlip();
         window.Aetheria.UI.openCookingModal();
@@ -463,12 +486,10 @@ window.Aetheria = window.Aetheria || {};
               window.Aetheria.State.save();
               return;
             } else if (d.projectId === "proj_z4_shelter") {
-              window.Aetheria.State.recalcMaxHp();
-              s.hp = s.maxHp;
+              window.Aetheria.State.sleepUntilMorning();
               window.Aetheria.Audio.sfxLevelUp();
-              window.Aetheria.State.save();
               window.Aetheria.UI.updateAllHud();
-              window.Aetheria.UI.showToast("在【極地防風毛皮屋】烤火休整，生命值已完全恢復！");
+              window.Aetheria.UI.showToast("在【極地防風毛皮屋】烤火睡眠至天亮，生命值與飽食度已 100% 恢復！");
               return;
             }
           }
@@ -538,12 +559,18 @@ window.Aetheria = window.Aetheria || {};
                 window.Aetheria.UI.showToast("岩石堅硬！請先到營地工坊升級【Lv.2 秘銀重鎬】！");
                 return;
               }
+              if ((s.hunger || 0) < 3) {
+                window.Aetheria.Audio.sfxWrong();
+                window.Aetheria.UI.showToast("肚子太餓無力揮動重鎬！請先按右下角【口糧】補充飽食度！");
+                return;
+              }
+              window.Aetheria.State.consumeHunger(3);
               d.cleared = true;
               s.inventory.basalt = (s.inventory.basalt || 0) + 1;
               window.Aetheria.Audio.sfxBreakShield();
               window.Aetheria.State.save();
               window.Aetheria.UI.updateAllHud();
-              window.Aetheria.UI.showToast("使用秘銀重鎬擊碎擋路巨石，獲得【玄武岩塊 +1】！");
+              window.Aetheria.UI.showToast("使用秘銀重鎬擊碎擋路巨石（飽食-3%），獲得【玄武岩塊 +1】！");
               return;
             }
             if (d.obstacleType === "deadtree") {
@@ -552,12 +579,18 @@ window.Aetheria = window.Aetheria || {};
                 window.Aetheria.UI.showToast("枯木粗壯！請先到營地工坊升級【Lv.2 烈焰戰斧】！");
                 return;
               }
+              if ((s.hunger || 0) < 3) {
+                window.Aetheria.Audio.sfxWrong();
+                window.Aetheria.UI.showToast("肚子太餓無力揮動戰斧！請先按右下角【口糧】補充飽食度！");
+                return;
+              }
+              window.Aetheria.State.consumeHunger(3);
               d.cleared = true;
               s.inventory.wood = (s.inventory.wood || 0) + 1;
               window.Aetheria.Audio.sfxBreakShield();
               window.Aetheria.State.save();
               window.Aetheria.UI.updateAllHud();
-              window.Aetheria.UI.showToast("揮動烈焰戰斧劈開巨型枯木，獲得【翠風原木 +1】！");
+              window.Aetheria.UI.showToast("揮動烈焰戰斧劈開巨型枯木（飽食-3%），獲得【翠風原木 +1】！");
               return;
             }
           }
@@ -594,13 +627,23 @@ window.Aetheria = window.Aetheria || {};
       this.fishCursorPos = 6;
       this.fishCursorDir = 1;
 
-      this.fishZoneWidth = (hookLv >= 3) ? 40 : (hookLv === 2) ? 30 : 22;
-      this.fishZoneStart = 22 + Math.floor(Math.random() * (68 - this.fishZoneWidth));
+      const phase = window.Aetheria.State.getTimePhase();
+      const duskBonus = (phase.id === "dusk") ? 7 : 0;
+
+      this.fishZoneWidth = ((hookLv >= 3) ? 40 : (hookLv === 2) ? 30 : 22) + duskBonus;
+      this.fishZoneStart = 18 + Math.floor(Math.random() * (68 - this.fishZoneWidth));
       this.fishSpeed = (hookLv >= 3) ? 1.85 : 2.25;
 
       const modal = document.getElementById("fishing-minigame-modal");
       const targetEl = document.getElementById("fishing-target-zone");
       const cursorEl = document.getElementById("fishing-cursor");
+      const subTxt = document.getElementById("fishing-sub-txt");
+
+      if (subTxt) {
+        subTxt.innerText = (phase.id === "dusk")
+          ? "🌇 黃昏魚群活躍中（綠色命中區已加寬）！看準時機立即收竿！"
+          : "當魚標游入【綠色命中區】或【金色紅心區】時，立即按下收竿！";
+      }
 
       if (targetEl) {
         targetEl.style.left = this.fishZoneStart + "%";
@@ -639,9 +682,10 @@ window.Aetheria = window.Aetheria || {};
       const perfStart = zoneStart + this.fishZoneWidth * 0.32;
       const perfEnd = zoneEnd - this.fishZoneWidth * 0.32;
 
+      window.Aetheria.State.advanceTime(8);
+
       if (centerPos >= zoneStart && centerPos <= zoneEnd) {
         const isPerfect = (centerPos >= perfStart && centerPos <= perfEnd);
-        // 注意：不將 spot.cleared 設為 true，確保釣魚點永不消失、可無限次垂釣 (問題 4)
 
         s.inventory.fish = (s.inventory.fish || 0) + 1;
         s.questProgress.fishedOnce = true;
@@ -693,8 +737,8 @@ window.Aetheria = window.Aetheria || {};
         if (s.currentZone === "camp_hub" || s.currentZone === "tent_guild" || s.currentZone === "zone1_forest" || s.currentZone === "cave1_mushroom") {
           s.inventory.plank += 1;
           s.inventory.rope += 1;
-          s.inventory.potionHeal += 1;
-          window.Aetheria.UI.showToast("開啟秘寶箱：獲得【加工厚木板 +1、強化麻繩索 +1、生命藥水 +1】！");
+          s.inventory.rationFish = (s.inventory.rationFish || 0) + 2;
+          window.Aetheria.UI.showToast("開啟秘寶箱：獲得【加工厚木板 +1、強化麻繩索 +1、炭烤鮮魚乾 +2】！");
         } else if (s.currentZone === "zone2_canyon" || s.currentZone === "zone3_coast") {
           s.inventory.mithril += 1;
           s.inventory.coral += 1;
@@ -731,8 +775,17 @@ window.Aetheria = window.Aetheria || {};
           }
           return;
         }
+
+        // v7.0：使用工具採集需消耗 3 點飽食度（徒手拾取 reqLv===0 不消耗）
+        if ((s.hunger !== undefined ? s.hunger : 100) < 3) {
+          window.Aetheria.Audio.sfxWrong();
+          window.Aetheria.UI.showToast("⚠️ 飽食度耗盡，無力揮動工具！請按右下角【口糧】進食或進行知識充飢！");
+          return;
+        }
+        window.Aetheria.State.consumeHunger(3);
       }
 
+      window.Aetheria.State.advanceTime(4);
       node.opened = true;
 
       if (node.perfect) {
@@ -745,7 +798,7 @@ window.Aetheria = window.Aetheria || {};
       s.inventory[matKey] = (s.inventory[matKey] || 0) + 1;
 
       const matObj = window.Aetheria.Data.MATERIALS[matKey] || { name: matKey };
-      let msg = (reqLv === 0 ? "拾取成功" : "採集成功") + "：獲得【" + matObj.name + " +1】！";
+      let msg = (reqLv === 0 ? "拾取成功" : "採集成功(飽食-3%)") + "：獲得【" + matObj.name + " +1】！";
 
       if (reqTool === "axe" && (s.tools.axe || 0) >= 3 && Math.random() < 0.25) {
         s.inventory.tameFruit = (s.inventory.tameFruit || 0) + 1;
@@ -755,6 +808,69 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.State.save();
       window.Aetheria.UI.updateAllHud();
       window.Aetheria.UI.showToast(msg);
+    },
+
+    // ================= v7.0 新增：右下角【口糧】與【火把】快捷鍵功能 =================
+    useFieldRation: function() {
+      if ((window.Aetheria.Battle && window.Aetheria.Battle.active) || this.fishingActive) return;
+      const s = window.Aetheria.State.data;
+      const inv = s.inventory;
+
+      if ((inv.rationFish || 0) > 0 || (inv.rationHerb || 0) > 0) {
+        if ((s.hunger || 0) >= 100 && s.hp >= s.maxHp) {
+          window.Aetheria.UI.showToast("目前飽食度 (100%) 與生命值皆已全滿，無須進食口糧！");
+          return;
+        }
+        if ((inv.rationFish || 0) > 0 && ((s.hunger || 0) <= 50 || (inv.rationHerb || 0) <= 0)) {
+          inv.rationFish--;
+          window.Aetheria.State.restoreHunger(60, 50);
+          window.Aetheria.Audio.sfxGather();
+          window.Aetheria.UI.spawnFloatingText("飽食+60% HP+50", "#5ac54f", false);
+          window.Aetheria.UI.updateAllHud();
+          window.Aetheria.UI.showToast("食用【炭烤鮮魚乾】！飽食度 +60%、HP +50！(剩餘魚乾 " + inv.rationFish + ")");
+        } else {
+          inv.rationHerb--;
+          window.Aetheria.State.restoreHunger(35, 20);
+          window.Aetheria.Audio.sfxGather();
+          window.Aetheria.UI.spawnFloatingText("飽食+35% HP+20", "#5ac54f", false);
+          window.Aetheria.UI.updateAllHud();
+          window.Aetheria.UI.showToast("食用【烘烤微光菇乾】！飽食度 +35%、HP +20！(剩餘菇乾 " + inv.rationHerb + ")");
+        }
+        return;
+      }
+
+      // 若背包完全無口糧：若飽食度已高，提示去工坊/料理鍋製作；若飽食度低，啟動防卡關「知識共鳴充飢」！
+      if ((s.hunger || 0) >= 65) {
+        window.Aetheria.UI.showToast("背包尚無隨身口糧！可在【營地料理鍋】或【工坊】用鮮魚/微光菇烘烤口糧。");
+        return;
+      }
+
+      window.Aetheria.Audio.sfxTalkBlip();
+      window.Aetheria.Battle.startForageChallenge();
+    },
+
+    useFieldTorch: function() {
+      if ((window.Aetheria.Battle && window.Aetheria.Battle.active) || this.fishingActive) return;
+      const s = window.Aetheria.State.data;
+      const inv = s.inventory;
+
+      if ((s.torchTicks || 0) > 100) {
+        window.Aetheria.UI.showToast("手中的松脂火把仍在熊熊燃燒中（剩餘 " + s.torchTicks + " 步照明）！");
+        return;
+      }
+      if ((inv.torchItem || 0) <= 0) {
+        window.Aetheria.Audio.sfxWrong();
+        window.Aetheria.UI.showToast("背包沒有【松脂火把】！可在營地工坊用「散落枯枝+琥珀松脂」合成，或向行商奇奇購買。");
+        return;
+      }
+
+      inv.torchItem--;
+      s.torchTicks = 180;
+      window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
+      window.Aetheria.UI.spawnFloatingText("🔥 點燃火把!", "#ffd166", false);
+      window.Aetheria.UI.updateAllHud();
+      window.Aetheria.UI.showToast("點燃【松脂火把】！獲得 180 步大範圍黑夜與洞窟照明！(剩餘火把 " + inv.torchItem + ")");
     },
 
     useBomb: function() {
