@@ -755,6 +755,32 @@ window.Aetheria = window.Aetheria || {};
       registerCustomTentSprites();
       hookWorldMaps();
       hookSystemsForSurvivalV71();
+
+      // 1. 確保主角帳篷 (tent_hero) 視為安全室內：不耗飽食度、不受黑夜遮罩影響
+      const St = window.Aetheria.State;
+      if (St && St.consumeHunger) {
+        const origConsume = St.consumeHunger.bind(St);
+        St.consumeHunger = function(amount) {
+          if (St.data && St.data.currentZone === "tent_hero") return true;
+          return origConsume(amount);
+        };
+      }
+
+      const Ren = window.Aetheria.Renderer;
+      if (Ren) {
+        const origRender = Ren.renderWorld.bind(Ren);
+        Ren.renderWorld = function() {
+          origRender();
+          const s = window.Aetheria.State.data;
+          const dnEl = document.getElementById("daynight-overlay");
+          if (dnEl && s && s.currentZone === "tent_hero") {
+            dnEl.className = "dn-day";
+          }
+        };
+        // 2. 強制重置場景快取並立即重繪，確保一進營地即刻顯示【主角專屬帳篷】
+        Ren.builtZoneKey = null;
+        Ren.renderWorld();
+      }
     } catch (err) {
       console.error("Survival v7.1 module init error:", err);
     }
