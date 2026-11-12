@@ -1,8 +1,7 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 強制錯題溫習卡與戰鬥結算引擎 (battle-break-boost.js - v6.6)
- * 升級：1.答錯任何題目時，強制暫停跳題並顯示【📖 錯題溫習與解析卡】(包含正確答案 + 知識解釋)
- *       2.玩家必須親手點擊「✓ 我已溫習並記住答案」按鈕，才會執行敵方反擊或結束檢定
- *       3.上半屏紅框提示條不再塞入超長答案文字，徹底解決文字超出螢幕被裁切問題
+ * Project J：艾瑟瑞亞的破曉 — 知識充飢檢定、夜戰加成與錯題溫習卡引擎 (battle-break-boost.js - v7.0)
+ * 新增：1.startForageChallenge()：零口糧時的「知識共鳴充飢」問答檢定，確保玩家絕不因飢餓卡關
+ *       2.飽食度 >= 80% 戰鬥傷害 +10% 且每回額外回血 +12；黑夜時段魔物額外機率掉落破防核心
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -188,12 +187,47 @@ window.Aetheria = window.Aetheria || {};
 
       const phaseTitle = document.getElementById("battle-phase-title");
       if (phaseTitle) {
-        phaseTitle.innerText = (customMode === "bounty") ? "討伐暗影錯題幻象" : "破盾詠唱";
+        const isNight = window.Aetheria.State.getTimePhase().isNight;
+        phaseTitle.innerText = (customMode === "bounty") ? "討伐暗影錯題幻象" : (isNight ? "🌙 夜戰破盾詠唱" : "破盾詠唱");
       }
 
       this.renderBattleDomStage();
       this.updateBattleHUD();
       this.nextTurnQuestion(customQuestionId);
+    },
+
+    // v7.0 新增：零口糧時的「野外求生・知識共鳴充飢」保底挑戰
+    startForageChallenge: function() {
+      this.active = true;
+      this.mode = "forage";
+      this.boostActive = false;
+      this.guardActive = false;
+
+      this.enemy = {
+        name: "野外求生・知識覓食",
+        lv: 1,
+        atk: 0,
+        isBoss: false,
+        isShiny: true,
+        spriteKey: "mat_herb",
+        hp: 20,
+        maxHp: 20,
+        shield: 1,
+        maxShield: 1,
+        broken: false,
+        intent: { type: "none", label: "答對本題即可採得野生微光菇乾，立即恢復 +40% 飽食度！", isUlt: false },
+        weak: "知識共鳴充飢"
+      };
+
+      document.getElementById("battle-stage").style.display = "flex";
+      window.Aetheria.UI.setActivePanel("panel-battle");
+
+      const phaseTitle = document.getElementById("battle-phase-title");
+      if (phaseTitle) phaseTitle.innerText = "知識共鳴充飢";
+
+      this.renderBattleDomStage();
+      this.updateBattleHUD();
+      this.nextTurnQuestion();
     },
 
     startHarvestChallenge: function(node) {
@@ -357,7 +391,7 @@ window.Aetheria = window.Aetheria || {};
       if (guardPill) guardPill.style.display = this.guardActive ? "inline-block" : "none";
 
       const streakEl = document.getElementById("battle-streak-tag");
-      if (streakEl) streakEl.innerText = "連勝 x" + (s.streak || 0) + "｜DEF " + window.Aetheria.State.getTotalDef();
+      if (streakEl) streakEl.innerText = "連勝 x" + (s.streak || 0) + "｜飽食 " + (s.hunger !== undefined ? s.hunger : 100) + "%";
 
       const orbs = document.getElementById("hero-bp-orbs");
       if (orbs) {
@@ -520,7 +554,6 @@ window.Aetheria = window.Aetheria || {};
       });
     },
 
-    // 問題 2 核心新增：當玩家答錯時，在下半屏顯示「📖 錯題溫習與解析卡」，直至點擊「✓ 我已溫習並記住答案」才繼續！
     showWrongAnswerReviewCard: function(correctText, qObj, onAcknowledge) {
       const area = document.getElementById("quiz-interactive-area");
       if (!area) {
@@ -569,6 +602,28 @@ window.Aetheria = window.Aetheria || {};
         if (isCorrect && qObj.subject && s.monolithPts && typeof s.monolithPts[qObj.subject] === "number") {
           s.monolithPts[qObj.subject] = Math.min(100, s.monolithPts[qObj.subject] + 2);
         }
+      }
+
+      // 模式 0：v7.0 知識共鳴充飢檢定
+      if (this.mode === "forage") {
+        if (isCorrect) {
+          this.playAttackAnimation();
+          window.Aetheria.Audio.sfxLevelUp();
+          window.Aetheria.State.restoreHunger(40, 25);
+          s.inventory.rationHerb = (s.inventory.rationHerb || 0) + 1;
+          window.Aetheria.State.save();
+          window.Aetheria.UI.showToast("知識覓食成功！飽食度 +40%、HP +25，並額外覓得【烘烤微光菇乾 +1】！");
+          this.endBattle();
+        } else {
+          window.Aetheria.Audio.sfxWrong();
+          window.Aetheria.UI.spawnFloatingText("請先溫習下方解析", "#ff595e", false);
+          this.showWrongAnswerReviewCard(correctText, qObj, function() {
+            window.Aetheria.State.restoreHunger(20, 10);
+            self.endBattle();
+            window.Aetheria.UI.showToast("完成錯題溫習！獲得保底充飢：飽食度 +20%！");
+          });
+        }
+        return;
       }
 
       // 模式 A：完美採集檢定
@@ -640,11 +695,19 @@ window.Aetheria = window.Aetheria || {};
       }
 
       // 模式 D：一般戰鬥 / 首領戰
+      window.Aetheria.State.advanceTime(6);
+      window.Aetheria.State.consumeHunger(1);
+
       if (isCorrect) {
         this.playAttackAnimation();
 
         let shieldDmg = 1 + window.Aetheria.State.getBonusShieldBreak();
         let dmgMult = 1.0;
+
+        // v7.0 飽食度 >= 80% 時獲得「飽食強攻」加成
+        if ((s.hunger !== undefined ? s.hunger : 100) >= 80) {
+          dmgMult *= 1.10;
+        }
 
         const wData = window.Aetheria.Data.WEAPONS[s.equippedWeapon] || {};
 
@@ -716,6 +779,7 @@ window.Aetheria = window.Aetheria || {};
         e.hp = Math.max(0, e.hp - totalDmg);
 
         let healAmt = (mainPet.healPerTurn || 0) + (subPet ? (subPet.healPerTurn || 0) : 0);
+        if ((s.hunger !== undefined ? s.hunger : 100) >= 80) healAmt += 12;
         if (s.currentJob === "alchemist") healAmt += Math.round(s.maxHp * 0.15);
         if (s.equippedWeapon === "w_dawn") healAmt += Math.round(s.maxHp * 0.10);
         if (window.Aetheria.State.hasRune("coreBamboo")) healAmt += 20;
@@ -743,7 +807,6 @@ window.Aetheria = window.Aetheria || {};
           setTimeout(function() { self.executeEnemyCounterPhase(true); }, 580);
         }
       } else {
-        // 問題 2 & 3 修正：答錯時不再把長答案塞入上半屏紅框，而是打開下半屏「錯題溫習卡」，等玩家點擊確認已學習才觸發敵方反擊！
         window.Aetheria.Audio.sfxWrong();
         this.updateBattleHUD();
         window.Aetheria.UI.spawnFloatingText("詠唱失誤！請先溫習下方解析", "#ff595e", false);
@@ -841,6 +904,7 @@ window.Aetheria = window.Aetheria || {};
       s.streak = 0;
       window.Aetheria.State.recalcMaxHp();
       s.hp = s.maxHp;
+      s.hunger = Math.max(60, s.hunger || 60);
 
       window.Aetheria.Data.Maps.refreshAllResources();
       if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
@@ -859,6 +923,7 @@ window.Aetheria = window.Aetheria || {};
     winBattle: function() {
       const s = window.Aetheria.State.data;
       const e = this.enemy;
+      const isNight = window.Aetheria.State.getTimePhase().isNight;
 
       window.Aetheria.Audio.sfxLevelUp();
 
@@ -888,7 +953,9 @@ window.Aetheria = window.Aetheria || {};
         dropSummary += "、" + window.Aetheria.Data.MATERIALS[e.subDrop].name + " +1";
       }
 
-      if ((e.broken || e.wasBroken) && e.breakDrop) {
+      // v7.0：黑夜戰鬥除了破防必掉核心外，未破防亦有 45% 機率額外獲得破防核心
+      const dropBreakCore = ((e.broken || e.wasBroken) || (isNight && Math.random() < 0.45)) && e.breakDrop;
+      if (dropBreakCore) {
         s.inventory[e.breakDrop] = (s.inventory[e.breakDrop] || 0) + 1;
         dropSummary += "、破防核心【" + window.Aetheria.Data.MATERIALS[e.breakDrop].name + " +1】";
       }
@@ -918,9 +985,9 @@ window.Aetheria = window.Aetheria || {};
       if (e.bossId) {
         window.Aetheria.UI.showToast("擊潰守關領主！通往下一疆域的封印結界已解開！獲得：" + dropSummary);
       } else if (leveledUp) {
-        window.Aetheria.UI.showToast("升級至 Lv." + s.lv + "！獲得 " + dropSummary + "！");
+        window.Aetheria.UI.showToast("升級至 Lv." + s.lv + "（生命與飽食度全滿）！獲得 " + dropSummary + "！");
       } else {
-        window.Aetheria.UI.showToast("戰鬥勝利！獲得 " + dropSummary + "！");
+        window.Aetheria.UI.showToast((isNight ? "🌙 夜戰勝利(獎賞+35%)！" : "戰鬥勝利！") + "獲得 " + dropSummary + "！");
       }
 
       this.endBattle();
