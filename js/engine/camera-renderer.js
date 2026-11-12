@@ -1,7 +1,7 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 釣魚點標籤、帳篷入口任務標記與清爽地圖渲染器 (camera-renderer.js - v6.5)
- * 修正：1.恢復所有水波釣魚點顯示「釣魚點 [按A]」標籤 (解決問題 4)
- *       2.帳篷出入口 (linkedNpcId) 自動顯示帳篷內巴爾/雷恩的 [!新任務] / [✓可交付] 提示 (解決問題 6)
+ * Project J：艾瑟瑞亞的破曉 — 日夜光影、火把照明與大世界渲染器 (camera-renderer.js - v7.0)
+ * 新增：1.動態渲染四時段光影遮罩 (#daynight-overlay：破曉/白晝/黃昏/黑夜)
+ *       2.支援松脂火把 (torchTicks > 0) 在黑夜擴大暖光視野，並可在洞窟內暫時驅散黑霧
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -77,7 +77,7 @@ window.Aetheria = window.Aetheria || {};
         this.domPool.bridge = bridge;
       }
 
-      // 3. 傳送門與帳篷入口 (支援動態顯示帳篷內 NPC 的任務標記)
+      // 3. 傳送門與帳篷入口
       const self = this;
       (mapObj.portals || []).forEach(function(p) {
         const el = document.createElement("div");
@@ -140,7 +140,7 @@ window.Aetheria = window.Aetheria || {};
         self.domPool.decos[key] = { el: el, img: img, lbl: lbl, data: d };
       });
 
-      // 6. 採集資源點 (不顯示文字標籤，只保留乾淨 16x16 素材圖示)
+      // 6. 採集資源點
       (mapObj.nodes || []).forEach(function(n) {
         const el = document.createElement("div");
         el.className = "dom-entity";
@@ -272,9 +272,29 @@ window.Aetheria = window.Aetheria || {};
         const Sprites = window.Aetheria.Data.Sprites;
         const ExpSys = window.Aetheria.Explore;
 
-        const brazierLit = (s.openedNodes && s.openedNodes["lit_" + mapObj.id]) || (s.projectsBuilt && s.projectsBuilt.proj_cave1_beacon && mapObj.id === "cave1_mushroom");
+        // v7.0：洞窟迷霧與松脂火把聯動（點燃松脂火把或建造聖火燈塔均可照亮洞窟）
+        const hasActiveTorch = Boolean(s.torchTicks && s.torchTicks > 0);
+        const brazierLit = (s.openedNodes && s.openedNodes["lit_" + mapObj.id]) ||
+                           (s.projectsBuilt && s.projectsBuilt.proj_cave1_beacon && mapObj.id === "cave1_mushroom") ||
+                           hasActiveTorch;
         const fogEl = document.getElementById("fog-overlay");
         if (fogEl) fogEl.style.display = (mapObj.fog && !brazierLit) ? "block" : "none";
+
+        // v7.0：更新動態日夜光影遮罩 (#daynight-overlay)
+        const dnEl = document.getElementById("daynight-overlay");
+        if (dnEl) {
+          const isIndoor = (mapObj.id === "tent_guild" || mapObj.id === "tent_forge" || mapObj.id === "cave1_mushroom");
+          if (isIndoor) {
+            dnEl.className = "dn-day";
+          } else {
+            const phase = window.Aetheria.State.getTimePhase();
+            let dnClass = "dn-" + phase.id;
+            if (phase.isNight && (hasActiveTorch || mapObj.id === "camp_hub")) {
+              dnClass += " torch-lit";
+            }
+            dnEl.className = dnClass;
+          }
+        }
 
         if (this.domPool.bridge && mapObj.hasRiver) {
           const bProj = mapObj.bridgeProject;
@@ -286,7 +306,7 @@ window.Aetheria = window.Aetheria || {};
           }
         }
 
-        // 0. 動態更新帳篷入口標籤 (若帳篷內的巴爾或雷恩有任務，門口顯示 [!新任務] / [✓可交付])
+        // 0. 動態更新帳篷入口標籤
         Object.keys(this.domPool.portals).forEach(function(pId) {
           const item = this.domPool.portals[pId];
           const p = item.data;
@@ -320,7 +340,6 @@ window.Aetheria = window.Aetheria || {};
           }
           item.el.style.display = "block";
 
-          // 問題 4 修正：所有釣魚點永久顯示「釣魚點 [按A]」標籤！
           if (d.isFishingSpot) {
             item.img.src = Sprites.getDataURL("fishing_spot");
             item.lbl.style.display = "block";
@@ -338,7 +357,7 @@ window.Aetheria = window.Aetheria || {};
               item.lbl.innerText = d.name + " [按A攀爬]";
             } else if (d.projectId === "proj_z4_shelter") {
               item.lbl.className = "dom-label portal-lbl";
-              item.lbl.innerText = "防風毛皮屋 [按A休整]";
+              item.lbl.innerText = "防風毛皮屋 [按A睡眠]";
             } else if (d.projectId === "proj_camp_forge") {
               item.lbl.className = "dom-label portal-lbl";
               item.lbl.innerText = "鍛造熔爐 [已修復]";
@@ -358,7 +377,7 @@ window.Aetheria = window.Aetheria || {};
           } else if (d.isCookPot) {
             item.lbl.style.display = "block";
             item.lbl.className = "dom-label";
-            item.lbl.innerText = "料理鍋 [按A]";
+            item.lbl.innerText = "料理鍋/睡眠 [按A]";
           } else {
             item.lbl.style.display = "none";
           }
@@ -395,6 +414,7 @@ window.Aetheria = window.Aetheria || {};
         }, this);
 
         // 4. 更新野外魔物與守關領主
+        const isNight = window.Aetheria.State.getTimePhase().isNight;
         Object.keys(this.domPool.monsters).forEach(function(mId) {
           const item = this.domPool.monsters[mId];
           const m = item.data;
@@ -416,7 +436,8 @@ window.Aetheria = window.Aetheria || {};
             item.lbl.innerText = m.name + (allUnsealed ? " [可挑戰]" : " [需解雙封印柱]");
           } else {
             item.lbl.className = "dom-label";
-            item.lbl.innerText = (m.isShiny ? "[閃光] " : "") + m.name + " Lv." + m.lv;
+            const nightTag = isNight ? "🌙" : "";
+            item.lbl.innerText = nightTag + (m.isShiny ? "[閃光] " : "") + m.name + " Lv." + m.lv;
           }
         }, this);
 
