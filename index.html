@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Project J：艾瑟瑞亞的破曉 (Dawn of Aetheria v6.5)</title>
+  <link rel="stylesheet" href="css/style.css?v=6.5">
+</head>
+<body>
+
+<div id="app-container">
+
+  <!-- ================= 0. 遊戲首頁封面 (Title Screen) ================= -->
+  <div id="title-screen">
+    <div class="title-sky-bg">
+      <div class="title-emblem-box">
+        <div class="title-sub">PROJECT J : SURVIVAL &amp; TACTICAL RPG</div>
+        <h1 class="title-main">艾瑟瑞亞的破曉</h1>
+        <div class="title-ver">PIONEER EDITION v6.5</div>
+      </div>
+      <div class="title-hero-showcase" id="title-hero-preview"></div>
+    </div>
+
+    <div class="title-menu-panel">
+      <button class="na-btn title-btn highlight" id="btn-continue-game" onclick="Aetheria.UI.continueGame()">
+        繼續遊戲
+        <span id="continue-save-info" class="title-save-sub">載入進度中...</span>
+      </button>
+      <button class="na-btn title-btn" onclick="Aetheria.UI.startNewGame()">
+        新遊戲
+        <span class="title-save-sub">赤手空拳拓荒求生・親手建造橋樑與木筏</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ================= 上半屏：純 DOM 開源像素地圖視窗 & 戰鬥舞台 (45%) ================= -->
+  <div id="upper-screen">
+    <div id="hud-hearts-box"></div>
+    <div id="hud-overlay">
+      <div class="hud-minimal-left">
+        <span class="na-badge" id="hud-lv">Lv.1 赤手空拳</span>
+        <span class="na-badge badge-meal" id="hud-meal" style="display:none;">料理生效中</span>
+      </div>
+      <div class="hud-minimal-right" style="display:flex; gap:4px; align-items:center; pointer-events:auto;">
+        <span class="na-badge danger-safe" id="hud-zone">0. 曙光露營基地</span>
+        <button class="na-badge btn-fs-toggle" id="btn-fullscreen" onclick="Aetheria.UI.toggleFullScreen()">⛶ 全屏</button>
+      </div>
+    </div>
+
+    <div style="display:none;">
+      <span id="hud-pet"></span>
+      <span id="hud-guild"></span>
+      <button id="btn-bgm-toggle"></button>
+    </div>
+
+    <!-- 純 DOM 2D 捲動地圖視窗 -->
+    <div id="world-viewport">
+      <div id="world-map-layer">
+        <div id="world-terrain-layer"></div>
+        <div id="world-entity-layer"></div>
+      </div>
+    </div>
+
+    <!-- 純 DOM 小地圖雷達 -->
+    <div id="dom-minimap"></div>
+
+    <!-- 洞穴火把視野遮罩 -->
+    <div id="fog-overlay"></div>
+
+    <!-- 環境危害閃爍遮罩 -->
+    <div id="hazard-overlay"></div>
+
+    <!-- ================= 釣魚小遊戲互動視窗 ================= -->
+    <div id="fishing-minigame-modal" style="display:none;">
+      <div class="fishing-box">
+        <div class="fishing-title" id="fishing-title-txt">海濱垂釣小遊戲</div>
+        <div class="fishing-sub" id="fishing-sub-txt">當魚標游入【綠色命中區】或【金色紅心區】時，立即按下收竿！</div>
+        <div class="fishing-bar-track">
+          <div id="fishing-target-zone" class="fishing-target-zone">
+            <div class="fishing-perfect-zone"></div>
+          </div>
+          <div id="fishing-cursor" class="fishing-cursor"></div>
+        </div>
+        <div style="display:flex; gap:8px; width:100%; margin-top:6px;">
+          <button class="na-btn highlight" style="flex:2; padding:10px; font-size:16px;" onclick="Aetheria.Explore.reelInFish()">立即收竿！</button>
+          <button class="na-btn" style="flex:1; padding:10px;" onclick="Aetheria.Explore.closeFishingMinigame()">放棄</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 多層次像素戰鬥舞台 ================= -->
+    <div id="battle-stage">
+      <div class="bt-top-hud">
+        <div class="bt-hero-status-card">
+          <div class="bt-hero-hp-row">
+            <span id="bt-hero-hp-txt">HP 100/100</span>
+            <span id="bt-guard-pill" class="bt-guard-badge" style="display:none;">舉盾防禦中</span>
+          </div>
+          <div class="hp-bar-outer" style="margin-bottom:3px;">
+            <div class="hp-bar-inner hero-hp-fill" id="hero-hp-bar"></div>
+          </div>
+          <div class="bp-orbs" id="hero-bp-orbs"></div>
+          <div class="bt-streak-pill" id="battle-streak-tag">連勝 x0｜DEF 12</div>
+        </div>
+
+        <div class="bt-enemy-status-card">
+          <div class="bt-enemy-header">
+            <span id="enemy-name">翠風竹子妖 Lv.2</span>
+            <span id="enemy-shiny-tag" class="bt-shiny-pill" style="display:none;">閃光</span>
+          </div>
+          <div class="bt-intent-banner" id="enemy-intent-box">
+            <span id="enemy-intent-txt">意圖：普通襲擊</span>
+          </div>
+          <div class="bt-shield-weak-row">
+            <div class="bt-shield-box" id="enemy-shield-box">
+              <span class="css-diamond-shield"></span>
+              <span id="enemy-shield">護盾 2</span>
+            </div>
+            <div class="bt-weak-pills" id="enemy-weak">弱點：忍刀</div>
+          </div>
+          <div class="hp-bar-outer">
+            <div class="hp-bar-inner" id="enemy-hp-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bt-arena-field" id="bt-arena-bg">
+        <div class="bt-scenery-horizon"></div>
+        <div class="bt-platform bt-plat-left">
+          <div class="bt-pet-slot" id="bt-dom-subpet"></div>
+          <div class="bt-pet-slot" id="bt-dom-pet"></div>
+          <div class="bt-hero-slot" id="bt-dom-hero"></div>
+        </div>
+        <div id="bt-slash-fx" class="bt-slash-effect"></div>
+        <div class="bt-platform bt-plat-right">
+          <div class="bt-enemy-slot" id="bt-dom-enemy"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 劇情過場視窗 ================= -->
+    <div id="story-cutscene-modal" style="display:none;">
+      <div class="story-box">
+        <div class="story-chapter-tag" id="story-tag">序幕・失落符文與靜默災厄</div>
+        <div class="story-speaker" id="story-speaker">星象少女・艾莉婭</div>
+        <div class="story-text" id="story-content">劇情載入中...</div>
+        <button class="na-btn highlight story-next-btn" id="story-btn-next" onclick="Aetheria.UI.advanceCutscene()">繼續 ▸</button>
+      </div>
+    </div>
+
+    <div id="toast-banner">系統提示</div>
+  </div>
+
+  <!-- ================= 下半屏：3x2 掌機控制台 (55%) ================= -->
+  <div id="lower-screen">
+
+    <!-- 【面板 1】大世界探索控制台 -->
+    <div id="panel-explore" class="sub-panel active">
+      <div class="quick-nav">
+        <button class="na-btn highlight" id="nav-btn-map" onclick="Aetheria.UI.openWorldMapModal()">傳送</button>
+        <button class="na-btn" id="nav-btn-guild" onclick="Aetheria.UI.openGuildModal('quest')">日誌</button>
+        <button class="na-btn" id="nav-btn-forge" onclick="Aetheria.UI.openForgeModal('weapon')">工坊</button>
+        <button class="na-btn" id="nav-btn-bag" onclick="Aetheria.UI.openBagModal()">背包</button>
+        <button class="na-btn" id="nav-btn-job" onclick="Aetheria.UI.openJobPetModal()">職/寵</button>
+        <button class="na-btn" id="nav-btn-set" onclick="Aetheria.UI.openSettingsModal()">設定</button>
+      </div>
+
+      <div id="explore-log">
+        <div id="hud-quest" class="log-quest-line">主線載入中...</div>
+      </div>
+
+      <div class="controls-pads">
+        <!-- 加大版十字方向鍵 (已移除中間重複的調查鍵) -->
+        <div class="dpad">
+          <div></div>
+          <button class="dpad-btn" id="btn-up">▲</button>
+          <div></div>
+          <button class="dpad-btn" id="btn-left">◀</button>
+          <div class="dpad-center-axis"></div>
+          <button class="dpad-btn" id="btn-right">▶</button>
+          <div></div>
+          <button class="dpad-btn" id="btn-down">▼</button>
+          <div></div>
+        </div>
+
+        <div class="action-cluster">
+          <button class="btn-action-a" onclick="Aetheria.Explore.interactNearby()">
+            <span class="action-main-txt">A 鍵</span>
+            <span class="action-sub-txt" id="a-btn-hint">對話 / 拾取</span>
+          </button>
+          <div style="display:flex; gap:6px;">
+            <button class="na-btn" id="btn-use-bomb" style="padding:6px 10px;" onclick="Aetheria.Explore.useBomb()">炸彈</button>
+            <button class="na-btn" style="padding:6px 10px;" onclick="Aetheria.Explore.warpToCamp()">回營地</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 【面板 2】NPC 互動對話面板 -->
+    <div id="panel-dialogue" class="sub-panel">
+      <div class="dialogue-header">
+        <img id="npc-portrait-img" src="" alt="NPC" class="npc-portrait-box">
+        <div class="npc-title-box">
+          <div id="npc-name-label" style="color:var(--na-gold); font-weight:900; font-size:16px;">鐵匠大叔・巴爾</div>
+          <div id="npc-role-label" style="font-size:13px; color:#cbd5e1;">曙光營地首席武器師</div>
+        </div>
+        <button class="na-btn" style="margin-left:auto; padding:6px 12px;" onclick="Aetheria.UI.closePanelToExplore()">返回</button>
+      </div>
+
+      <div class="dialogue-scroll-box" id="npc-speech-text">對話載入中...</div>
+      <div class="path-actions-title">點擊下方任務卡片（接取 / 查看進度 / 交付領獎）：</div>
+      <div id="npc-action-buttons" class="npc-btn-grid"></div>
+    </div>
+
+    <!-- 【面板 3】戰鬥指令與詠唱面板 -->
+    <div id="panel-battle" class="sub-panel">
+      <div class="battle-cmd-header">
+        <div style="display:flex; align-items:center; gap:5px;">
+          <span style="color:var(--na-gold); font-weight:900; font-size:13px;" id="battle-phase-title">破盾詠唱</span>
+          <span id="timer-badge" style="display:none;">12s</span>
+        </div>
+        <div style="display:flex; gap:4px;">
+          <button class="na-btn" id="btn-boost" onclick="Aetheria.Battle.toggleBoost()">Boost</button>
+          <button class="na-btn" id="btn-guard" onclick="Aetheria.Battle.toggleGuard()">舉盾</button>
+          <button class="na-btn" id="btn-tame" style="display:none; border-color:#5ac54f;" onclick="Aetheria.Battle.attemptTame()">收服</button>
+          <button class="na-btn" onclick="Aetheria.Battle.useHealPotion()">藥水</button>
+          <button class="na-btn" onclick="Aetheria.Battle.fleeBattle()">撤退</button>
+        </div>
+      </div>
+
+      <div class="quiz-scroll-box">
+        <div class="quiz-meta">
+          <span id="q-subject-tag">[中文・龍語古卷]</span>
+          <span id="q-type-tag">四選一・疾風連斬</span>
+        </div>
+        <div class="quiz-prompt" id="q-prompt-text">題目載入中...</div>
+        <div id="q-diagram-container" class="quiz-diagram-thumb" style="display:none;" onclick="Aetheria.QuizUI.openLightbox()">
+          <div id="q-diagram-svg"></div>
+          <span style="font-size:12px; color:var(--na-gold);">[點擊放大檢視圖卷]</span>
+        </div>
+      </div>
+
+      <div id="quiz-interactive-area"></div>
+    </div>
+
+    <!-- 【面板 4】多功能系統視窗 -->
+    <div id="panel-modal" class="sub-panel">
+      <div class="modal-header-bar">
+        <h3 id="modal-title">系統選單</h3>
+        <button class="na-btn" style="padding:5px 12px;" onclick="Aetheria.UI.closePanelToExplore()">返回探索</button>
+      </div>
+      <div id="modal-body" class="modal-content-scroll"></div>
+    </div>
+
+  </div>
+
+  <!-- 圖片全屏放大燈箱 -->
+  <div id="image-lightbox" onclick="Aetheria.QuizUI.closeLightbox()">
+    <div style="color:var(--na-gold); font-weight:900; font-size:16px; margin-bottom:10px;">古文明圖卷（點擊任意處關閉）</div>
+    <div id="lightbox-content"></div>
+  </div>
+</div>
+
+<!-- 防雙手誤觸縮放攔截器 -->
+<script>
+  (function() {
+    document.addEventListener("dblclick", function(e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener("gesturestart", function(e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener("gesturechange", function(e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener("gestureend", function(e) { e.preventDefault(); }, { passive: false });
+    document.addEventListener("touchmove", function(e) {
+      if (e.touches && e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  })();
+</script>
+
+<!-- v6.5 模組與四科獨立題庫載入順序 -->
+<script src="js/engine/save-state.js?v=6.5"></script>
+<script src="js/engine/audio-synth.js?v=6.5"></script>
+<script src="js/data/pixel-sprites.js?v=6.5"></script>
+<script src="js/data/world-maps.js?v=6.5"></script>
+<script src="js/data/items-crafting.js?v=6.5"></script>
+<script src="js/data/jobs-monsters.js?v=6.5"></script>
+<script src="js/data/quests-npcs.js?v=6.5"></script>
+
+<script src="questions/questions-chinese.js?v=6.5"></script>
+<script src="questions/questions-english.js?v=6.5"></script>
+<script src="questions/questions-humanities.js?v=6.5"></script>
+<script src="questions/questions-science.js?v=6.5"></script>
+<script src="questions/question-bridge.js?v=6.5"></script>
+
+<script src="js/engine/camera-renderer.js?v=6.5"></script>
+<script src="js/systems/exploration-gather.js?v=6.5"></script>
+<script src="js/systems/quiz-widgets.js?v=6.5"></script>
+<script src="js/systems/battle-break-boost.js?v=6.5"></script>
+<script src="js/systems/progression-town.js?v=6.5"></script>
+
+</body>
+</html>
