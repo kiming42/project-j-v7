@@ -1003,6 +1003,9 @@ window.Aetheria = window.Aetheria || {};
     endBattle: function() {
       clearInterval(this.timerInterval);
       this.active = false;
+      this.mapMonsterRef = null;
+      this.harvestNodeRef = null;
+      this.pathActionRef = null;
       document.getElementById("battle-stage").style.display = "none";
 
       const s = window.Aetheria.State.data;
