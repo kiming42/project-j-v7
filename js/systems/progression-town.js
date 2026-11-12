@@ -2046,7 +2046,7 @@ window.Aetheria = window.Aetheria || {};
     }
   };
 
-  window.Aetheria.UI = UIManager;
+  window.Aetheria.UI = Object.assign(window.Aetheria.UI || {}, UIManager);
 
   function startMainGameLoop() {
     try { window.Aetheria.Data.Sprites.init(); } catch (e) {}
