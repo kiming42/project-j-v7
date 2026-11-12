@@ -7,7 +7,7 @@
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  const SAVE_KEY = "PROJECT_J_AETHERIA_SAVE_V6";
+  const SAVE_KEY = "AETHERIA_SAVE_V7";
 
   const DEFAULT_STATE = {
     version: "6.0",
