@@ -1,10 +1,7 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 大航海未知荒島與隨機秘境地牢模組 (ocean-voyage.js - v7.3)
- * 模組化獨立擴充檔：
- *   1. 自動註冊像素圖示：航海舵輪碼頭 (voyage_dock)、遠航帆船 (voyage_ship)、深淵階梯與古航海圖
- *   2. 於曙光營地池畔與翡翠海岸注入【航海碼頭】，開啟「大航海羅盤」四大隨機海域與多層秘境地牢
- *   3. 每次出海動態隨機生成島嶼/地牢迷宮、礦脈、釣魚點、炸彈裂縫岩壁密室、荒島求生營火與守島首領
- *   4. 完美結合 v7.2 飽食度、松脂火把照明、爆破炸彈與上屏精簡短標籤
+ * Project J：艾瑟瑞亞的破曉 — 大航海未知荒島與隨機秘境地牢模組 (ocean-voyage.js - v7.3.1)
+ * 修正：1.將營地【⛵航海碼頭】移至奇奇下方空地 (435, 385)，徹底解決與 NPC 重疊問題
+ *       2.內建 60FPS 穩定幀率鎖定器與舒適移動速度調節，解決 120Hz 手機與飽食加成導致走太快的問題
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -77,7 +74,6 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    // 航海舵輪碼頭樁 (16x16)
     const dockWheelUrl = buildGridDataUrl([
       ".......YY.......",
       "..Y...YYYY...Y..",
@@ -99,7 +95,6 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", Y: "#f5b700", D: "#8f563b", W: "#d9a066"
     });
 
-    // 古航海圖殘卷 (16x16)
     const mapChartUrl = buildGridDataUrl([
       "..KKKKKKKKKKKK..",
       ".KYYYYYYYYYYYYK.",
@@ -194,7 +189,7 @@ window.Aetheria = window.Aetheria || {};
       hungerCost: 20,
       theme: "cave",
       bgm: "cave",
-      fog: true, // 黑霧地牢，點燃松脂火把或火盆可照亮！
+      fog: true,
       reqRaft: false,
       isMultiFloor: true,
       desc: "【無限層數隨機地牢】伸手不見五指的古代迷宮！內含需用【炸彈】炸開的隱藏寶庫與稀有礦脈，層數越深獎勵越豐厚！",
@@ -215,7 +210,7 @@ window.Aetheria = window.Aetheria || {};
       theme: "volcano",
       bgm: "boss",
       fog: false,
-      reqRaft: true, // 需完成第3區破浪遠航木筏才可駛入終極外海
+      reqRaft: true,
       desc: "【遠洋傳奇孤島】需建造「破浪遠航木筏」方可抵達。遍佈熔岩黑曜石、深淵星隕鐵、世界樹金葉與遠古海龍皇！",
       orePool: ["obsidian", "obsidian", "starIron", "mithril"],
       herbPool: ["goldLeaf", "iceLotus", "magmaScale", "flower"],
@@ -271,7 +266,6 @@ window.Aetheria = window.Aetheria || {};
       { cx: 940, cy: 320, rx: 120, ry: 95 }
     ];
 
-    // 1. 隨機生成樹木或岩柱迷宮障礙
     const trees = [];
     const treeCount = 18;
     for (let i = 0; i < treeCount; i++) {
@@ -285,7 +279,6 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // 2. 互動設施：荒島求生營火、南北封印柱、水波釣魚點、炸彈裂縫岩壁密室
     const seal1Id = "seal_voy_" + islandDef.id + "_" + floorNum + "_1";
     const seal2Id = "seal_voy_" + islandDef.id + "_" + floorNum + "_2";
     const wallId  = "wall_voy_" + Date.now() + "_" + randInt(100, 999);
@@ -324,7 +317,6 @@ window.Aetheria = window.Aetheria || {};
         isSealPillar: true,
         name: "南翼海神柱"
       },
-      // 中央隱藏炸彈裂縫岩壁（炸開可拿秘寶箱）
       {
         id: wallId,
         x: vaultPt.x - 36,
@@ -335,7 +327,6 @@ window.Aetheria = window.Aetheria || {};
         solid: true,
         isCrackedWall: true
       },
-      // 擋路玄武巨石與枯木（考驗重鎬與戰斧）
       {
         id: "obs_boulder_" + randInt(1, 999),
         x: 360,
@@ -387,11 +378,9 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // 3. 隨機生成礦脈、靈植與秘寶箱
     const nodes = [];
     const matNames = window.Aetheria.Data.MATERIALS || {};
 
-    // 裂縫岩壁後方的秘境寶箱
     nodes.push({
       id: "voy_chest_vault_" + Date.now(),
       x: vaultPt.x + 8,
@@ -403,7 +392,6 @@ window.Aetheria = window.Aetheria || {};
       floorNum: floorNum
     });
 
-    // 首領身後的遠古航海寶箱
     nodes.push({
       id: "voy_chest_boss_" + Date.now(),
       x: 1035,
@@ -415,7 +403,6 @@ window.Aetheria = window.Aetheria || {};
       floorNum: floorNum + 1
     });
 
-    // 隨機生成 6 個礦石節點 + 6 個靈植/漂流物節點
     for (let m = 0; m < 6; m++) {
       let ox = randInt(230, 860);
       let oy = randInt(80, 550);
@@ -465,7 +452,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // 4. 隨機生成巡邏魔物與守島/守層首領
     const monsters = [];
     for (let k = 0; k < 5; k++) {
       const mTemplate = islandDef.monPool[k % islandDef.monPool.length];
@@ -505,7 +491,6 @@ window.Aetheria = window.Aetheria || {};
       isVoyageBoss: true
     });
 
-    // 5. 傳送門：西側搭船返航、東側（地牢專屬）深入下一層
     const portals = [
       {
         id: "p_voyage_return",
@@ -513,8 +498,8 @@ window.Aetheria = window.Aetheria || {};
         x: 56,
         y: 320,
         targetZone: "camp_hub",
-        targetX: 425,
-        targetY: 295,
+        targetX: 435,
+        targetY: 350,
         icon: "door"
       }
     ];
@@ -560,38 +545,48 @@ window.Aetheria = window.Aetheria || {};
     return generated;
   }
 
-  // ================= 6. 注入【航海碼頭】至曙光營地與翡翠海岸 =================
+  // ================= 6. 注入【航海碼頭】至曙光營地（奇奇下方空地）與翡翠海岸 =================
   function injectVoyageDocksIntoWorld(mapObj) {
-    if (!mapObj || mapObj._voyageDockInjected) return mapObj;
+    if (!mapObj) return mapObj;
 
     if (mapObj.id === "camp_hub") {
-      mapObj._voyageDockInjected = true;
       mapObj.decos = mapObj.decos || [];
-      mapObj.decos.push({
-        id: "deco_camp_voyage_dock",
-        x: 454,
-        y: 292,
-        sprite: "voyage_dock",
-        w: 28,
-        h: 28,
-        solid: true,
-        isVoyageDock: true,
-        name: "航海碼頭"
-      });
+      let existing = mapObj.decos.find(function(d) { return d.id === "deco_camp_voyage_dock"; });
+      if (existing) {
+        existing.x = 435;
+        existing.y = 385;
+      } else {
+        mapObj.decos.push({
+          id: "deco_camp_voyage_dock",
+          x: 435,
+          y: 385,
+          sprite: "voyage_dock",
+          w: 28,
+          h: 28,
+          solid: true,
+          isVoyageDock: true,
+          name: "航海碼頭"
+        });
+      }
     } else if (mapObj.id === "zone3_coast") {
-      mapObj._voyageDockInjected = true;
       mapObj.decos = mapObj.decos || [];
-      mapObj.decos.push({
-        id: "deco_coast_voyage_dock",
-        x: 968,
-        y: 505,
-        sprite: "voyage_dock",
-        w: 30,
-        h: 30,
-        solid: true,
-        isVoyageDock: true,
-        name: "遠航碼頭"
-      });
+      let existingCoast = mapObj.decos.find(function(d) { return d.id === "deco_coast_voyage_dock"; });
+      if (existingCoast) {
+        existingCoast.x = 905;
+        existingCoast.y = 540;
+      } else {
+        mapObj.decos.push({
+          id: "deco_coast_voyage_dock",
+          x: 905,
+          y: 540,
+          sprite: "voyage_dock",
+          w: 30,
+          h: 30,
+          solid: true,
+          isVoyageDock: true,
+          name: "遠航碼頭"
+        });
+      }
     }
     return mapObj;
   }
@@ -799,7 +794,6 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.State.save();
       window.Aetheria.UI.closePanelToExplore();
 
-      // 18% 機率觸發航海奇遇：拾獲海上漂流木桶
       if (floorNum === 1 && Math.random() < 0.18) {
         s.inventory.rationFish = (s.inventory.rationFish || 0) + 1;
         s.gold += 40;
@@ -809,7 +803,6 @@ window.Aetheria = window.Aetheria || {};
       }
     },
 
-    // 荒島求生營火互動：就地炭烤剛釣到的鮮魚/微光菇，或添柴取暖回血
     openIslandCampfireModal: function() {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
@@ -891,13 +884,35 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Voyage = VoyageSystem;
 
-  // ================= 8. 掛載探索、秘寶箱、首領獎勵與渲染器 =================
+  // ================= 8. 掛載 60FPS 穩定步速調節器、探索與首領獎勵 =================
   function hookSystemsForVoyage() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
     const Bat = window.Aetheria.Battle;
 
     if (Exp) {
+      // 修正 120Hz 高刷手機與飽食度加成導致移動過快的問題：鎖定 60FPS 時間步並將移動速度調回舒適節奏
+      let lastStepTime = 0;
+      const origUpdateStep = Exp.updateStep.bind(Exp);
+      Exp.updateStep = function() {
+        const now = performance.now();
+        if (now - lastStepTime < 15.5) {
+          return; // 在 120Hz 手機上自動跳過多餘幀，確保與 60Hz 速度完全一致
+        }
+        lastStepTime = now;
+
+        // 稍微調降方向移動量 (0.76x)，抵銷飽食度 1.12x 加速，令角色操控精準不飄移
+        const savedDX = this.moveDX;
+        const savedDY = this.moveDY;
+        if (this.isMoving) {
+          this.moveDX = savedDX * 0.76;
+          this.moveDY = savedDY * 0.76;
+        }
+        origUpdateStep();
+        this.moveDX = savedDX;
+        this.moveDY = savedDY;
+      };
+
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
@@ -937,7 +952,6 @@ window.Aetheria = window.Aetheria || {};
         origHint(mapObj, s);
       };
 
-      // 攔截秘境地牢「深入下一層」傳送門
       const origPortal = Exp.triggerPortal.bind(Exp);
       Exp.triggerPortal = function(portal) {
         const s = window.Aetheria.State.data;
@@ -955,7 +969,6 @@ window.Aetheria = window.Aetheria || {};
         origPortal(portal);
       };
 
-      // 擴充荒島與秘境寶箱獎勵（必出古航海圖殘卷與高階礦材）
       const origHarvest = Exp.harvestNode.bind(Exp);
       Exp.harvestNode = function(node) {
         if (node && node.type === "chest" && node.isVoyageChest) {
@@ -985,7 +998,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 擊敗荒島或秘境地牢首領時，額外獎勵【古航海圖殘卷 +1】
     if (Bat && Bat.winBattle) {
       const origWin = Bat.winBattle.bind(Bat);
       Bat.winBattle = function() {
@@ -1003,7 +1015,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 渲染精簡短標籤：航海碼頭、荒島營火
     if (Ren && Ren.renderWorld) {
       const origRender = Ren.renderWorld.bind(Ren);
       Ren.renderWorld = function() {
@@ -1041,7 +1052,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Ocean Voyage v7.3 module init error:", err);
+      console.error("Ocean Voyage v7.3.1 module init error:", err);
     }
   }
 
