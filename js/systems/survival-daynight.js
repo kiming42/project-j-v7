@@ -1,10 +1,10 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 動態生態隨機素材、智慧魔物分佈與日夜帳篷模組 (survival-daynight.js - v7.7)
- * 核心升級：
- *   1. 【防重疊隨機素材生成】：各區素材改為在隨機地點、隨不同時段動態生成，嚴格避開樹木、NPC、工程、河流與其他物品
- *   2. 【隨時間動態補充】：每當日夜時段切換（破曉/白晝/黃昏/黑夜），全地圖自動在不同位置長出符合該時段的新素材
- *   3. 【合理增加魔物 & 可走位避開】：白晝+2~3隻、黑夜+4~5隻魔物；縮小仇恨圈、保留路口安全通道、手持火把可威懾夜魔，確保主角能繞路避開！
- *   4. 完整包含全屏自適應、標籤簡化、下半框按鍵人體工學優化與主角帳篷睡袋日出動畫
+ * Project J：艾瑟瑞亞的破曉 — 高密度魔物群、主角高速移動與激戰生態模組 (survival-daynight.js - v7.8)
+ * 核心修正：
+ *   1. 【強制高密度魔物生成】：放寬地形檢測，白晝每區強制額外生成 6~8 隻魔物，黑夜暴增 10~14 隻夜行狂暴魔物！
+ *   2. 【主角移動速度大幅提升】：直接提供 1.42x 移動速度加成，抵銷先前減速，操控爽快敏捷！
+ *   3. 【取消從容走位・高壓迫感追擊】：魔物索敵視野擴大至 115~140px，追擊速度大幅提高至 1.95~2.45，緊咬主角不放！
+ *   4. 保留防重疊隨機素材分佈、全屏自適應、標籤簡化與主角帳篷睡袋日出動畫
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -294,13 +294,13 @@ window.Aetheria = window.Aetheria || {};
       .replace("無盡試煉之塔", "試煉塔");
   }
 
-  // ================= 3. v7.7 核心：各區動態隨機素材庫與魔物生態配置 =================
+  // ================= 3. v7.8 核心：高密度魔物群與隨機素材生態池 =================
   const ZONE_ECOLOGY_POOLS = {
     camp_hub: {
       nodeCount: 7,
       extraDayMons: 0,
       extraNightMons: 0,
-      maxSpawnY: 348, // 避免生成在南側深海裡
+      maxSpawnY: 348,
       pool: [
         { giveKey: "branch", type: "wood",    reqTool: "axe", reqToolLv: 0, weight: 38, nightBoost: false },
         { giveKey: "flint",  type: "crystal", reqTool: "pickaxe", reqToolLv: 0, weight: 36, nightBoost: false },
@@ -308,11 +308,11 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     zone1_forest: {
-      nodeCount: 12,
-      extraDayMons: 2,
-      extraNightMons: 4,
-      monNames: ["迷霧竹葉妖", "森林巡遊菇精", "暗林枯木妖", "翠風野林怪"],
-      monTypes: ["bamboo", "bamboo", "skull"],
+      nodeCount: 14,
+      extraDayMons: 7,    // 白晝額外 +7 隻（連同原本共約 11 隻）
+      extraNightMons: 12, // 黑夜額外 +12 隻（連同原本共約 16 隻！）
+      monNames: ["迷霧竹葉妖", "森林狂暴菇精", "暗林枯木妖", "翠風野林怪", "荊棘襲擊者"],
+      monTypes: ["bamboo", "skull", "bamboo"],
       pool: [
         { giveKey: "branch", type: "wood",    reqTool: "axe",     reqToolLv: 0, weight: 16 },
         { giveKey: "flint",  type: "crystal", reqTool: "pickaxe", reqToolLv: 0, weight: 14 },
@@ -324,10 +324,10 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     cave1_mushroom: {
-      nodeCount: 10,
-      extraDayMons: 2,
-      extraNightMons: 4,
-      monNames: ["洞窟夜行蝙蝠", "微光孢子妖", "礦坑碎骨兵", "晶簇守衛怪"],
+      nodeCount: 11,
+      extraDayMons: 6,
+      extraNightMons: 10,
+      monNames: ["洞窟嗜血蝙蝠", "微光狂暴孢妖", "礦坑碎骨兵", "晶簇守衛怪"],
       monTypes: ["skull", "bamboo"],
       pool: [
         { giveKey: "flint",   type: "crystal", reqTool: "pickaxe", reqToolLv: 0, weight: 15 },
@@ -338,10 +338,10 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     zone2_canyon: {
-      nodeCount: 11,
-      extraDayMons: 3,
-      extraNightMons: 5,
-      monNames: ["峽谷流沙蠍", "荒岩骷髏弓手", "斷崖風暴妖", "狂沙巡狩者"],
+      nodeCount: 12,
+      extraDayMons: 7,
+      extraNightMons: 12,
+      monNames: ["峽谷流沙毒蠍", "荒岩骷髏獵手", "斷崖風暴妖", "狂沙追獵者"],
       monTypes: ["skull", "bamboo"],
       pool: [
         { giveKey: "iron",    type: "crystal", reqTool: "pickaxe", reqToolLv: 1, weight: 16 },
@@ -352,10 +352,10 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     zone3_coast: {
-      nodeCount: 12,
-      extraDayMons: 3,
-      extraNightMons: 5,
-      monNames: ["沉船亡靈水手", "潮汐巡海妖", "深淵寄居蟹", "迷霧海盜兵"],
+      nodeCount: 13,
+      extraDayMons: 7,
+      extraNightMons: 12,
+      monNames: ["沉船亡靈水手", "潮汐噬魂海妖", "深淵鐵甲巨蟹", "迷霧海盜狂徒"],
       monTypes: ["skull", "bamboo"],
       pool: [
         { giveKey: "wood",      type: "wood",    reqTool: "axe",     reqToolLv: 1, weight: 18 },
@@ -367,10 +367,10 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     zone4_snow: {
-      nodeCount: 11,
-      extraDayMons: 3,
-      extraNightMons: 5,
-      monNames: ["極寒霜原狼", "暴雪冰晶妖", "凍土亡靈衛", "冰河巡獵者"],
+      nodeCount: 12,
+      extraDayMons: 8,
+      extraNightMons: 13,
+      monNames: ["極寒嗜血霜狼", "暴雪冰晶魔", "凍土亡靈狂戰", "冰河獵殺者"],
       monTypes: ["skull", "bamboo"],
       pool: [
         { giveKey: "basalt",   type: "crystal", reqTool: "pickaxe", reqToolLv: 2, weight: 18 },
@@ -380,10 +380,10 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     zone5_volcano: {
-      nodeCount: 11,
-      extraDayMons: 3,
-      extraNightMons: 5,
-      monNames: ["紅蓮炎魔兵", "熔岩黑曜衛", "煉獄火蜥蜴", "焦土狂暴魔"],
+      nodeCount: 12,
+      extraDayMons: 8,
+      extraNightMons: 14,
+      monNames: ["紅蓮炎魔狂兵", "熔岩黑曜魔衛", "煉獄火蜥蜴", "焦土毀滅者"],
       monTypes: ["skull", "bamboo"],
       pool: [
         { giveKey: "basalt",   type: "crystal", reqTool: "pickaxe", reqToolLv: 2, weight: 18 },
@@ -393,10 +393,10 @@ window.Aetheria = window.Aetheria || {};
       ]
     },
     zone6_sky: {
-      nodeCount: 11,
-      extraDayMons: 3,
-      extraNightMons: 5,
-      monNames: ["星界墮落神兵", "浮空聖殿守衛", "破曉試煉魔像"],
+      nodeCount: 12,
+      extraDayMons: 8,
+      extraNightMons: 14,
+      monNames: ["星界墮落神兵", "浮空聖殿裁決者", "破曉試煉魔像"],
       monTypes: ["skull", "bamboo"],
       pool: [
         { giveKey: "obsidian", type: "crystal", reqTool: "pickaxe", reqToolLv: 3, weight: 22 },
@@ -410,66 +410,61 @@ window.Aetheria = window.Aetheria || {};
     return min + Math.floor(Math.random() * (max - min + 1));
   }
 
-  // 嚴格防重疊座標檢測器：確保隨機生成的素材或魔物絕不與樹木、NPC、工程、傳送門、河流或其他物品重疊
+  // 防重疊座標搜尋器（支援 120 次重試與合理間距，確保魔物與素材 100% 足額生成！）
   function findNonOverlappingSpot(mapObj, existingList, options) {
     options = options || {};
     const W = mapObj.width || 640;
-    const H = options.maxY || ((mapObj.height || 480) - 55);
-    const minX = options.minX || 55;
-    const maxX = options.maxX || (W - 55);
-    const minY = options.minY || 65;
-    const avoidPortalsDist = options.avoidPortalsDist || 62;
+    const H = options.maxY || ((mapObj.height || 480) - 48);
+    const minX = options.minX || 50;
+    const maxX = options.maxX || (W - 50);
+    const minY = options.minY || 58;
+    const avoidPortalsDist = options.avoidPortalsDist || 52;
+    const treeSafeDist = options.forMonster ? 24 : 32;
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
 
-    for (let attempt = 0; attempt < 45; attempt++) {
+    for (let attempt = 0; attempt < 120; attempt++) {
       const cx = randBetween(minX, maxX);
       const cy = randBetween(minY, H);
 
-      // 1. 避開河流與斷橋區域
       if (mapObj.hasRiver) {
         const rx = mapObj.riverX || 1030;
-        if (cx > rx - 38 && cx < rx + 68) continue;
+        if (cx > rx - 30 && cx < rx + 58) continue;
       }
 
-      // 2. 避開玩家當前站立位置（避免突然刷在玩家臉上）
-      if (s.currentZone === mapObj.id && Math.hypot(cx - (s.heroX || 0), cy - (s.heroY || 0)) < (options.forMonster ? 95 : 42)) {
+      if (s.currentZone === mapObj.id && Math.hypot(cx - (s.heroX || 0), cy - (s.heroY || 0)) < (options.forMonster ? 65 : 34)) {
         continue;
       }
 
-      // 3. 避開所有傳送門與出入口
       let hitPortal = false;
       (mapObj.portals || []).forEach(function(p) {
         if (Math.hypot(cx - p.x, cy - p.y) < avoidPortalsDist) hitPortal = true;
       });
       if (hitPortal) continue;
 
-      // 4. 避開所有樹木與石柱迷宮
       let hitTree = false;
       (mapObj.trees || []).forEach(function(t) {
-        if (Math.hypot(cx - (t.x + 16), cy - (t.y + 16)) < 40) hitTree = true;
+        if (Math.hypot(cx - (t.x + 14), cy - (t.y + 14)) < treeSafeDist) hitTree = true;
       });
       if (hitTree) continue;
 
-      // 5. 避開所有 NPC
       let hitNpc = false;
       (mapObj.npcs || []).forEach(function(n) {
-        if (Math.hypot(cx - n.x, cy - n.y) < 48) hitNpc = true;
+        if (Math.hypot(cx - n.x, cy - n.y) < 38) hitNpc = true;
       });
       if (hitNpc) continue;
 
-      // 6. 避開所有裝飾物、工程牌、釣魚點、封印柱與營地帳篷
       let hitDeco = false;
       (mapObj.decos || []).forEach(function(d) {
-        const radius = (d.w && d.w > 40) ? 54 : 42;
+        const radius = (d.w && d.w > 40) ? 44 : 32;
         if (Math.hypot(cx - (d.x + (d.w || 26) / 2), cy - (d.y + (d.h || 26) / 2)) < radius) hitDeco = true;
       });
       if (hitDeco) continue;
 
-      // 7. 避開已經生成的其他素材點或魔物
       let hitOther = false;
+      const spacing = options.minSpacing || 34;
       (existingList || []).forEach(function(item) {
         if (item.opened || item.alive === false) return;
-        if (Math.hypot(cx - item.x, cy - item.y) < (options.minSpacing || 42)) hitOther = true;
+        if (Math.hypot(cx - item.x, cy - item.y) < spacing) hitOther = true;
       });
       if (hitOther) continue;
 
@@ -496,7 +491,6 @@ window.Aetheria = window.Aetheria || {};
     return pool[0];
   }
 
-  // 為指定地圖重新隨機分佈素材與動態數量的魔物
   function populateDynamicZoneEcology(mapObj, onlyReplenishNodes) {
     if (!mapObj || !ZONE_ECOLOGY_POOLS[mapObj.id]) return;
     const eco = ZONE_ECOLOGY_POOLS[mapObj.id];
@@ -512,10 +506,9 @@ window.Aetheria = window.Aetheria || {};
       ? (mapObj.nodes || []).filter(function(n) { return !n.opened; })
       : chests.slice();
 
-    const targetCount = eco.nodeCount + (isNight && mapObj.id !== "camp_hub" ? 2 : 0);
+    const targetCount = eco.nodeCount + (isNight && mapObj.id !== "camp_hub" ? 3 : 0);
     const needed = Math.max(0, targetCount - (activeNodes.length - chests.length));
 
-    // 若是曙光營地首次生成，保底包含枯枝x2、燧石x2、黏土x2，確保新手序章 100% 順暢，且位置每次隨機！
     const guaranteedQueue = (!onlyReplenishNodes && mapObj.id === "camp_hub")
       ? [
           eco.pool[0], eco.pool[0],
@@ -530,12 +523,11 @@ window.Aetheria = window.Aetheria || {};
         : pickWeightedEcologyItem(eco.pool, isNight);
 
       const spotOpts = {
-        minY: picked.preferSouthShore ? 315 : (mapObj.id === "camp_hub" ? 155 : 65),
-        maxY: picked.preferSouthShore ? 352 : (eco.maxSpawnY || (mapObj.height - 55)),
-        minSpacing: 38
+        minY: picked.preferSouthShore ? 315 : (mapObj.id === "camp_hub" ? 155 : 58),
+        maxY: picked.preferSouthShore ? 352 : (eco.maxSpawnY || (mapObj.height - 50)),
+        minSpacing: 34
       };
 
-      // 第一區森林：確保至少前 65% 的素材生成在河西岸 (x < 960)，免除修橋前拿不到素材
       if (mapObj.id === "zone1_forest" && i < Math.ceil(needed * 0.68)) {
         spotOpts.maxX = 950;
       }
@@ -562,32 +554,38 @@ window.Aetheria = window.Aetheria || {};
 
     mapObj.nodes = activeNodes;
 
-    // (B) 合理增加魔物數量（保留原本首領與固定怪，並在安全空曠處動態增補巡邏怪）
+    // (B) 大幅增加魔物數量（白晝 +6~8 隻，黑夜 +10~14 隻！）
     if (!onlyReplenishNodes && (eco.extraDayMons > 0 || eco.extraNightMons > 0)) {
-      // 先移除上一次動態生成的巡邏怪，保留原版基礎魔物與 Boss
       const baseMons = (mapObj.monsters || []).filter(function(m) { return !m.isDynamicSpawn; });
-      // 將原版小怪的隨機出生點也微調防呆，並重設存活狀態
       baseMons.forEach(function(m) { m.alive = true; });
 
       const extraCount = isNight ? eco.extraNightMons : eco.extraDayMons;
       const allMons = baseMons.slice();
 
       for (let mIdx = 0; mIdx < extraCount; mIdx++) {
-        const monSpot = findNonOverlappingSpot(mapObj, allMons.concat(activeNodes), {
+        let monSpot = findNonOverlappingSpot(mapObj, allMons, {
           forMonster: true,
-          avoidPortalsDist: 115, // 遠離出入口與傳送門至少 115px，確保玩家過圖絕不會被堵門！
-          minSpacing: 68
+          avoidPortalsDist: 65,
+          minSpacing: 38
         });
-        if (!monSpot) continue;
 
-        const nameList = eco.monNames || ["荒野巡邏魔物"];
+        // 保底生成機制：即使地圖樹木極密集，也會確保足額生成所有怪物！
+        if (!monSpot) {
+          const fallbackMaxX = (mapObj.hasRiver && mIdx % 2 === 0) ? ((mapObj.riverX || 1030) - 55) : (mapObj.width - 70);
+          monSpot = {
+            x: randBetween(120, Math.max(200, fallbackMaxX)),
+            y: randBetween(80, mapObj.height - 80)
+          };
+        }
+
+        const nameList = eco.monNames || ["荒野狂暴魔"];
         const typeList = eco.monTypes || ["bamboo"];
         const mName = nameList[mIdx % nameList.length];
         const mType = typeList[mIdx % typeList.length];
-        const baseLv = Math.max(1, (mapObj.recLv || 2) + randBetween(-1, 2));
+        const baseLv = Math.max(1, (mapObj.recLv || 2) + randBetween(0, 2));
 
         allMons.push({
-          id: "dyn_mon_" + mapObj.id + "_" + Date.now() + "_" + mIdx,
+          id: "dyn_mon_" + mapObj.id + "_" + Date.now() + "_" + mIdx + "_" + Math.floor(Math.random() * 999),
           name: mName,
           lv: baseLv,
           x: monSpot.x,
@@ -596,7 +594,7 @@ window.Aetheria = window.Aetheria || {};
           homeY: monSpot.y,
           type: mType,
           isBoss: false,
-          isShiny: (Math.random() < (isNight ? 0.22 : 0.12)),
+          isShiny: (Math.random() < (isNight ? 0.25 : 0.14)),
           alive: true,
           isDynamicSpawn: true
         });
@@ -606,52 +604,22 @@ window.Aetheria = window.Aetheria || {};
     }
 
     mapObj._refreshToken = Date.now() + Math.floor(Math.random() * 1000);
+    if (window.Aetheria.Renderer) {
+      window.Aetheria.Renderer.builtZoneKey = null;
+    }
   }
 
-  // 當夜晚降臨時，在當前野外地圖即時增援 2 隻夜行魔物（遠離主角當前位置）並長出夜間靈植
   function triggerTimePhaseEcologyShift(newPhaseId) {
     const s = window.Aetheria.State && window.Aetheria.State.data;
     if (!s || !window.Aetheria.Data || !window.Aetheria.Data.Maps) return;
     const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
     if (!mapObj || !ZONE_ECOLOGY_POOLS[mapObj.id]) return;
 
-    // 補充隨時間新長出來的素材
-    populateDynamicZoneEcology(mapObj, true);
-
-    // 若進入黑夜，在遠離主角處增派 2 隻夜行巡邏魔物
-    if (newPhaseId === "night" && mapObj.id !== "camp_hub") {
-      const eco = ZONE_ECOLOGY_POOLS[mapObj.id];
-      const allMons = mapObj.monsters || [];
-      for (let i = 0; i < 2; i++) {
-        const spot = findNonOverlappingSpot(mapObj, allMons.concat(mapObj.nodes || []), {
-          forMonster: true,
-          avoidPortalsDist: 115,
-          minSpacing: 70
-        });
-        if (spot) {
-          const mName = (eco.monNames && eco.monNames[i % eco.monNames.length]) || "暗夜巡獵者";
-          allMons.push({
-            id: "night_ambush_" + Date.now() + "_" + i,
-            name: mName,
-            lv: Math.max(2, (mapObj.recLv || 2) + 1),
-            x: spot.x,
-            y: spot.y,
-            homeX: spot.x,
-            homeY: spot.y,
-            type: "skull",
-            isBoss: false,
-            isShiny: (Math.random() < 0.25),
-            alive: true,
-            isDynamicSpawn: true
-          });
-        }
-      }
-      mapObj.monsters = allMons;
-    }
-
-    mapObj._refreshToken = Date.now();
-    if (window.Aetheria.Renderer) {
-      window.Aetheria.Renderer.builtZoneKey = null;
+    if (newPhaseId === "night" || newPhaseId === "dawn") {
+      // 入夜或破曉時直接完整重刷該區魔物群與素材，黑夜魔物數量立即暴增！
+      populateDynamicZoneEcology(mapObj, false);
+    } else {
+      populateDynamicZoneEcology(mapObj, true);
     }
   }
 
@@ -780,34 +748,34 @@ window.Aetheria = window.Aetheria || {};
   }
 
   function injectHeroTentIntoCamp(campMap) {
-    if (!campMap || campMap._heroTentInjected) return campMap;
-    campMap._heroTentInjected = true;
+    if (!campMap) return campMap;
+    if (!campMap._heroTentInjected) {
+      campMap._heroTentInjected = true;
 
-    campMap.decos = campMap.decos || [];
-    campMap.decos.push({
-      id: "deco_hero_tent_ext",
-      x: 285,
-      y: 76,
-      sprite: "hero_tent",
-      w: 54,
-      h: 48,
-      solid: true
-    });
+      campMap.decos = campMap.decos || [];
+      campMap.decos.push({
+        id: "deco_hero_tent_ext",
+        x: 285,
+        y: 76,
+        sprite: "hero_tent",
+        w: 54,
+        h: 48,
+        solid: true
+      });
 
-    campMap.portals = campMap.portals || [];
-    campMap.portals.push({
-      id: "p_enter_hero_tent",
-      name: "主角帳篷",
-      x: 312,
-      y: 138,
-      targetZone: "tent_hero",
-      targetX: 180,
-      targetY: 185,
-      icon: "door",
-      labelBottom: true
-    });
-
-    populateDynamicZoneEcology(campMap, false);
+      campMap.portals = campMap.portals || [];
+      campMap.portals.push({
+        id: "p_enter_hero_tent",
+        name: "主角帳篷",
+        x: 312,
+        y: 138,
+        targetZone: "tent_hero",
+        targetX: 180,
+        targetY: 185,
+        icon: "door",
+        labelBottom: true
+      });
+    }
     return campMap;
   }
 
@@ -827,8 +795,8 @@ window.Aetheria = window.Aetheria || {};
         if (m.id === "camp_hub") {
           injectHeroTentIntoCamp(m);
         }
-        if (!m._dynamicEcologyReady && ZONE_ECOLOGY_POOLS[m.id]) {
-          m._dynamicEcologyReady = true;
+        if (!m._dynamicEcologyV78 && ZONE_ECOLOGY_POOLS[m.id]) {
+          m._dynamicEcologyV78 = true;
           populateDynamicZoneEcology(m, false);
         }
       }
@@ -842,22 +810,20 @@ window.Aetheria = window.Aetheria || {};
       const camp = origGetMap("camp_hub");
       if (camp) injectHeroTentIntoCamp(camp);
 
-      // 對所有區域執行「不同地點、不同素材、防重疊」重新隨機分佈！
       Object.keys(ZONE_ECOLOGY_POOLS).forEach(function(zId) {
         const m = origGetMap(zId);
         if (m) {
-          m._dynamicEcologyReady = true;
+          m._dynamicEcologyV78 = true;
           populateDynamicZoneEcology(m, false);
         }
       });
     };
 
-    // 初始化時立即為全大陸套用防重疊隨機素材與生態
     Object.keys(ZONE_ECOLOGY_POOLS).forEach(function(zId) {
       const m = origGetMap(zId);
       if (m) {
         if (zId === "camp_hub") injectHeroTentIntoCamp(m);
-        m._dynamicEcologyReady = true;
+        m._dynamicEcologyV78 = true;
         populateDynamicZoneEcology(m, false);
       }
     });
@@ -908,8 +874,8 @@ window.Aetheria = window.Aetheria || {};
         nightCard.innerHTML =
           '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
             '<div>' +
-              '<b style="color:#e0aaff; font-size:14px;">🌙 閉目養神至黑夜降臨 (夜獵挑戰)</b>' +
-              '<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">回滿 HP 與飽食度並推進至黑夜（刷出夜行魔物與夜間稀有礦植，手持火把可避開或克制魔物）</div>' +
+              '<b style="color:#e0aaff; font-size:14px;">🌙 閉目養神至黑夜降臨 (高危夜獵)</b>' +
+              '<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">回滿 HP 與飽食度並推進至黑夜（刷出大量狂暴夜魔與夜間稀有礦植，獎賞+50%）</div>' +
             '</div>' +
             '<button class="na-btn" style="padding:8px 12px;" onclick="Aetheria.Survival.playSleepToNight()">睡到黑夜</button>' +
           '</div>';
@@ -1035,8 +1001,8 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.renderWorld();
 
-        if (titleEl) titleEl.innerText = "🌙 黑夜降臨！夜間稀有礦植與夜行魔物已現身！";
-        if (subEl) subEl.innerText = "夜魔雖強但視野較窄，可走位繞開；點燃【松脂火把】更可威懾夜魔並破除其護盾！";
+        if (titleEl) titleEl.innerText = "🌙 黑夜降臨！大批【夜行狂暴魔物】已湧現！";
+        if (subEl) subEl.innerText = "夜魔數量暴增且高速追擊！擊敗獲 +50% 經驗金幣，點燃【松脂火把】可破除其暗夜護盾！";
       }, 1400);
 
       setTimeout(function() {
@@ -1074,11 +1040,11 @@ window.Aetheria = window.Aetheria || {};
       const guideCard = document.createElement("div");
       guideCard.className = "sys-card";
       guideCard.innerHTML =
-        '<b style="color:var(--na-gold);">【Survival RPG 動態生態與避戰指南】</b>' +
+        '<b style="color:var(--na-gold);">【Survival RPG 日夜激戰指南】</b>' +
         '<div style="font-size:12px; color:#cbd5e1; margin-top:4px; line-height:1.5;">' +
-          '• <b>🌱 隨機生態刷新</b>：每當日夜時段轉換或過夜，各區會在不重疊的新地點長出不同素材（白晝多靈花原木、夜晚多微光菇松脂與秘銀）。<br>' +
-          '• <b>🌙 黑夜走位避戰</b>：黑夜魔物數量較多且等級+3，但牠們的<b>感知範圍較窄且移速比你慢</b>！只要保持距離繞路即可安全避開。<br>' +
-          '• <b>🔥 火把威懾夜魔</b>：手持點燃的【松脂火把】時，夜魔會畏懼火光而大幅縮小追擊範圍，開戰時更能直接燒毀其 1 層護盾！' +
+          '• <b>🌱 隨機生態刷新</b>：每當日夜時段轉換或過夜，各區會在不重疊的新地點長出不同素材。<br>' +
+          '• <b>🌙 黑夜狂暴魔潮</b>：黑夜野外魔物數量暴增（每區 12~16 隻）、等級+3 且高速追擊！擊敗可獲 <b>+50% 經驗與金幣</b>！<br>' +
+          '• <b>🔥 松脂火把破盾</b>：手持點燃的【松脂火把】開戰時，可直接燒毀夜行魔物 1 層暗夜護盾！' +
         '</div>';
       body.appendChild(guideCard);
     },
@@ -1092,7 +1058,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Survival = SurvivalDayNight;
 
-  // ================= 7. 掛載時段生態刷新、可走位避開的魔物 AI 與標籤簡化 =================
+  // ================= 7. 掛載主角高速移動 (1.42x) 與高壓迫感狂暴魔物追擊 AI =================
   function hookSystemsForSurvivalV71() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
@@ -1110,7 +1076,6 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      // 攔截 advanceTime：每當日夜時段切換（如白晝➔黃昏、黃昏➔黑夜），在當前地圖動態長出新素材！
       if (St.advanceTime) {
         const origAdvance = St.advanceTime.bind(St);
         St.advanceTime = function(ticks) {
@@ -1124,8 +1089,22 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // 覆寫魔物巡邏與追擊 AI：讓夜晚魔物雖強，但主角 100% 可以靠走位或火把避開！
     if (Exp) {
+      // 1. 大幅提升主角移動速度 (+42% 倍率加成，抵銷任何減速，操作極速流暢！)
+      const origUpdateStep = Exp.updateStep.bind(Exp);
+      Exp.updateStep = function() {
+        const savedDX = this.moveDX;
+        const savedDY = this.moveDY;
+        if (this.isMoving) {
+          this.moveDX = savedDX * 1.42;
+          this.moveDY = savedDY * 1.42;
+        }
+        origUpdateStep();
+        this.moveDX = savedDX;
+        this.moveDY = savedDY;
+      };
+
+      // 2. 高壓迫感、激進追擊的魔物 AI（取消從容走位，大範圍索敵 + 高速圍剿！）
       Exp.updateMonstersAI = function(mapObj, s) {
         if (!mapObj || !mapObj.monsters || mapObj.monsters.length === 0) return;
         if (window.Aetheria.Battle && window.Aetheria.Battle.active) return;
@@ -1135,7 +1114,6 @@ window.Aetheria = window.Aetheria || {};
         if (cutEl && cutEl.style.display !== "none") return;
 
         const isNight = window.Aetheria.State.getTimePhase().isNight;
-        const hasTorch = Boolean(s.torchTicks && s.torchTicks > 0);
 
         for (let i = 0; i < mapObj.monsters.length; i++) {
           const m = mapObj.monsters[i];
@@ -1143,8 +1121,8 @@ window.Aetheria = window.Aetheria || {};
 
           const distToHero = Math.hypot(s.heroX - m.x, s.heroY - m.y);
 
-          // 碰撞觸發戰鬥距離略微收緊至 17px，給玩家擦身逃脫的空間
-          if (distToHero < 17) {
+          // 觸發戰鬥碰撞距離 (22px)
+          if (distToHero < 22) {
             this.stopMove();
 
             if (!window.Aetheria.State.hasWeaponEquipped()) {
@@ -1171,15 +1149,14 @@ window.Aetheria = window.Aetheria || {};
             return;
           }
 
-          // 智慧仇恨距離：一般小怪只感知 54px 內（手持火把時夜魔畏光，感知縮小至 38px！）
-          // 且若魔物離自己的出生點 (homeX, homeY) 超過 95px，會放棄追擊退回原位，讓玩家能輕鬆甩開！
+          // 大範圍敏銳索敵：白晝 115px，黑夜狂暴高達 140px！且追擊半徑擴大至 260px，緊咬不放！
           const distFromHome = Math.hypot(m.x - (m.homeX || m.x), m.y - (m.homeY || m.y));
-          let aggroRadius = m.isBoss ? 52 : (hasTorch && isNight ? 38 : 54);
+          const aggroRadius = m.isBoss ? 85 : (isNight ? 140 : 115);
 
-          if (distToHero < aggroRadius && (m.isBoss || distFromHome < 105)) {
+          if (distToHero < aggroRadius && (m.isBoss || distFromHome < 260)) {
             m.aggro = true;
-            // 魔物追擊速度 (0.95 ~ 1.12) 明顯慢於主角步速 (~2.0)，確保玩家隨時可以跑贏並繞開！
-            const chaseSpeed = m.isBoss ? 0.82 : (isNight ? 1.12 : 0.98);
+            // 高速追擊：白晝 1.95，黑夜狂暴 2.45！
+            const chaseSpeed = m.isBoss ? 1.25 : (isNight ? 2.45 : 1.95);
             const dx = (s.heroX - m.x) / (distToHero || 1);
             const dy = (s.heroY - m.y) / (distToHero || 1);
             let nextMX = m.x + dx * chaseSpeed;
@@ -1194,20 +1171,21 @@ window.Aetheria = window.Aetheria || {};
             m.y = Math.max(35, Math.min(mapObj.height - 45, nextMY));
           } else if (!m.isBoss) {
             m.aggro = false;
-            m.patrolTimer = (m.patrolTimer || 60) - 1;
+            m.patrolTimer = (m.patrolTimer || 45) - 1;
             if (m.patrolTimer <= 0) {
-              m.patrolTimer = 65 + Math.floor(Math.random() * 70);
+              m.patrolTimer = 40 + Math.floor(Math.random() * 50);
               const randAng = Math.random() * Math.PI * 2;
-              m.vx = Math.cos(randAng) * 0.45;
-              m.vy = Math.sin(randAng) * 0.45;
+              const patrolSpd = isNight ? 1.05 : 0.78;
+              m.vx = Math.cos(randAng) * patrolSpd;
+              m.vy = Math.sin(randAng) * patrolSpd;
             }
 
             let nextMX = m.x + (m.vx || 0);
             let nextMY = m.y + (m.vy || 0);
 
-            if (distFromHome > 52) {
-              m.vx = ((m.homeX || m.x) - m.x) * 0.025;
-              m.vy = ((m.homeY || m.y) - m.y) * 0.025;
+            if (distFromHome > 85) {
+              m.vx = ((m.homeX || m.x) - m.x) * 0.035;
+              m.vy = ((m.homeY || m.y) - m.y) * 0.035;
               nextMX = m.x + m.vx;
               nextMY = m.y + m.vy;
             }
@@ -1501,15 +1479,15 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Survival v7.7 module init error:", err);
+      console.error("Survival v7.8 module init error:", err);
     }
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
-    setTimeout(initSurvivalExpansion, 40);
+    setTimeout(initSurvivalExpansion, 90);
   } else {
     window.addEventListener("load", function() {
-      setTimeout(initSurvivalExpansion, 40);
+      setTimeout(initSurvivalExpansion, 90);
     });
   }
 })();
