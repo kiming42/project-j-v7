@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Project J：艾瑟瑞亞的破曉 (Dawn of Aetheria v6.5)</title>
-  <link rel="stylesheet" href="css/style.css?v=6.5">
+  <title>Project J：艾瑟瑞亞的破曉 (Dawn of Aetheria v7.0)</title>
+  <link rel="stylesheet" href="css/style.css?v=7.0">
 </head>
 <body>
 
@@ -16,7 +16,7 @@
       <div class="title-emblem-box">
         <div class="title-sub">PROJECT J : SURVIVAL &amp; TACTICAL RPG</div>
         <h1 class="title-main">艾瑟瑞亞的破曉</h1>
-        <div class="title-ver">PIONEER EDITION v6.5</div>
+        <div class="title-ver">SURVIVAL EDITION v7.0</div>
       </div>
       <div class="title-hero-showcase" id="title-hero-preview"></div>
     </div>
@@ -28,7 +28,7 @@
       </button>
       <button class="na-btn title-btn" onclick="Aetheria.UI.startNewGame()">
         新遊戲
-        <span class="title-save-sub">赤手空拳拓荒求生・親手建造橋樑與木筏</span>
+        <span class="title-save-sub">日夜交替・飽食度求生・親手建造橋樑與木筏</span>
       </button>
     </div>
   </div>
@@ -39,11 +39,13 @@
     <div id="hud-overlay">
       <div class="hud-minimal-left">
         <span class="na-badge" id="hud-lv">Lv.1 赤手空拳</span>
-        <span class="na-badge badge-meal" id="hud-meal" style="display:none;">料理生效中</span>
+        <span class="na-badge badge-hunger" id="hud-hunger">飽食 100%</span>
+        <span class="na-badge badge-meal" id="hud-meal" style="display:none;">料理生效</span>
       </div>
       <div class="hud-minimal-right" style="display:flex; gap:4px; align-items:center; pointer-events:auto;">
-        <span class="na-badge danger-safe" id="hud-zone">0. 曙光露營基地</span>
-        <button class="na-badge btn-fs-toggle" id="btn-fullscreen" onclick="Aetheria.UI.toggleFullScreen()">⛶ 全屏</button>
+        <span class="na-badge badge-time" id="hud-time">☀ 白晝</span>
+        <span class="na-badge danger-safe" id="hud-zone">0. 曙光營地</span>
+        <button class="na-badge btn-fs-toggle" id="btn-fullscreen" onclick="Aetheria.UI.toggleFullScreen()">⛶</button>
       </div>
     </div>
 
@@ -63,6 +65,9 @@
 
     <!-- 純 DOM 小地圖雷達 -->
     <div id="dom-minimap"></div>
+
+    <!-- v7.0 新增：動態日夜光影與火把照明遮罩 -->
+    <div id="daynight-overlay"></div>
 
     <!-- 洞穴火把視野遮罩 -->
     <div id="fog-overlay"></div>
@@ -170,7 +175,7 @@
       </div>
 
       <div class="controls-pads">
-        <!-- 加大版十字方向鍵 (已移除中間重複的調查鍵) -->
+        <!-- 加大版十字方向鍵 -->
         <div class="dpad">
           <div></div>
           <button class="dpad-btn" id="btn-up">▲</button>
@@ -188,9 +193,12 @@
             <span class="action-main-txt">A 鍵</span>
             <span class="action-sub-txt" id="a-btn-hint">對話 / 拾取</span>
           </button>
-          <div style="display:flex; gap:6px;">
-            <button class="na-btn" id="btn-use-bomb" style="padding:6px 10px;" onclick="Aetheria.Explore.useBomb()">炸彈</button>
-            <button class="na-btn" style="padding:6px 10px;" onclick="Aetheria.Explore.warpToCamp()">回營地</button>
+          <!-- v7.0 新增：2x2 求生快捷鍵（口糧、火把、炸彈、回營地） -->
+          <div class="survival-mini-grid">
+            <button class="na-btn" id="btn-use-ration" onclick="Aetheria.Explore.useFieldRation()">口糧</button>
+            <button class="na-btn" id="btn-use-torch" onclick="Aetheria.Explore.useFieldTorch()">火把</button>
+            <button class="na-btn" id="btn-use-bomb" onclick="Aetheria.Explore.useBomb()">炸彈</button>
+            <button class="na-btn" onclick="Aetheria.Explore.warpToCamp()">回營地</button>
           </div>
         </div>
       </div>
@@ -276,26 +284,26 @@
   })();
 </script>
 
-<!-- v6.5 模組與四科獨立題庫載入順序 -->
-<script src="js/engine/save-state.js?v=6.5"></script>
-<script src="js/engine/audio-synth.js?v=6.5"></script>
-<script src="js/data/pixel-sprites.js?v=6.5"></script>
-<script src="js/data/world-maps.js?v=6.5"></script>
-<script src="js/data/items-crafting.js?v=6.5"></script>
-<script src="js/data/jobs-monsters.js?v=6.5"></script>
-<script src="js/data/quests-npcs.js?v=6.5"></script>
+<!-- v7.0 模組與四科獨立題庫載入順序 -->
+<script src="js/engine/save-state.js?v=7.0"></script>
+<script src="js/engine/audio-synth.js?v=7.0"></script>
+<script src="js/data/pixel-sprites.js?v=7.0"></script>
+<script src="js/data/world-maps.js?v=7.0"></script>
+<script src="js/data/items-crafting.js?v=7.0"></script>
+<script src="js/data/jobs-monsters.js?v=7.0"></script>
+<script src="js/data/quests-npcs.js?v=7.0"></script>
 
-<script src="questions/questions-chinese.js?v=6.5"></script>
-<script src="questions/questions-english.js?v=6.5"></script>
-<script src="questions/questions-humanities.js?v=6.5"></script>
-<script src="questions/questions-science.js?v=6.5"></script>
-<script src="questions/question-bridge.js?v=6.5"></script>
+<script src="questions/questions-chinese.js?v=7.0"></script>
+<script src="questions/questions-english.js?v=7.0"></script>
+<script src="questions/questions-humanities.js?v=7.0"></script>
+<script src="questions/questions-science.js?v=7.0"></script>
+<script src="questions/question-bridge.js?v=7.0"></script>
 
-<script src="js/engine/camera-renderer.js?v=6.5"></script>
-<script src="js/systems/exploration-gather.js?v=6.5"></script>
-<script src="js/systems/quiz-widgets.js?v=6.5"></script>
-<script src="js/systems/battle-break-boost.js?v=6.5"></script>
-<script src="js/systems/progression-town.js?v=6.5"></script>
+<script src="js/engine/camera-renderer.js?v=7.0"></script>
+<script src="js/systems/exploration-gather.js?v=7.0"></script>
+<script src="js/systems/quiz-widgets.js?v=7.0"></script>
+<script src="js/systems/battle-break-boost.js?v=7.0"></script>
+<script src="js/systems/progression-town.js?v=7.0"></script>
 
 </body>
 </html>
