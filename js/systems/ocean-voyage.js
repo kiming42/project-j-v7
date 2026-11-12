@@ -1,20 +1,21 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 海濱沙灘碼頭、親手造船與海上開船航行模組 (ocean-voyage.js - v7.4)
- * 三大核心升級：
- *   1. 【真實海濱地貌】：在曙光營地南側鋪設「黃金沙灘、海浪、深海與木造棧橋」，令釣魚點與碼頭合理位於海中
- *   2. 【收集素材造船】：必須先在棧橋船塢投入原木/木板、麻繩/藤蔓與松脂建造【木帆船】，海面才會出現船隻供登船
- *   3. 【親自駕船航行】：登船後進入【無盡碧海航行圖 (ocean_sea)】，主角化身為帆船在海上自由掌舵、打撈漂流桶、避開海怪並駛向四座荒島與地牢！
+ * Project J：艾瑟瑞亞的破曉 — 海濱碼頭、造船主線整合與大航海模組 (ocean-voyage.js - v7.5)
+ * 核心整合：
+ *   1. 【主線任務無縫插入】：
+ *      - [第1章・造船出海 (mq_06_ship)]：擊敗第1區森林領主後，由營地海濱【老漁夫・阿海】發布，收集原木/藤蔓/松脂建造一階木帆船並駛入無盡碧海！
+ *      - [第3章・遠洋秘寶 (mq_12_voyage)]：完成第3區海岸主線後，由【老船匠・達克】發布，駕船前往未知荒島或深淵地牢奪取【古航海圖殘卷】！
+ *   2. 【造船進度雙向同步】：第3區【破浪遠航木筏 (proj_z3_raft)】與造船廠【二階：破浪遠洋大帆船】自動共享進度，絕不重複消耗材料！
+ *   3. 【真實海濱與親自開船】：營地南岸黃金沙灘+海水+木棧橋、海上掌舵開船、打撈漂流桶與 60FPS 穩定步速。
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
   // ================= 1. 注入海濱沙灘、海浪、木棧橋與海洋地圖 CSS =================
   function injectVoyageStyles() {
-    if (document.getElementById("voyage-v74-styles")) return;
+    if (document.getElementById("voyage-v75-styles")) return;
     const style = document.createElement("style");
-    style.id = "voyage-v74-styles";
+    style.id = "voyage-v75-styles";
     style.textContent = `
-      /* 營地南側黃金沙灘與拍岸海浪 */
       .dom-coast-beach {
         position: absolute;
         left: 0;
@@ -43,8 +44,6 @@ window.Aetheria = window.Aetheria || {};
         0%, 100% { border-top-width: 3px; transform: translateY(0px); }
         50% { border-top-width: 6px; transform: translateY(2px); }
       }
-
-      /* 延伸入海的木造長棧橋 */
       .dom-wooden-pier {
         position: absolute;
         left: 421px;
@@ -59,8 +58,6 @@ window.Aetheria = window.Aetheria || {};
         pointer-events: none;
         z-index: 3;
       }
-
-      /* 無盡碧海大航海主題背景 */
       .map-theme-ocean {
         background-color: #16427d;
         background-image:
@@ -69,14 +66,11 @@ window.Aetheria = window.Aetheria || {};
         background-size: 36px 36px;
         background-position: 0 0, 18px 18px;
       }
-
-      /* 海上島嶼淺灘沙洲 */
       .dom-dirt-blob.ocean-atoll {
         background: radial-gradient(ellipse at center, #5b8c3e 0%, #e6c88c 62%, #38b6ff 92%, transparent 100%) !important;
         border: 3px solid rgba(255, 255, 255, 0.75) !important;
         box-shadow: 0 0 14px rgba(56, 182, 255, 0.65);
       }
-
       .dom-label.voyage-lbl {
         background: #0f2942;
         color: #ffd166;
@@ -139,7 +133,6 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    // 航海舵輪碼頭樁 (16x16)
     const dockWheelUrl = buildGridDataUrl([
       ".......YY.......",
       "..Y...YYYY...Y..",
@@ -157,11 +150,8 @@ window.Aetheria = window.Aetheria || {};
       "....KDDDDDDK....",
       "...KDDDDDDDDK...",
       "..KKKKKKKKKKKK.."
-    ], {
-      K: "#141013", Y: "#f5b700", D: "#8f563b", W: "#d9a066"
-    });
+    ], { K: "#141013", Y: "#f5b700", D: "#8f563b", W: "#d9a066" });
 
-    // 一階：近海探索木帆船 (白帆木船 16x16)
     const shipSloopUrl = buildGridDataUrl([
       ".......KK.......",
       "......KYYK......",
@@ -179,11 +169,8 @@ window.Aetheria = window.Aetheria || {};
       "..KDDDDDDDDDDK..",
       "..BBBBBBBBBBBB..",
       "....BBBBBBBB...."
-    ], {
-      K: "#141013", Y: "#e03c4b", W: "#ffffff", D: "#8f563b", L: "#d9a066", B: "#8ce0ff"
-    });
+    ], { K: "#141013", Y: "#e03c4b", W: "#ffffff", D: "#8f563b", L: "#d9a066", B: "#8ce0ff" });
 
-    // 二階：破浪遠洋大帆船 (金紅雙帆巨艦 16x16)
     const shipGalleonUrl = buildGridDataUrl([
       "...KK......KK...",
       "..KYYK....KYYK..",
@@ -201,11 +188,8 @@ window.Aetheria = window.Aetheria || {};
       "...KDDDDDDDDK...",
       "..BBBBBBBBBBBB..",
       "....BBBBBBBB...."
-    ], {
-      K: "#141013", Y: "#f5b700", R: "#e03c4b", D: "#5c3824", L: "#d9a066", B: "#8ce0ff"
-    });
+    ], { K: "#141013", Y: "#f5b700", R: "#e03c4b", D: "#5c3824", L: "#d9a066", B: "#8ce0ff" });
 
-    // 海上漂流補給木桶 (16x16)
     const seaBarrelUrl = buildGridDataUrl([
       "................",
       "....KKKKKKKK....",
@@ -223,11 +207,8 @@ window.Aetheria = window.Aetheria || {};
       "................",
       "................",
       "................"
-    ], {
-      K: "#141013", D: "#8f563b", I: "#4a4e69", Y: "#f5b700", B: "#38b6ff", W: "#ffffff"
-    });
+    ], { K: "#141013", D: "#8f563b", I: "#4a4e69", Y: "#f5b700", B: "#38b6ff", W: "#ffffff" });
 
-    // 古航海圖殘卷 (16x16)
     const mapChartUrl = buildGridDataUrl([
       "..KKKKKKKKKKKK..",
       ".KYYYYYYYYYYYYK.",
@@ -245,9 +226,7 @@ window.Aetheria = window.Aetheria || {};
       "................",
       "................",
       "................"
-    ], {
-      K: "#141013", Y: "#d9a066", S: "#f5e6c4", B: "#3898ff", R: "#e03c4b", X: "#8f563b"
-    });
+    ], { K: "#141013", Y: "#d9a066", S: "#f5e6c4", B: "#3898ff", R: "#e03c4b", X: "#8f563b" });
 
     const customUrls = {
       voyage_dock: dockWheelUrl,
@@ -264,23 +243,34 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 註冊新道具与造船配方 =================
+  // ================= 3. 造船藍圖與雙向進度同步 =================
   const SHIP_BLUEPRINTS = {
     1: {
       tier: 1,
       name: "近海探索木帆船",
       sprite: "ship_sloop",
-      desc: "由原木、藤蔓與松脂打造嘅單桅木帆船。完成後可從營地棧橋親自駕船駛入【無盡碧海】，探索珊瑚荒島、沉船墓地與深淵地牢！",
+      desc: "【第1章主線造船】由翠風原木、堅韌藤蔓與琥珀松脂打造的單桅木帆船。完工後可從營地木棧橋親自駕船駛入【無盡碧海】，探索珊瑚荒島、沉船墓地與深淵地牢！",
       cost: { wood: 3, vine: 2, resin: 2 }
     },
     2: {
       tier: 2,
       name: "破浪遠洋大帆船",
       sprite: "ship_galleon",
-      desc: "加裝厚木板、防水松脂膠與古帆布嘅雙桅裝甲帆船！海上航行飽食度消耗減半，並可衝破狂風巨浪登陸【星隕火山孤島】！",
-      cost: { plank: 3, pitch: 1, sailCloth: 2, nails: 2 }
+      desc: "【第3章主線同步】與第3區海岸「破浪遠航木筏」同步升級！航行飽食度消耗減半，並可衝破狂風巨浪登陸極東【星隕火山孤島】！",
+      cost: { plank: 4, pitch: 2, heavySail: 1, coral: 2, coreSiren: 1 }
     }
   };
+
+  function getPlayerBoatTier(s) {
+    if (!s) return 0;
+    if (s.projectsBuilt && s.projectsBuilt.proj_z3_raft) {
+      s.boatTier = Math.max(s.boatTier || 0, 2);
+    }
+    if ((s.boatTier || 0) >= 2 && s.projectsBuilt) {
+      s.projectsBuilt.proj_z3_raft = true;
+    }
+    return s.boatTier || 0;
+  }
 
   function initVoyageMaterials() {
     const Data = window.Aetheria.Data;
@@ -290,20 +280,136 @@ window.Aetheria = window.Aetheria || {};
       id: "seaChart",
       name: "古航海圖殘卷",
       tier: 3,
-      desc: "【大航海專屬戰利品】探索未知荒島與秘境地牢首領獲得，可於航海碼頭兌換聖碑殘片與高階礦石。"
+      desc: "【大航海主線與首領戰利品】討伐未知荒島與秘境地牢首領、或打撈海上漂流瓶獲得，可交付達克主線或於碼頭兌換聖碑殘片與星隕鐵。"
     };
   }
 
-  function getPlayerBoatTier(s) {
-    if (!s) return 0;
-    // 若玩家已在第3區造好「破浪遠航木筏」，自動視為擁有二階遠洋船
-    if (s.projectsBuilt && s.projectsBuilt.proj_z3_raft) {
-      s.boatTier = Math.max(s.boatTier || 0, 2);
+  // ================= 4. 將「造船出海」與「遠洋航海圖」正式插入主線任務鏈 =================
+  function injectShipbuildingMainQuests() {
+    const Data = window.Aetheria.Data;
+    if (!Data || !Array.isArray(Data.MAIN_QUESTS)) return;
+    if (Data.MAIN_QUESTS.some(function(q) { return q.id === "mq_06_ship"; })) return;
+
+    // 主線 A：插入在 mq_06（擊敗第1區森林領主）之後
+    const mqShip1 = {
+      id: "mq_06_ship",
+      chapter: "航海1/2",
+      giverNpcId: "npc_fisher",
+      giverName: "老漁夫・阿海",
+      giverZone: "0.曙光營地(海濱)",
+      title: "建造【近海探索木帆船】並揚帆出海",
+      desc: "步驟①：收集翠風原木x3、堅韌藤蔓x2、琥珀松脂x2 ➔ 步驟②：走上營地南岸木棧橋對準【造船廠】按A鍵造船並登船駛入【無盡碧海】 ➔ 步驟③：向阿海回報領獎。",
+      rewardText: "180 EXP、200 G、炭烤鮮魚乾 x2、松脂火把 x2",
+      getProgressList: function(s) {
+        const bt = getPlayerBoatTier(s);
+        const sailed = Boolean(s.questProgress && s.questProgress.sailedOnce);
+        if (bt >= 1) {
+          return [
+            { name: "建造近海木帆船", cur: 1, max: 1 },
+            { name: "登船駛入無盡碧海", cur: sailed ? 1 : 0, max: 1 }
+          ];
+        }
+        const contrib = (s.shipContributions && s.shipContributions[1]) || {};
+        return [
+          { key: "wood",  name: "翠風原木", cur: (s.inventory.wood || 0) + (contrib.wood || 0),   max: 3 },
+          { key: "vine",  name: "堅韌藤蔓", cur: (s.inventory.vine || 0) + (contrib.vine || 0),   max: 2 },
+          { key: "resin", name: "琥珀松脂", cur: (s.inventory.resin || 0) + (contrib.resin || 0), max: 2 },
+          { name: "木棧橋造船出海", cur: 0, max: 1 }
+        ];
+      },
+      checkComplete: function(s) {
+        return getPlayerBoatTier(s) >= 1 && Boolean(s.questProgress && s.questProgress.sailedOnce);
+      },
+      onClaim: function(s) {
+        s.inventory.rationFish = (s.inventory.rationFish || 0) + 2;
+        s.inventory.torchItem = (s.inventory.torchItem || 0) + 2;
+        window.Aetheria.State.gainRewards(180, 200, 35);
+      }
+    };
+
+    // 主線 B：插入在 mq_12（擊敗第3區海岸幽靈船長）之後
+    const mqShip2 = {
+      id: "mq_12_voyage",
+      chapter: "航海2/2",
+      giverNpcId: "npc_shipwright",
+      giverName: "老船匠・達克",
+      giverZone: "3.翡翠沉船海岸",
+      title: "遠洋探索：尋回【古航海圖殘卷】",
+      desc: "步驟①：從海岸碼頭或營地棧橋登船駛入【無盡碧海】 ➔ 步驟②：登陸任意荒島或深淵地牢（開啟秘寶箱、打撈漂流瓶或擊敗首領）取得【古航海圖殘卷 x1】 ➔ 步驟③：向老船匠達克回報領獎。",
+      rewardText: "550 EXP、600 G、古文明聖碑殘片 x1、熔岩黑曜石 x1",
+      getProgressList: function(s) {
+        const haveChart = (s.inventory && s.inventory.seaChart) || 0;
+        const everGot = (s.questProgress && s.questProgress.gotSeaChartOnce) ? 1 : 0;
+        return [
+          { key: "seaChart", name: "古航海圖殘卷", cur: Math.max(haveChart, everGot), max: 1 }
+        ];
+      },
+      checkComplete: function(s) {
+        return ((s.inventory && s.inventory.seaChart) || 0) >= 1 || Boolean(s.questProgress && s.questProgress.gotSeaChartOnce);
+      },
+      onClaim: function(s) {
+        s.inventory.tabletShard = (s.inventory.tabletShard || 0) + 1;
+        s.inventory.obsidian = (s.inventory.obsidian || 0) + 1;
+        window.Aetheria.State.gainRewards(550, 600, 65);
+      }
+    };
+
+    const idx06 = Data.MAIN_QUESTS.findIndex(function(q) { return q.id === "mq_06"; });
+    if (idx06 !== -1) {
+      Data.MAIN_QUESTS.splice(idx06 + 1, 0, mqShip1);
+    } else {
+      Data.MAIN_QUESTS.push(mqShip1);
     }
-    return s.boatTier || 0;
+
+    const idx12 = Data.MAIN_QUESTS.findIndex(function(q) { return q.id === "mq_12"; });
+    if (idx12 !== -1) {
+      Data.MAIN_QUESTS.splice(idx12 + 1, 0, mqShip2);
+    } else {
+      Data.MAIN_QUESTS.push(mqShip2);
+    }
+
+    // 擴充 NPC 動態四階段對話，讓老漁夫阿海與老船匠達克對造船主線給出明確指引
+    if (Data.getNpcDynamicGreeting) {
+      const origGreeting = Data.getNpcDynamicGreeting.bind(Data);
+      Data.getNpcDynamicGreeting = function(s, npcId) {
+        const mq = Data.getCurrentMainQuest ? Data.getCurrentMainQuest(s) : null;
+        if (mq && mq.giverNpcId === npcId) {
+          const isAcc = Boolean(s.questProgress && s.questProgress["acc_" + mq.id]);
+          const isDone = mq.checkComplete(s);
+          if (mq.id === "mq_06_ship") {
+            if (!isAcc) {
+              return "Justin！你已經打通了迷霧森林，是時候建造一艘真正的【近海探索木帆船】出海看看了！快點擊下方卡片接取造船主線吧！";
+            }
+            if (isDone) {
+              return "太壯觀了！看著你親手打造的木帆船在碧海上乘風破浪，老夫也熱血沸騰起來！這是給你的遠航補給獎勵，快收下吧！";
+            }
+            return "造船材料需要【翠風原木 x3、堅韌藤蔓 x2、琥珀松脂 x2】。集齊後走上我右邊的木棧橋，對準【🔨造船廠】按 A 鍵造船並登船出海一次就能回來領獎了！";
+          }
+          if (mq.id === "mq_12_voyage") {
+            if (!isAcc) {
+              return "破浪大帆船已經就緒！傳說外海的沉船墓地與深淵地牢藏着【古航海圖殘卷】，快接下這份遠洋委託出海尋寶吧！";
+            }
+            if (isDone) {
+              return "這正是失傳已久的【古航海圖殘卷】！有了它，你隨時可以在碼頭兌換聖碑殘片與星隕鐵！這份豐厚報酬歸你了！";
+            }
+            return "從旁邊的碼頭登船駛入【無盡碧海】，打撈海上的古老漂流瓶、或登陸荒島開啟秘寶箱與討伐首領，就能取得【古航海圖殘卷】！";
+          }
+        }
+        return origGreeting(s, npcId);
+      };
+    }
+
+    // 同步第3區 proj_z3_raft 完成回呼：完成木筏時自動將 boatTier 升為 2
+    if (Data.SURVIVAL_PROJECTS && Data.SURVIVAL_PROJECTS.proj_z3_raft) {
+      const origRaftComplete = Data.SURVIVAL_PROJECTS.proj_z3_raft.onComplete;
+      Data.SURVIVAL_PROJECTS.proj_z3_raft.onComplete = function(s) {
+        s.boatTier = 2;
+        if (origRaftComplete) origRaftComplete(s);
+      };
+    }
   }
 
-  // ================= 4. 四大隨機海域島嶼與秘境地牢定義 =================
+  // ================= 5. 四大隨機海域島嶼與秘境地牢定義 =================
   const VOYAGE_ISLANDS = [
     {
       id: "island_coral",
@@ -377,7 +483,7 @@ window.Aetheria = window.Aetheria || {};
       theme: "volcano",
       bgm: "boss",
       fog: false,
-      desc: "位於極東狂風海域的傳奇孤島（需二階遠洋大帆船）。遍佈熔岩黑曜石、深淵星隕鐵与遠古海龍皇！",
+      desc: "位於極東狂風海域的傳奇孤島（需二階遠洋大帆船）。遍佈熔岩黑曜石、深淵星隕鐵與遠古海龍皇！",
       orePool: ["obsidian", "obsidian", "starIron", "mithril"],
       herbPool: ["goldLeaf", "iceLotus", "magmaScale", "flower"],
       monPool: [
@@ -388,7 +494,7 @@ window.Aetheria = window.Aetheria || {};
     }
   ];
 
-  // ================= 5. 生成【無盡碧海航行大地圖 (ocean_sea)】與隨機荒島 =================
+  // ================= 6. 生成【無盡碧海航行大地圖 (ocean_sea)】與隨機荒島 =================
   const activeGeneratedMaps = {};
 
   function randInt(min, max) {
@@ -404,29 +510,25 @@ window.Aetheria = window.Aetheria || {};
     return true;
   }
 
-  // 生成「海上開船航行過程」地圖 (ocean_sea)
   function generateOceanSeaMap() {
     const s = (window.Aetheria.State && window.Aetheria.State.data) || { lv: 1 };
     const W = 1420;
     const H = 760;
 
-    // 港灣與四座島嶼的淺灘沙洲座標
     const dirtBlobs = [
-      { cx: 130, cy: 380, rx: 95, ry: 75, isAtoll: true },  // 西側：曙光營地港灣
-      { cx: 520, cy: 175, rx: 90, ry: 62, isAtoll: true },  // 西北：迷霧珊瑚荒島
-      { cx: 920, cy: 185, rx: 95, ry: 65, isAtoll: true },  // 東北：幽靈沉船墓地
-      { cx: 680, cy: 575, rx: 90, ry: 62, isAtoll: true },  // 南方：深淵秘境海蝕洞
-      { cx: 1220, cy: 420, rx: 105, ry: 72, isAtoll: true } // 極東：星隕火山孤島
+      { cx: 130, cy: 380, rx: 95, ry: 75, isAtoll: true },
+      { cx: 520, cy: 175, rx: 90, ry: 62, isAtoll: true },
+      { cx: 920, cy: 185, rx: 95, ry: 65, isAtoll: true },
+      { cx: 680, cy: 575, rx: 90, ry: 62, isAtoll: true },
+      { cx: 1220, cy: 420, rx: 105, ry: 72, isAtoll: true }
     ];
 
-    // 海上暗礁岩柱（航行時需繞開）
     const trees = [
       { x: 320, y: 250 }, { x: 350, y: 490 },
       { x: 710, y: 310 }, { x: 760, y: 390 },
       { x: 1040, y: 340 }, { x: 1060, y: 520 }
     ];
 
-    // 島嶼上的視覺地標與海面垂釣點
     const decos = [
       { id: "sea_fish_1", x: 310, y: 370, sprite: "fishing_spot", w: 28, h: 28, isFishingSpot: true },
       { id: "sea_fish_2", x: 840, y: 440, sprite: "fishing_spot", w: 28, h: 28, isFishingSpot: true },
@@ -435,7 +537,6 @@ window.Aetheria = window.Aetheria || {};
       { id: "sea_volc_deco",  x: 1220, y: 368, sprite: "brazier_on", w: 32, h: 32, solid: false }
     ];
 
-    // 海上隨機漂流木桶（開船靠近按 A 鍵可打撈口糧、金幣或秘銀）
     const nodes = [];
     const barrelCoords = [
       { x: 290, y: 180 }, { x: 440, y: 380 }, { x: 640, y: 240 },
@@ -455,7 +556,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 海上巡邏海怪與幽靈海盜船
     const baseLv = Math.max(3, s.lv);
     const monsters = [
       { id: "sea_mon_1", name: "近海狂暴巨蟹", lv: baseLv,     x: 380, y: 290, homeX: 380, homeY: 290, type: "bamboo", isBoss: false, alive: true },
@@ -464,7 +564,6 @@ window.Aetheria = window.Aetheria || {};
       { id: "sea_mon_4", name: "深淵觸手海獸", lv: baseLv + 5, x: 1090, y: 390, homeX: 1090, homeY: 390, type: "boss", isBoss: false, alive: true }
     ];
 
-    // 5 個港口與登陸點傳送門
     const portals = [
       {
         id: "p_sea_to_camp",
@@ -517,7 +616,6 @@ window.Aetheria = window.Aetheria || {};
     return seaMap;
   }
 
-  // 生成四座隨機荒島與秘境地牢內部地圖
   function generateProceduralIslandMap(islandDef, floorNum) {
     floorNum = floorNum || 1;
     const s = (window.Aetheria.State && window.Aetheria.State.data) || { lv: 1 };
@@ -770,7 +868,6 @@ window.Aetheria = window.Aetheria || {};
       isVoyageBoss: true
     });
 
-    // 西側港口：登船回到「無盡碧海」該島嶼附近，繼續航行！
     const portals = [
       {
         id: "p_voyage_back_to_sea",
@@ -825,7 +922,7 @@ window.Aetheria = window.Aetheria || {};
     return generated;
   }
 
-  // ================= 6. 注入營地海濱沙灘、棧橋、碼頭與停泊船隻 =================
+  // ================= 7. 注入營地海濱沙灘、棧橋、碼頭與停泊船隻 =================
   function injectVoyageDocksIntoWorld(mapObj) {
     if (!mapObj) return mapObj;
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
@@ -834,14 +931,12 @@ window.Aetheria = window.Aetheria || {};
     if (mapObj.id === "camp_hub") {
       mapObj.decos = mapObj.decos || [];
 
-      // 確保營地釣魚點位於海水波浪中 (x: 205, y: 402)
       const fishSpot = mapObj.decos.find(function(d) { return d.isFishingSpot; });
       if (fishSpot) {
         fishSpot.x = 205;
         fishSpot.y = 402;
       }
 
-      // 1. 棧橋上的造船廠/航海舵輪樁 (x: 432, y: 378)
       let dock = mapObj.decos.find(function(d) { return d.id === "deco_camp_voyage_dock"; });
       if (!dock) {
         dock = {
@@ -861,7 +956,6 @@ window.Aetheria = window.Aetheria || {};
         dock.y = 378;
       }
 
-      // 2. 棧橋海面停泊的船隻（造好船後才會顯示在海面上！）
       let mooredBoat = mapObj.decos.find(function(d) { return d.id === "deco_camp_moored_boat"; });
       if (boatTier >= 1) {
         const boatSprite = (boatTier >= 2) ? "ship_galleon" : "ship_sloop";
@@ -943,14 +1037,19 @@ window.Aetheria = window.Aetheria || {};
     if (initCamp) injectVoyageDocksIntoWorld(initCamp);
   }
 
-  // ================= 7. 造船廠、親自駕船出海與古航海圖兌換系統 =================
+  // ================= 8. 造船廠、親自駕船出海與古航海圖兌換系統 =================
   const VoyageSystem = {
     openVoyageModal: function(activeTab) {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
       const boatTier = getPlayerBoatTier(s);
 
-      // 若尚未造船 (boatTier === 0)，預設打開「造船廠」分頁
+      // 若玩家正在進行造船主線 mq_06_ship 且未接取，打開造船廠時自動視為已接取
+      const mq = window.Aetheria.Data.getCurrentMainQuest ? window.Aetheria.Data.getCurrentMainQuest(s) : null;
+      if (mq && (mq.id === "mq_06_ship" || mq.id === "mq_12_voyage")) {
+        s.questProgress["acc_" + mq.id] = true;
+      }
+
       if (!activeTab) {
         activeTab = (boatTier === 0) ? "shipyard" : "sail";
       }
@@ -983,7 +1082,6 @@ window.Aetheria = window.Aetheria || {};
       });
       body.appendChild(tabBar);
 
-      // 【分頁 1：營地造船廠（收集素材親手造船）】
       if (activeTab === "shipyard") {
         const nextTier = boatTier + 1;
         const bp = SHIP_BLUEPRINTS[nextTier];
@@ -992,9 +1090,9 @@ window.Aetheria = window.Aetheria || {};
         statusCard.className = "sys-card-scroll";
         if (boatTier === 0) {
           statusCard.innerHTML =
-            '<b>⚓ 船塢狀態：尚未建造船隻</b>' +
+            '<b>⚓ 船塢狀態：尚未建造船隻（主線：建造近海探索木帆船）</b>' +
             '<div style="font-size:12px; color:#7f2b1d; margin-top:3px;">' +
-              '沒有船隻無法出海！請先在森林採集<b>翠風原木、堅韌藤蔓與琥珀松脂</b>，於下方投入建材打造你的第一艘【近海探索木帆船】！' +
+              '沒有船隻無法出海！請先在森林採集<b>翠風原木 x3、堅韌藤蔓 x2、琥珀松脂 x2</b>，於下方投入建材打造你的第一艘【近海探索木帆船】！' +
             '</div>';
         } else {
           const curBp = SHIP_BLUEPRINTS[boatTier];
@@ -1012,6 +1110,10 @@ window.Aetheria = window.Aetheria || {};
         if (bp) {
           if (!s.shipContributions) s.shipContributions = {};
           if (!s.shipContributions[nextTier]) s.shipContributions[nextTier] = {};
+          // 若為二階船，與 proj_z3_raft 共享已投入的建材數
+          if (nextTier === 2 && s.projectContributions && s.projectContributions.proj_z3_raft) {
+            Object.assign(s.shipContributions[2], s.projectContributions.proj_z3_raft);
+          }
           const contrib = s.shipContributions[nextTier];
           const mats = window.Aetheria.Data.MATERIALS;
 
@@ -1058,7 +1160,6 @@ window.Aetheria = window.Aetheria || {};
         }
       }
 
-      // 【分頁 2：登船出海（進入無盡碧海親自開船）】
       else if (activeTab === "sail") {
         if (boatTier === 0) {
           const warnBox = document.createElement("div");
@@ -1079,7 +1180,7 @@ window.Aetheria = window.Aetheria || {};
             '<div>' +
               '<b style="font-size:14px; color:#1d3557;">⛵ 登船駛入【無盡碧海航行圖】</b>' +
               '<div style="font-size:12px; color:#5c3824; margin-top:2px;">' +
-                '親自用十字鍵掌舵開船！在海面上打撈<b>漂流補給桶</b>、迎戰海怪，並自由駛向四座未知荒島與深淵地牢！(出航耗飽食 10%)' +
+                '親自用十字鍵掌舵開船！在海面上打撈<b>漂流補給桶</b>、迎戰海怪，並自由駛向四座未知荒島與深淵地牢！(出航耗飽食 ' + (boatTier >= 2 ? 5 : 10) + '%)' +
               '</div>' +
             '</div>' +
             '<button class="na-btn highlight" style="padding:10px 14px; font-size:14px; white-space:nowrap;" onclick="Aetheria.Voyage.embarkOcean()">立即登船 ▸</button>' +
@@ -1107,12 +1208,11 @@ window.Aetheria = window.Aetheria || {};
               '</div>' +
             '</div>' +
             '<div style="font-size:11.5px; color:#cbd5e1; margin-top:3px;">' + isl.desc + '</div>' +
-            (!tierOk ? '<div style="font-size:11px; color:#ff758f; margin-top:2px;">🔒 需先於造船廠升級【二階：破浪遠洋大帆船】才可抗風浪登陸</div>' : '');
+            (!tierOk ? '<div style="font-size:11px; color:#ff758f; margin-top:2px;">🔒 需先升級【二階：破浪遠洋大帆船】才可抗風浪登陸</div>' : '');
           body.appendChild(card);
         });
       }
 
-      // 【分頁 3：古航海圖兌換】
       else {
         const exIntro = document.createElement("div");
         exIntro.className = "sys-card-scroll";
@@ -1171,6 +1271,14 @@ window.Aetheria = window.Aetheria || {};
       const giveAmt = Math.min(rem, inBag);
       s.inventory[matKey] -= giveAmt;
       contrib[matKey] = putCount + giveAmt;
+
+      // 若投入二階帆船，同步寫入第3區 proj_z3_raft 工程進度，避免重複消耗
+      if (targetTier === 2) {
+        if (!s.projectContributions) s.projectContributions = {};
+        if (!s.projectContributions.proj_z3_raft) s.projectContributions.proj_z3_raft = {};
+        s.projectContributions.proj_z3_raft[matKey] = contrib[matKey];
+      }
+
       window.Aetheria.Audio.sfxGather();
 
       const allDone = Object.entries(bp.cost).every(function(entry) {
@@ -1179,6 +1287,10 @@ window.Aetheria = window.Aetheria || {};
 
       if (allDone) {
         s.boatTier = targetTier;
+        if (targetTier === 2) {
+          if (!s.projectsBuilt) s.projectsBuilt = {};
+          s.projectsBuilt.proj_z3_raft = true;
+        }
         window.Aetheria.Audio.sfxLevelUp();
         window.Aetheria.State.save();
 
@@ -1188,7 +1300,7 @@ window.Aetheria = window.Aetheria || {};
 
         this.openVoyageModal("sail");
         window.Aetheria.UI.updateAllHud();
-        window.Aetheria.UI.showToast("⛵ 造船落成！【" + bp.name + "】已停泊在棧橋海面，現在可以登船出海了！");
+        window.Aetheria.UI.showToast("⛵ 造船落成！【" + bp.name + "】已停泊在棧橋海面，請點擊「立即登船」駛入無盡碧海！");
       } else {
         window.Aetheria.State.save();
         this.openVoyageModal("shipyard");
@@ -1197,7 +1309,6 @@ window.Aetheria = window.Aetheria || {};
       }
     },
 
-    // 登船進入【無盡碧海 (ocean_sea)】親自開船航行！
     embarkOcean: function() {
       const s = window.Aetheria.State.data;
       const boatTier = getPlayerBoatTier(s);
@@ -1224,9 +1335,10 @@ window.Aetheria = window.Aetheria || {};
       }
 
       s.hunger = Math.max(0, curHunger - hungerCost);
+      s.questProgress.sailedOnce = true; // 標記已完成首次出海（達成 mq_06_ship 主線條件）
       window.Aetheria.State.advanceTime(8);
 
-      const seaMap = generateOceanSeaMap();
+      generateOceanSeaMap();
       s.currentZone = "ocean_sea";
       s.heroX = 165;
       s.heroY = 380;
@@ -1255,7 +1367,7 @@ window.Aetheria = window.Aetheria || {};
       if (boatTier < (isl.reqBoatTier || 1)) {
         s.heroX -= 32;
         window.Aetheria.Audio.sfxWrong();
-        window.Aetheria.UI.showToast("🌊 外海狂風巨浪！必須先回營地造船廠升級【二階：破浪遠洋大帆船】才可登陸【" + isl.name + "】！");
+        window.Aetheria.UI.showToast("🌊 外海狂風巨浪！必須先升級【二階：破浪遠洋大帆船】才可登陸【" + isl.name + "】！");
         return;
       }
 
@@ -1380,14 +1492,13 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Voyage = VoyageSystem;
 
-  // ================= 8. 掛載海濱地形繪製、海上帆船變身、60FPS 穩定步速與互動 =================
+  // ================= 9. 掛載海濱地形繪製、海上帆船變身、60FPS 穩定步速與互動 =================
   function hookSystemsForVoyage() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
     const Bat = window.Aetheria.Battle;
 
     if (Exp) {
-      // 60FPS 穩定幀率鎖定 + 營地深水區防落水邊界（木棧橋 x:415~465 可走入至 y:415）
       let lastStepTime = 0;
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
@@ -1411,7 +1522,6 @@ window.Aetheria = window.Aetheria || {};
         this.moveDX = savedDX;
         this.moveDY = savedDY;
 
-        // 營地南側海水邊界：除了走在木棧橋 (x: 416 ~ 468) 上，角色不會走到深水區 (y > 392)
         if (s.currentZone === "camp_hub") {
           const onPier = (s.heroX >= 416 && s.heroX <= 468);
           const maxCampY = onPier ? 408 : 388;
@@ -1467,7 +1577,6 @@ window.Aetheria = window.Aetheria || {};
         origHint(mapObj, s);
       };
 
-      // 攔截海上島嶼登陸門與地牢下一層
       const origPortal = Exp.triggerPortal.bind(Exp);
       Exp.triggerPortal = function(portal) {
         const s = window.Aetheria.State.data;
@@ -1490,7 +1599,6 @@ window.Aetheria = window.Aetheria || {};
         origPortal(portal);
       };
 
-      // 海上打撈漂流木桶與開啟荒島秘寶箱
       const origHarvest = Exp.harvestNode.bind(Exp);
       Exp.harvestNode = function(node) {
         const s = window.Aetheria.State.data;
@@ -1510,6 +1618,7 @@ window.Aetheria = window.Aetheria || {};
           } else {
             s.inventory.mithril = (s.inventory.mithril || 0) + 1;
             s.inventory.seaChart = (s.inventory.seaChart || 0) + 1;
+            s.questProgress.gotSeaChartOnce = true;
             window.Aetheria.UI.showToast("⛵ 打撈古老漂流瓶：驚喜獲得【古航海圖殘卷 +1、流沙秘銀礦 +1】！");
           }
           window.Aetheria.State.save();
@@ -1522,6 +1631,7 @@ window.Aetheria = window.Aetheria || {};
           window.Aetheria.Audio.sfxLevelUp();
 
           s.inventory.seaChart = (s.inventory.seaChart || 0) + 1;
+          s.questProgress.gotSeaChartOnce = true;
           s.inventory.rationFish = (s.inventory.rationFish || 0) + 1;
           const depth = node.floorNum || 1;
 
@@ -1553,15 +1663,15 @@ window.Aetheria = window.Aetheria || {};
         if (isVoyBoss) {
           const s = window.Aetheria.State.data;
           s.inventory.seaChart = (s.inventory.seaChart || 0) + 1;
+          s.questProgress.gotSeaChartOnce = true;
           window.Aetheria.State.save();
           setTimeout(function() {
-            window.Aetheria.UI.showToast("🗺️ 討伐海域首領成功！額外獲得【古航海圖殘卷 +1】！可回航海碼頭兌換聖碑殘片！");
+            window.Aetheria.UI.showToast("🗺️ 討伐海域首領成功！額外獲得【古航海圖殘卷 +1】！");
           }, 500);
         }
       };
     }
 
-    // 渲染器擴充：1.在營地繪製真實海濱沙灘、海水與木棧橋 2.在海上將主角顯示為帆船
     if (Ren) {
       const origBuild = Ren.buildSceneDOM.bind(Ren);
       Ren.buildSceneDOM = function(mapObj) {
@@ -1574,7 +1684,6 @@ window.Aetheria = window.Aetheria || {};
         const S = window.Aetheria.Data.Sprites;
         if (!terrainLayer || !mapObj) return;
 
-        // 在曙光營地南側繪製「黃金沙灘 + 碧藍海水 + 木造長棧橋」
         if (mapObj.id === "camp_hub") {
           const beach = document.createElement("div");
           beach.className = "dom-coast-beach";
@@ -1589,7 +1698,6 @@ window.Aetheria = window.Aetheria || {};
           terrainLayer.appendChild(pier);
         }
 
-        // 在無盡碧海繪製島嶼沙洲樣式與漂流木桶圖示
         if (mapObj.id === "ocean_sea") {
           const blobs = terrainLayer.querySelectorAll(".dom-dirt-blob");
           blobs.forEach(function(b) { b.classList.add("ocean-atoll"); });
@@ -1611,7 +1719,6 @@ window.Aetheria = window.Aetheria || {};
           const S = window.Aetheria.Data.Sprites;
           const boatTier = getPlayerBoatTier(s);
 
-          // 若玩家正在【無盡碧海 (ocean_sea)】航行中，將主角外觀變成「帆船」並隱藏隨行寵物於船艙內！
           if (s.currentZone === "ocean_sea" && this.domPool.hero && S) {
             const shipKey = (boatTier >= 2) ? "ship_galleon" : "ship_sloop";
             this.domPool.hero.el.style.width = "38px";
@@ -1647,7 +1754,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 確保重新整理網頁時，若玩家位於 ocean_sea 或荒島不會被彈回營地
     const mapsList = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.ORDERED_WORLD_ZONES;
     if (mapsList && !mapsList.some(function(z) { return z.id === "ocean_sea"; })) {
       mapsList.push({
@@ -1665,15 +1771,19 @@ window.Aetheria = window.Aetheria || {};
       injectVoyageStyles();
       registerVoyageSprites();
       initVoyageMaterials();
+      injectShipbuildingMainQuests();
       hookMapsForVoyage();
       hookSystemsForVoyage();
 
+      if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) {
+        window.Aetheria.UI.updateAllHud();
+      }
       if (window.Aetheria.Renderer) {
         window.Aetheria.Renderer.builtZoneKey = null;
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Ocean Voyage v7.4 module init error:", err);
+      console.error("Ocean Voyage v7.5 module init error:", err);
     }
   }
 
