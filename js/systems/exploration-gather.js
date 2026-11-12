@@ -185,6 +185,7 @@ window.Aetheria = window.Aetheria || {};
         this.stepFrameCounter = (this.stepFrameCounter || 0) + 1;
         if (this.stepFrameCounter % 15 === 0) {
           window.Aetheria.State.advanceTime(1);
+          window.Aetheria.UI.updateAllHud();
         }
         if (this.stepFrameCounter % 48 === 0) {
           window.Aetheria.State.consumeHunger(1);
