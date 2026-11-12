@@ -1,201 +1,128 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 赤手空拳開局、40種生存建材與實地建造狀態中心 (save-state.js - v6.0)
- * 升級：1.開局赤手空拳 (equippedWeapon: "w_none"，四大工具皆為 Lv.0)，需先徒手拾荒修復熔爐或經 NPC 授予
- *       2.新增 8 種天然生存原材與 6 種工坊加工建材 (共 40 種素材)
- *       3.新增 7 大實地工程進度 (projectsBuilt / projectContributions) 與村民委託追蹤 (npcQuests)
+ * Project J：艾瑟瑞亞的破曉 — 存檔狀態、日夜時鐘與飽食度求生核心 (save-state.js - v7.0)
+ * 新增：1.飽食度系統 (hunger: 0~100)、生存天數 (dayCount) 與四時段世界時鐘 (worldClock: 0~399)
+ *       2.松脂火把照明步數 (torchTicks) 與營地「睡眠至天亮」完整恢復機制
+ *       3.100% 向下兼容 v6.7 存檔，舊存檔載入時自動補齊求生欄位與初始口糧
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
   const SAVE_KEY = "AETHERIA_SAVE_V7";
 
-  const DEFAULT_STATE = {
-    version: "6.0",
-    lv: 1,
-    exp: 0,
-    hp: 100,
-    maxHp: 100,
-    baseAtk: 24,
-    baseDef: 6,
-    bp: 1,
-    maxBp: 5,
-    streak: 0,
-    maxStreak: 0,
-    gold: 0,
+  function createDefaultState() {
+    return {
+      version: 7.0,
+      heroName: "Justin",
+      lv: 1,
+      exp: 0,
+      maxExp: 80,
+      hp: 120,
+      maxHp: 120,
+      bp: 1,
+      maxBp: 5,
+      gold: 50,
+      guildPoints: 0,
+      guildRank: "F",
+      streak: 0,
+      maxStreak: 0,
 
-    // 赤手空拳開局：無武器 ("w_none")，需幫鐵匠巴爾修復熔爐才獲贈新手忍刀與基礎工具！
-    currentJob: "swordsman",
-    unlockedJobs: ["swordsman"],
-    equippedWeapon: "w_none",
-    unlockedWeapons: [],
-    equippedArmor: "a_cloth",
-    unlockedArmors: ["a_cloth"],
-    unlockedRelics: [],
+      // v7.0 新增：日夜交替與飽食度求生指標
+      hunger: 100,
+      maxHunger: 100,
+      dayCount: 1,
+      worldClock: 80, // 0~59:破曉(dawn), 60~219:白晝(day), 220~279:黃昏(dusk), 280~399:黑夜(night)
+      stepHungerCounter: 0,
+      torchTicks: 0,
 
-    socketedRunes: {
-      weapon: null,
-      armor: null
-    },
+      currentZone: "camp_hub",
+      heroX: 320,
+      heroY: 260,
+      petX: 296,
+      petY: 264,
+      facing: "down",
+      unlockedZones: ["camp_hub"],
 
-    activeMeal: {
-      id: null,
-      battlesLeft: 0
-    },
+      currentJob: "swordsman",
+      unlockedJobs: ["swordsman"],
 
-    // 四大探索工具初始皆為 Lv.0 (未持有)
-    // pickaxe & axe 由巴爾授予；hook (釣竿) 由老漁夫阿海授予；bomb (火藥袋) 由見習礦工石頭授予
-    tools: {
-      pickaxe: 0,
-      axe: 0,
-      bomb: 0,
-      hook: 0
-    },
+      equippedWeapon: null,
+      unlockedWeapons: [],
 
-    activePet: "pet_slime",
-    unlockedPets: ["pet_slime"],
-    shinyPets: [],
-    expeditionCounter: 0,
+      equippedArmor: "a_cloth",
+      unlockedArmors: ["a_cloth"],
 
-    // 40 種完整背包素材：天然原材 + 工坊加工建材 + 礦石靈植 + 6大破防核心 + 消耗品
-    inventory: {
-      // 徒手與天然生存原材 (8)
-      branch: 0,      // 散落枯枝 (徒手拾取)
-      flint: 0,       // 尖銳燧石 (徒手拾取)
-      clay: 0,        // 河床黏土 (徒手/水岸拾取)
-      resin: 0,       // 琥珀松脂 (森林伐木伴生/採集)
-      basalt: 0,      // 玄武岩塊 (Lv.2重鎬碎巨石/採集)
-      hemp: 0,        // 荒野亞麻 (第2區峽谷綠洲採集)
-      sailCloth: 0,   // 幽靈古帆布 (第3區海盜魔物掉落)
-      sinew: 0,       // 強韌獸筋 (第4區雪原魔物掉落)
-      // 工坊加工建材組件 (6)
-      plank: 0,       // 加工厚木板 (原木x2 + 松脂x1)
-      rope: 0,        // 強化麻繩索 (藤蔓x2 + 枯枝x1)
-      nails: 0,       // 鍛造鐵釘 (藍晶鐵礦x2)
-      pitch: 0,       // 防水松脂膠 (松脂x2 + 黏土x1)
-      heavySail: 0,   // 遠航風帆 (古帆布x2 + 亞麻x2 + 麻繩x1)
-      firebrick: 0,   // 黑曜耐火磚 (黏土x2 + 玄武岩x2 + 黑曜石x1)
-      // 礦石與木材靈植 (10)
-      iron: 0,
-      mithril: 0,
-      obsidian: 0,
-      starIron: 0,
-      wood: 0,
-      herb: 0,
-      vine: 0,
-      flower: 0,
-      iceLotus: 0,
-      goldLeaf: 0,
-      // 生態特產與聖碑 (6)
-      shell: 0,
-      coral: 0,
-      fur: 0,
-      magmaScale: 0,
-      fish: 0,
-      tabletShard: 0,
-      // 6 大魔物破防核心
-      coreBamboo: 0,
-      coreSkull: 0,
-      coreSiren: 0,
-      coreWolf: 0,
-      coreGolem: 0,
-      coreDragon: 0,
-      // 消耗品 (4)
-      potionHeal: 0,
-      potionHint: 0,
-      bombItem: 0,
-      tameFruit: 0
-    },
+      unlockedRelics: [],
+      socketedRunes: { weapon: null, armor: null },
 
-    // 7 大實地拓荒工程完成紀錄與分批建材投入紀錄
-    projectsBuilt: {
-      proj_camp_forge: false,  // 0. 曙光營地：修復巴爾的鍛造熔爐
-      proj_z1_bridge: false,   // 1. 翠風森林：建造跨河加固吊橋
-      proj_cave1_beacon: false,// 1-B. 蘑菇洞窟：砌築永明聖火燈塔
-      proj_z2_ladder: false,   // 2. 流沙峽谷：架設斷崖重型絞盤木梯
-      proj_z3_raft: false,     // 3. 翡翠海岸：建造破浪遠航木筏
-      proj_z4_shelter: false,  // 4. 霜語雪原：搭建極地防風毛皮屋
-      proj_z5_bridge: false    // 5. 熔岩火山：鋪設黑曜耐火石拱橋
-    },
-    projectContributions: {},
+      activePet: "pet_slime",
+      unlockedPets: ["pet_slime"],
+      shinyPets: [],
 
-    // 村民實地委託狀態機：紀錄每個任務 { status: 'accepted' | 'completed', startStat: 0 }
-    npcQuests: {},
+      tools: {
+        pickaxe: 0,
+        axe: 0,
+        hook: 0,
+        bomb: 0
+      },
 
-    monolithPts: {
-      chinese: 0,
-      english: 0,
-      science: 0,
-      humanities: 0
-    },
+      activeMeal: { id: null, battlesLeft: 0 },
 
-    activeSubjects: {
-      chinese: true,
-      english: true,
-      humanities: true,
-      science: true
-    },
-    questionMastery: {},
-    wrongBook: [],
+      inventory: {
+        branch: 0, flint: 0, clay: 0, resin: 0,
+        basalt: 0, hemp: 0, sailCloth: 0, sinew: 0,
+        plank: 0, rope: 0, nails: 0, pitch: 0, heavySail: 0, firebrick: 0,
+        iron: 0, mithril: 0, obsidian: 0, starIron: 0,
+        wood: 0, herb: 0, vine: 0, flower: 0, iceLotus: 0, goldLeaf: 0,
+        shell: 0, coral: 0, fur: 0, magmaScale: 0, fish: 0, tabletShard: 0,
+        coreBamboo: 0, coreSkull: 0, coreSiren: 0, coreWolf: 0, coreGolem: 0, coreDragon: 0,
+        potionHeal: 2, potionHint: 2, bombItem: 0, tameFruit: 1,
+        // v7.0 新增隨身求生道具
+        rationHerb: 2,
+        rationFish: 0,
+        torchItem: 1
+      },
 
-    guildPoints: 0,
-    guildRank: "F",
-    claimedRankSupplies: [],
-    activeBounties: [],
-    bountyPoolSeed: 1,
-    bountyCooldowns: {},
-    wrongBountyKills: 0,
-    bountyStats: {
-      kills: 0,
-      breaks: 0,
-      fishes: 0,
-      meals: 0
-    },
+      projectsBuilt: {},
+      projectContributions: {},
+      unlockedSeals: {},
+      clearedBosses: {},
+      openedNodes: {},
+      seenCutscenes: {},
 
-    questProgress: {
-      mq_01_talked: false,
-      bountiesCleared: 0
-    },
-    clearedBosses: {},
-    unlockedSeals: {},
-    seenCutscenes: {},
+      questProgress: {
+        bountiesCleared: 0,
+        fishedOnce: false,
+        cookedOnce: false
+      },
+      npcQuests: {},
+      activeBounties: [],
+      bountyStats: { kills: 0, breaks: 0, fishes: 0, meals: 0 },
+      bountyPoolSeed: 1,
+      bountyCooldowns: {},
+      claimedRankSupplies: [],
+      wrongBountyKills: 0,
 
-    campBuildings: {
-      greenhouse: 0,
-      pasture: 1
-    },
+      monolithPts: {
+        chinese: 0,
+        english: 0,
+        science: 0,
+        humanities: 0
+      },
 
-    currentZone: "camp_hub",
-    unlockedZones: ["camp_hub"],
-    heroX: 320,
-    heroY: 260,
-    petX: 296,
-    petY: 264,
-    facing: "down",
-    openedNodes: {},
-    maxTowerFloor: 1
-  };
+      maxTowerFloor: 1,
+      passiveCounter: 0,
 
-  function isObject(item) {
-    return (item && typeof item === "object" && !Array.isArray(item));
-  }
-
-  function deepMerge(target, source) {
-    const output = Object.assign({}, target);
-    if (isObject(target) && isObject(source)) {
-      Object.keys(source).forEach(function(key) {
-        if (isObject(source[key])) {
-          if (!(key in target)) Object.assign(output, { [key]: source[key] });
-          else output[key] = deepMerge(target[key], source[key]);
-        } else {
-          Object.assign(output, { [key]: source[key] });
-        }
-      });
-    }
-    return output;
+      activeSubjects: { chinese: true, english: true, humanities: true, science: true },
+      activeLessons: null,
+      lessonSelectMode: "multi",
+      activeQuizTypes: null,
+      questionMastery: {},
+      wrongBook: []
+    };
   }
 
   const StateManager = {
-    data: JSON.parse(JSON.stringify(DEFAULT_STATE)),
+    data: createDefaultState(),
 
     hasExistingSave: function() {
       try {
@@ -208,48 +135,50 @@ window.Aetheria = window.Aetheria || {};
     getSaveSummary: function() {
       try {
         const raw = localStorage.getItem(SAVE_KEY);
-        if (!raw) return null;
+        if (!raw) return { lv: 1, guildRank: "F", zone: "camp_hub", dayCount: 1 };
         const parsed = JSON.parse(raw);
         return {
           lv: parsed.lv || 1,
+          guildRank: parsed.guildRank || "F",
           zone: parsed.currentZone || "camp_hub",
-          guildRank: parsed.guildRank || "F"
+          dayCount: parsed.dayCount || 1
         };
       } catch (e) {
-        return null;
+        return { lv: 1, guildRank: "F", zone: "camp_hub", dayCount: 1 };
       }
     },
 
     init: function() {
+      const def = createDefaultState();
       try {
         const raw = localStorage.getItem(SAVE_KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
-          this.data = deepMerge(DEFAULT_STATE, parsed);
-          if (!Array.isArray(this.data.unlockedZones) || this.data.unlockedZones.length === 0) {
-            this.data.unlockedZones = ["camp_hub"];
-          }
-          if (!Array.isArray(this.data.activeBounties)) this.data.activeBounties = [];
-          if (!Array.isArray(this.data.claimedRankSupplies)) this.data.claimedRankSupplies = [];
-          if (!Array.isArray(this.data.unlockedArmors) || this.data.unlockedArmors.length === 0) {
-            this.data.unlockedArmors = ["a_cloth"];
-          }
-          if (!this.data.unlockedSeals) this.data.unlockedSeals = {};
-          if (!this.data.projectsBuilt) this.data.projectsBuilt = {};
-          if (!this.data.projectContributions) this.data.projectContributions = {};
-          if (!this.data.npcQuests) this.data.npcQuests = {};
-          if (!this.data.bountyStats) this.data.bountyStats = { kills: 0, breaks: 0, fishes: 0, meals: 0 };
+          this.data = Object.assign({}, def, parsed);
+          this.data.inventory = Object.assign({}, def.inventory, parsed.inventory || {});
+          this.data.tools = Object.assign({}, def.tools, parsed.tools || {});
+          this.data.monolithPts = Object.assign({}, def.monolithPts, parsed.monolithPts || {});
+          this.data.questProgress = Object.assign({}, def.questProgress, parsed.questProgress || {});
+          this.data.bountyStats = Object.assign({}, def.bountyStats, parsed.bountyStats || {});
+          this.data.socketedRunes = Object.assign({}, def.socketedRunes, parsed.socketedRunes || {});
+
+          if (typeof this.data.hunger !== "number" || isNaN(this.data.hunger)) this.data.hunger = 100;
+          if (typeof this.data.maxHunger !== "number") this.data.maxHunger = 100;
+          if (typeof this.data.dayCount !== "number" || this.data.dayCount < 1) this.data.dayCount = 1;
+          if (typeof this.data.worldClock !== "number" || isNaN(this.data.worldClock)) this.data.worldClock = 80;
+          if (typeof this.data.torchTicks !== "number" || isNaN(this.data.torchTicks)) this.data.torchTicks = 0;
+        } else {
+          this.data = def;
         }
       } catch (e) {
-        console.warn("讀取存檔失敗，使用預設進度:", e);
+        this.data = def;
       }
-      this.updateGuildRank();
       this.recalcMaxHp();
       return this.data;
     },
 
     startFreshNewGame: function() {
-      this.data = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      this.data = createDefaultState();
       this.recalcMaxHp();
       this.save();
       return this.data;
@@ -265,201 +194,247 @@ window.Aetheria = window.Aetheria || {};
       try {
         localStorage.removeItem(SAVE_KEY);
       } catch (e) {}
-      this.data = JSON.parse(JSON.stringify(DEFAULT_STATE));
-      window.location.reload();
-    },
-
-    // 檢查玩家是否已經獲得初始武器 (若仍為赤手空拳則無法與魔物交戰)
-    hasWeaponEquipped: function() {
-      const s = this.data;
-      return Boolean(s.equippedWeapon && s.equippedWeapon !== "w_none" && s.unlockedWeapons && s.unlockedWeapons.length > 0);
-    },
-
-    unlockZone: function(zoneId) {
-      if (!zoneId) return false;
-      if (zoneId === "tent_guild" || zoneId === "tent_forge") return false;
-      if (this.data.unlockedZones.indexOf(zoneId) === -1) {
-        this.data.unlockedZones.push(zoneId);
-        this.save();
-        return true;
-      }
-      return false;
+      location.reload();
     },
 
     exportJSON: function() {
       return JSON.stringify(this.data);
     },
 
-    importJSON: function(jsonStr) {
+    importJSON: function(rawStr) {
       try {
-        const parsed = JSON.parse(jsonStr);
-        this.data = deepMerge(DEFAULT_STATE, parsed);
-        this.updateGuildRank();
-        this.recalcMaxHp();
-        this.save();
+        const parsed = JSON.parse(rawStr);
+        if (!parsed || typeof parsed.lv !== "number") return false;
+        localStorage.setItem(SAVE_KEY, JSON.stringify(parsed));
+        this.init();
         return true;
       } catch (e) {
         return false;
       }
     },
 
-    getExpRequired: function(lv) {
-      lv = lv || this.data.lv;
-      return Math.floor(35 * Math.pow(lv, 1.35));
+    // ================= v7.0 日夜時鐘與飽食度輔助方法 =================
+    getTimePhase: function() {
+      const c = ((this.data.worldClock || 0) % 400 + 400) % 400;
+      if (c < 60) {
+        return { id: "dawn",  label: "🌅 破曉", icon: "🌅", isNight: false, expMult: 1.0 };
+      }
+      if (c < 220) {
+        return { id: "day",   label: "☀ 白晝", icon: "☀", isNight: false, expMult: 1.0 };
+      }
+      if (c < 280) {
+        return { id: "dusk",  label: "🌇 黃昏", icon: "🌇", isNight: false, expMult: 1.15 };
+      }
+      return { id: "night", label: "🌙 黑夜", icon: "🌙", isNight: true,  expMult: 1.35 };
     },
 
-    recalcMaxHp: function() {
+    advanceTime: function(ticks) {
+      ticks = ticks || 1;
       const s = this.data;
-      const armors = (window.Aetheria.Data && window.Aetheria.Data.ARMORS) || {};
-      const aObj = armors[s.equippedArmor] || { hpBonus: 0 };
+      const oldPhase = this.getTimePhase().id;
 
-      let totalMax = 80 + (s.lv * 20) + (aObj.hpBonus || 0);
-      if (s.unlockedRelics && s.unlockedRelics.indexOf("r_cloak") !== -1) totalMax += 50;
-      if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_soup") totalMax += 80;
+      s.worldClock = (s.worldClock || 0) + ticks;
+      if (s.worldClock >= 400) {
+        s.worldClock = s.worldClock % 400;
+        s.dayCount = (s.dayCount || 1) + 1;
+      }
 
-      const humPts = (s.monolithPts && s.monolithPts.humanities) || 0;
-      if (humPts >= 50) totalMax = Math.round(totalMax * 1.25);
+      if (s.torchTicks && s.torchTicks > 0) {
+        s.torchTicks = Math.max(0, s.torchTicks - ticks);
+      }
 
-      s.maxHp = totalMax;
-      if (s.hp > s.maxHp) s.hp = s.maxHp;
-      return s.maxHp;
+      const newPhase = this.getTimePhase();
+      if (oldPhase !== newPhase.id && window.Aetheria.UI && window.Aetheria.UI.showToast) {
+        if (newPhase.id === "dusk") {
+          window.Aetheria.UI.showToast("🌇 黃昏降臨！水波釣魚點魚群活躍（命中區加寬 25%），黑夜即將到來！");
+        } else if (newPhase.id === "night") {
+          window.Aetheria.UI.showToast("🌙 黑夜降臨！野外視野收窄，夜行魔物經驗與金幣 +35%！可點燃【火把】或回營地休息。");
+        } else if (newPhase.id === "dawn") {
+          window.Aetheria.UI.showToast("🌅 第 " + s.dayCount + " 天破曉時分！黑夜退去，大陸重現晨光。");
+        }
+      }
     },
 
-    getTotalAtk: function() {
+    consumeHunger: function(amount) {
       const s = this.data;
-      const weapons = (window.Aetheria.Data && window.Aetheria.Data.WEAPONS) || {};
-      const jobs = (window.Aetheria.Data && window.Aetheria.Data.JOBS) || {};
-      const wBonus = (s.equippedWeapon && weapons[s.equippedWeapon]) ? weapons[s.equippedWeapon].atk : 0;
-      const jMult = jobs[s.currentJob] ? jobs[s.currentJob].atkMult : 1.0;
-      const shinyBonus = (s.shinyPets && s.shinyPets.indexOf(s.activePet) !== -1) ? 1.2 : 1.0;
-      const ssBonus = (s.guildRank === "SS") ? 1.3 : 1.0;
-
-      const chiPts = (s.monolithPts && s.monolithPts.chinese) || 0;
-      const monoMult = (chiPts >= 75) ? 1.3 : (chiPts >= 25) ? 1.15 : 1.0;
-
-      const hasGolemRune = (s.socketedRunes && (s.socketedRunes.weapon === "coreGolem" || s.socketedRunes.armor === "coreGolem")) ? 25 : 0;
-
-      return Math.round((s.baseAtk + wBonus + hasGolemRune) * jMult * shinyBonus * ssBonus * monoMult);
+      if (s.currentZone === "camp_hub" || s.currentZone === "tent_guild" || s.currentZone === "tent_forge") {
+        return true; // 營地安全區不消耗飽食度
+      }
+      const prev = s.hunger !== undefined ? s.hunger : 100;
+      s.hunger = Math.max(0, prev - amount);
+      if (prev > 20 && s.hunger <= 20 && window.Aetheria.UI) {
+        window.Aetheria.UI.showToast("⚠️ 肚子餓了（飽食度低於 20%）！請按右下角【口糧】進食或回營地煲湯休整！");
+      }
+      return s.hunger > 0;
     },
 
-    getTotalDef: function() {
+    restoreHunger: function(amount, healHp) {
       const s = this.data;
-      const armors = (window.Aetheria.Data && window.Aetheria.Data.ARMORS) || {};
-      const aDef = armors[s.equippedArmor] ? armors[s.equippedArmor].def : 5;
-      let total = s.baseDef + aDef;
+      s.hunger = Math.min(s.maxHunger || 100, (s.hunger || 0) + amount);
+      if (healHp && healHp > 0) {
+        this.recalcMaxHp();
+        s.hp = Math.min(s.maxHp, s.hp + healHp);
+      }
+      this.save();
+    },
 
-      const humPts = (s.monolithPts && s.monolithPts.humanities) || 0;
-      if (humPts >= 50) total = Math.round(total * 1.25);
+    sleepUntilMorning: function() {
+      const s = this.data;
+      s.dayCount = (s.dayCount || 1) + 1;
+      s.worldClock = 65; // 直接進入白晝清晨
+      s.hunger = s.maxHunger || 100;
+      this.recalcMaxHp();
+      s.hp = s.maxHp;
+      if (window.Aetheria.Data && window.Aetheria.Data.Maps) {
+        window.Aetheria.Data.Maps.refreshAllResources();
+      }
+      if (window.Aetheria.Renderer) {
+        window.Aetheria.Renderer.builtZoneKey = null;
+      }
+      this.save();
+    },
 
-      return total;
+    hasWeaponEquipped: function() {
+      const s = this.data;
+      return Boolean(s.equippedWeapon && s.unlockedWeapons && s.unlockedWeapons.indexOf(s.equippedWeapon) !== -1);
+    },
+
+    hasRune: function(runeKey) {
+      const s = this.data;
+      if (!s.socketedRunes) return false;
+      return s.socketedRunes.weapon === runeKey || s.socketedRunes.armor === runeKey;
     },
 
     hasHazardImmunity: function(hazardType) {
       const s = this.data;
-      const armors = (window.Aetheria.Data && window.Aetheria.Data.ARMORS) || {};
-      const aObj = armors[s.equippedArmor] || {};
-
-      if (hazardType === "cold") {
-        if (aObj.resistCold || aObj.resistAll) return true;
-        if (s.projectsBuilt && s.projectsBuilt.proj_z4_shelter) return true; // 建好雪原防風毛皮屋可抵禦凍傷！
-        if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_hotpot") return true;
+      const armor = window.Aetheria.Data && window.Aetheria.Data.ARMORS && window.Aetheria.Data.ARMORS[s.equippedArmor];
+      if (armor) {
+        if (armor.resistAll) return true;
+        if (hazardType === "cold" && armor.resistCold) return true;
       }
-      if (hazardType === "heat") {
-        if (aObj.resistHeat || aObj.resistAll) return true;
-        if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_hotpot") return true;
+      if (hazardType === "cold" && s.projectsBuilt && s.projectsBuilt.proj_z4_shelter) {
+        return true;
+      }
+      if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_hotpot") {
+        return true;
       }
       return false;
     },
 
+    recalcMaxHp: function() {
+      const s = this.data;
+      let base = 100 + (s.lv - 1) * 24;
+      const armor = window.Aetheria.Data && window.Aetheria.Data.ARMORS && window.Aetheria.Data.ARMORS[s.equippedArmor];
+      if (armor && armor.hpBonus) base += armor.hpBonus;
+      if (s.unlockedRelics && s.unlockedRelics.indexOf("r_cloak") !== -1) base += 50;
+      if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_soup") base += 80;
+      if (s.monolithPts && s.monolithPts.humanities >= 50) {
+        base = Math.round(base * 1.25);
+      }
+      s.maxHp = base;
+      if (s.hp > s.maxHp) s.hp = s.maxHp;
+    },
+
+    getTotalAtk: function() {
+      const s = this.data;
+      let atk = 10 + (s.lv - 1) * 5;
+      const w = window.Aetheria.Data && window.Aetheria.Data.WEAPONS && window.Aetheria.Data.WEAPONS[s.equippedWeapon];
+      if (w && w.atk) atk += w.atk;
+      if (this.hasRune("coreGolem")) atk += 25;
+
+      const job = window.Aetheria.Data && window.Aetheria.Data.JOBS && window.Aetheria.Data.JOBS[s.currentJob];
+      if (job && job.atkMult) atk = Math.round(atk * job.atkMult);
+
+      const chiPts = (s.monolithPts && s.monolithPts.chinese) || 0;
+      if (chiPts >= 75) atk = Math.round(atk * 1.30);
+      else if (chiPts >= 25) atk = Math.round(atk * 1.15);
+
+      if (s.guildRank === "SS") atk = Math.round(atk * 1.30);
+      return atk;
+    },
+
+    getTotalDef: function() {
+      const s = this.data;
+      let def = 6 + (s.lv - 1) * 3;
+      const a = window.Aetheria.Data && window.Aetheria.Data.ARMORS && window.Aetheria.Data.ARMORS[s.equippedArmor];
+      if (a && a.def) def += a.def;
+      if (s.currentJob === "paladin") def = Math.round(def * 1.35);
+      if (s.monolithPts && s.monolithPts.humanities >= 50) def = Math.round(def * 1.25);
+      return def;
+    },
+
     getBonusShieldBreak: function() {
       const s = this.data;
-      const weapons = (window.Aetheria.Data && window.Aetheria.Data.WEAPONS) || {};
-      let bonus = (s.equippedWeapon && weapons[s.equippedWeapon]) ? (weapons[s.equippedWeapon].shieldBreak || 0) : 0;
-      if (s.currentJob === "swordsman" && Math.random() < 0.25) bonus += 1;
-      if (s.currentJob === "archmage") bonus += 1;
-      if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_fish") bonus += 1;
-      return bonus;
+      let b = 0;
+      const w = window.Aetheria.Data && window.Aetheria.Data.WEAPONS && window.Aetheria.Data.WEAPONS[s.equippedWeapon];
+      if (w && w.shieldBreak) b += w.shieldBreak;
+      if (s.activeMeal && s.activeMeal.battlesLeft > 0 && s.activeMeal.id === "meal_fish") b += 1;
+      return b;
     },
 
-    hasRune: function(coreKey) {
-      const r = this.data.socketedRunes;
-      if (!r) return false;
-      return r.weapon === coreKey || r.armor === coreKey;
-    },
-
-    gainRewards: function(expAmount, goldAmount, guildPts) {
-      goldAmount = goldAmount || 0;
-      guildPts = guildPts || 5;
+    unlockZone: function(zoneId) {
       const s = this.data;
-
-      const engPts = (s.monolithPts && s.monolithPts.english) || 0;
-      let streakMult = 1.0;
-      if (s.streak >= 5) streakMult = (engPts >= 75) ? 2.0 : 1.5;
-      else if (s.streak >= 3) streakMult = 1.25;
-
-      const rankBonus = (s.guildRank === "A" || s.guildRank === "S" || s.guildRank === "SS") ? 1.25 : 1.0;
-
-      s.exp += Math.round(expAmount * streakMult * rankBonus);
-      s.gold += Math.round(goldAmount * streakMult * rankBonus);
-      s.guildPoints += guildPts;
-
-      let leveledUp = false;
-      while (s.exp >= this.getExpRequired(s.lv) && s.lv < 100) {
-        s.exp -= this.getExpRequired(s.lv);
-        s.lv++;
-        s.baseAtk += 5;
-        s.baseDef += 3;
-        this.recalcMaxHp();
-        s.hp = s.maxHp;
-        leveledUp = true;
+      if (!Array.isArray(s.unlockedZones)) s.unlockedZones = ["camp_hub"];
+      if (s.unlockedZones.indexOf(zoneId) === -1) {
+        s.unlockedZones.push(zoneId);
+        this.save();
+        return true;
       }
-
-      this.updateGuildRank();
-      this.checkJobUnlocks();
-      this.save();
-      return leveledUp;
+      return false;
     },
 
     updateGuildRank: function() {
       const s = this.data;
-      const pts = s.guildPoints || 0;
-      const lv = s.lv || 1;
-
-      if (pts >= 2200 && lv >= 45) s.guildRank = "SS";
-      else if (pts >= 1300 && lv >= 32) s.guildRank = "S";
-      else if (pts >= 700  && lv >= 20) s.guildRank = "A";
-      else if (pts >= 320  && lv >= 10) s.guildRank = "C";
-      else if (pts >= 120  && lv >= 4)  s.guildRank = "E";
-      else s.guildRank = "F";
+      const ranks = (window.Aetheria.Data && window.Aetheria.Data.GUILD_RANKS) || [];
+      let best = "F";
+      for (let i = 0; i < ranks.length; i++) {
+        if (s.lv >= ranks[i].minLv && s.guildPoints >= ranks[i].minPts) {
+          best = ranks[i].rank;
+        }
+      }
+      s.guildRank = best;
     },
 
-    checkJobUnlocks: function() {
-      const lv = this.data.lv;
-      const unlocked = this.data.unlockedJobs;
-      if (lv >= 5 && unlocked.indexOf("scholar") === -1) unlocked.push("scholar");
-      if (lv >= 12 && unlocked.indexOf("hunter") === -1) unlocked.push("hunter");
-      if (lv >= 20 && unlocked.indexOf("thief") === -1) unlocked.push("thief");
-      if (lv >= 30 && unlocked.indexOf("alchemist") === -1) unlocked.push("alchemist");
-      if (lv >= 50 && unlocked.indexOf("archmage") === -1) unlocked.push("archmage");
+    gainRewards: function(expGain, goldGain, guildPtsGain) {
+      const s = this.data;
+      let mult = 1.0;
+      if (s.guildRank === "A" || s.guildRank === "S" || s.guildRank === "SS") mult += 0.25;
+      if (s.unlockedRelics && s.unlockedRelics.indexOf("r_charm") !== -1) mult += 0.20;
+
+      // v7.0 黑夜與黃昏戰鬥加成
+      const phase = this.getTimePhase();
+      if (phase && phase.expMult) mult *= phase.expMult;
+
+      s.exp += Math.round((expGain || 0) * mult);
+      s.gold += Math.round((goldGain || 0) * mult);
+      s.guildPoints += (guildPtsGain || 0);
+
+      let leveledUp = false;
+      while (s.exp >= s.maxExp) {
+        s.exp -= s.maxExp;
+        s.lv++;
+        s.maxExp = Math.round(s.maxExp * 1.28 + 30);
+        this.recalcMaxHp();
+        s.hp = s.maxHp;
+        s.hunger = s.maxHunger || 100; // 升級時同時回滿飽食度
+        leveledUp = true;
+      }
+      this.updateGuildRank();
+      this.save();
+      return leveledUp;
     },
 
     tickPassiveProduction: function() {
       const s = this.data;
-      s.expeditionCounter = (s.expeditionCounter || 0) + 1;
-      let msg = null;
-
-      if (s.expeditionCounter >= 5) {
-        s.expeditionCounter = 0;
-        s.inventory.iron += 1;
-        if (s.campBuildings.greenhouse > 0) {
-          s.inventory.potionHint += 1;
-          msg = "牧場遠征：藍晶鐵礦 +1｜溫室：洞察藥水 +1";
-        } else {
-          msg = "牧場遠征歸來：藍晶鐵礦 +1";
-        }
+      if (s.guildRank === "F") return null;
+      s.passiveCounter = (s.passiveCounter || 0) + 1;
+      if (s.passiveCounter >= 4) {
+        s.passiveCounter = 0;
+        s.inventory.iron = (s.inventory.iron || 0) + 1;
         this.save();
+        return "【公會遠征隊】自動產出：藍晶鐵礦 +1";
       }
-      return msg;
+      return null;
     }
   };
 
