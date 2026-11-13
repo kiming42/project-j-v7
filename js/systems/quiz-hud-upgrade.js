@@ -1,23 +1,21 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 原有題庫多樣化題型轉換與精準血量HUD模組 (quiz-hud-upgrade.js - v7.9.1)
- * 核心設計（零外來題目，100% 使用原有題庫）：
- *   1. 【左上角精準血量 HUD】：將 3 顆模糊愛心升級為「♥ 120/120 實時數字 + 動態三色迷你血條」，點擊可快捷飲用藥水
- *   2. 【原有題庫智能題型轉換（科學科 & 人文科）】：
- *      - 模式 A [先後排序題]：若原題答案含箭頭(→/➔)或頓號(、)，自動拆解為順序槽供點擊排列
- *      - 模式 B [概念語塊重組]：將原題正確答案拆為語塊，並混入同題錯誤選項的干擾語塊，依序點擊拼出答案
- *      - 模式 C [原題庫同科配對]：即時從原有題庫抽取 3 題同科題目，組成「題目 ⟷ 答案」配對題
- *   3. 100% 兼容原有錯題本 (wrongBook) 與題目詳解 (explanation)
+ * Project J：艾瑟瑞亞的破曉 — 原有題庫多樣化題型轉換與精準血量HUD模組 (quiz-hud-upgrade.js - v7.9.2)
+ * 根據 quiz-widgets.js 真實結構精準對接：
+ *   1. 直接攔截 QuizUI.renderMCQ(q, area) 與 #q-prompt-text / #q-type-tag
+ *   2. 透過 QuizBridge.getAllQuestions() 100% 讀取原有題庫（零外來題目）
+ *   3. 將科學科與人文科的原四選一題目自動轉為：【互動排序題】、【同課配對題】、【正誤分類籃】
+ *   4. 左上角 #hud-hearts-box 升級為「♥ 100/100 實時數字 + 動態三色迷你血條」
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入精準血量膠囊與互動排序/配對介面 CSS =================
+  // ================= 1. 注入左上角精準血量框與互動排序題 CSS =================
   function injectQuizHudStyles() {
-    if (document.getElementById("quiz-hud-v79-styles")) return;
+    if (document.getElementById("quiz-hud-v792-styles")) return;
     const style = document.createElement("style");
-    style.id = "quiz-hud-v79-styles";
+    style.id = "quiz-hud-v792-styles";
     style.textContent = `
-      /* 左上角精準數字血量膠囊 (#hud-hearts-box 升級版) */
+      /* 左上角精準數字血量膠囊 (#hud-hearts-box) */
       #hud-hearts-box {
         position: absolute !important;
         top: 4px !important;
@@ -73,12 +71,12 @@ window.Aetheria = window.Aetheria || {};
         transition: width 0.25s ease, background-color 0.25s ease;
       }
 
-      /* 調整頂部右側徽章列起點，與左上角精準血量框並排不重疊 */
+      /* 調整頂部徽章列左邊距，避免與左上角血量框重疊 */
       #hud-overlay {
         left: 90px !important;
       }
 
-      /* 互動排序題 / 語塊重組題 (Sequence / Assembly) 介面樣式 */
+      /* 互動排序題介面樣式 */
       .seq-container {
         display: flex;
         flex-direction: column;
@@ -92,14 +90,14 @@ window.Aetheria = window.Aetheria || {};
         font-size: 11px;
         color: #ffd166;
         font-weight: 900;
-        background: rgba(15, 23, 42, 0.8);
+        background: rgba(15, 23, 42, 0.85);
         padding: 3px 8px;
         border-radius: 4px;
         border: 1px solid #38b6ff;
       }
       .seq-slots-row {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
         gap: 5px;
         width: 100%;
       }
@@ -107,8 +105,8 @@ window.Aetheria = window.Aetheria || {};
         background: #141013;
         border: 2px dashed #6c757d;
         border-radius: 6px;
-        padding: 4px 4px;
-        min-height: 40px;
+        padding: 5px 4px;
+        min-height: 42px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -118,7 +116,6 @@ window.Aetheria = window.Aetheria || {};
         font-weight: 900;
         color: #8d99ae;
         cursor: pointer;
-        transition: all 0.15s ease;
       }
       .seq-slot-box.filled {
         background: linear-gradient(135deg, #1d3557 0%, #102542 100%);
@@ -129,7 +126,7 @@ window.Aetheria = window.Aetheria || {};
       .seq-slot-num {
         font-size: 9.5px;
         color: #ffd166;
-        margin-bottom: 1px;
+        margin-bottom: 2px;
       }
       .seq-choices-grid {
         display: grid;
@@ -141,13 +138,14 @@ window.Aetheria = window.Aetheria || {};
         background: #2b2118;
         border: 2px solid #d9a066;
         border-radius: 6px;
-        padding: 6px 5px;
+        padding: 6px 6px;
         color: #fff3b0;
         font-size: 12px;
         font-weight: 900;
         text-align: center;
         cursor: pointer;
         box-shadow: 0 2px 0 #141013;
+        line-height: 1.25;
       }
       .seq-choice-btn:active {
         transform: translateY(2px);
@@ -166,7 +164,6 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 輔助函式：從原有題庫拆解步驟或組合配對 =================
   function shuffleArray(arr) {
     const copy = arr.slice();
     for (let i = copy.length - 1; i > 0; i--) {
@@ -178,44 +175,54 @@ window.Aetheria = window.Aetheria || {};
     return copy;
   }
 
-  function getOriginalQuestionBank() {
-    const Data = window.Aetheria.Data || {};
-    if (Array.isArray(Data.QUESTIONS) && Data.QUESTIONS.length > 0) return Data.QUESTIONS;
-    if (Array.isArray(Data.QUESTIONS_BANK) && Data.QUESTIONS_BANK.length > 0) return Data.QUESTIONS_BANK;
-    if (window.Aetheria.QuizBridge && Array.isArray(window.Aetheria.QuizBridge.questions)) {
-      return window.Aetheria.QuizBridge.questions;
-    }
-    return [];
+  function stripOptionPrefix(str) {
+    return String(str || "").replace(/^[A-Da-d][\.\、\s]+/, "").trim();
   }
 
-  // 將單一答案字串拆解為 2~4 個有意義的步驟或語塊
-  function extractStepsFromAnswer(ansStr) {
-    const clean = String(ansStr || "").trim();
+  function isScienceOrHumanities(q) {
+    if (!q) return false;
+    if (q.subject === "science" || q.subject === "humanities") return true;
+    const lbl = String(q.subjectLabel || "");
+    if (lbl.indexOf("科學") !== -1 || lbl.indexOf("人文") !== -1) return true;
+    const uKey = String(q.unitKey || "");
+    return uKey.indexOf("sci") === 0 || uKey.indexOf("hum") === 0;
+  }
+
+  // 解析原題正確答案，將其拆解為自然語意步驟或片段
+  function splitAnswerIntoLogicalSteps(rawAns) {
+    const clean = stripOptionPrefix(rawAns);
     if (!clean) return null;
 
-    // 1. 優先檢查箭頭次序 (➔, →, ->, ＞, >)
+    // 1. 若答案含箭頭 (→, ➔, ->, ＞)
     if (/➔|→|->|＞|>/.test(clean)) {
-      const arrowParts = clean.split(/➔|→|->|＞|>/).map(function(s) { return s.trim(); }).filter(Boolean);
-      if (arrowParts.length >= 2 && arrowParts.length <= 5) {
-        return { mode: "arrow", steps: arrowParts };
+      const parts = clean.split(/➔|→|->|＞|>/).map(function(s) { return s.trim(); }).filter(Boolean);
+      if (parts.length >= 2 && parts.length <= 5) {
+        return { mode: "arrow", steps: parts };
       }
     }
 
-    // 2. 檢查頓號、分號、斜線或逗號並列項目 (、 / ； / ，)
-    if (/、|；|，|\//.test(clean)) {
-      const listParts = clean.split(/、|；|，|\//).map(function(s) { return s.trim(); }).filter(Boolean);
-      if (listParts.length >= 2 && listParts.length <= 4) {
-        return { mode: "list", steps: listParts };
+    // 2. 若答案含頓號、分號、逗號或連詞 (、 ， ； 及 和 與)
+    if (/、|，|；|及|和|與/.test(clean)) {
+      const parts = clean.split(/、|，|；|及|和|與/).map(function(s) { return s.trim(); }).filter(Boolean);
+      if (parts.length >= 2 && parts.length <= 4 && parts.every(function(p) { return p.length >= 1; })) {
+        const isOrdered = /，|；/.test(clean);
+        return { mode: isOrdered ? "clause" : "list", steps: parts };
       }
     }
 
-    // 3. 若答案為 4~18 字的完整短句或專有名詞組合，自動切成 2~3 個語塊供重組排序
-    if (clean.length >= 4 && clean.length <= 18 && !/^[A-Za-z0-9\s]+$/.test(clean)) {
-      const segCount = clean.length >= 9 ? 3 : 2;
-      const segLen = Math.ceil(clean.length / segCount);
+    // 3. 若答案含因果或結構助詞（因為...所以 / 使 / 令 / 的 / 由...到）
+    const connectorSplit = clean.split(/(?=因為|所以|從而|導致|使|令|並|再|然後|最後)/).map(function(s) { return s.trim(); }).filter(Boolean);
+    if (connectorSplit.length >= 2 && connectorSplit.length <= 4) {
+      return { mode: "clause", steps: connectorSplit };
+    }
+
+    // 4. 一般詞語或短句（長度 >= 4）：按雙字/三字詞組切分為 2~3 個順序片段
+    if (clean.length >= 4) {
+      const numChunks = clean.length >= 8 ? 3 : 2;
+      const chunkLen = Math.ceil(clean.length / numChunks);
       const chunks = [];
-      for (let i = 0; i < clean.length; i += segLen) {
-        chunks.push(clean.slice(i, i + segLen));
+      for (let i = 0; i < clean.length; i += chunkLen) {
+        chunks.push(clean.slice(i, i + chunkLen));
       }
       if (chunks.length >= 2) {
         return { mode: "chunk", steps: chunks };
@@ -225,228 +232,270 @@ window.Aetheria = window.Aetheria || {};
     return null;
   }
 
-  // 從同一題的錯誤選項 (options) 提取 2 個干擾語塊，增加重組與排序思考度
-  function extractDistractorBlocks(q, correctSteps) {
+  // 從同一題的錯誤選項中提取 2~3 個干擾片段
+  function getDistractorsFromOptions(q, correctSteps) {
     const distractors = [];
+    const ansClean = stripOptionPrefix(q.answer);
     const opts = Array.isArray(q.options) ? q.options : [];
-    const ans = String(q.answer || "").trim();
 
     opts.forEach(function(opt) {
-      const oStr = String(opt || "").trim();
-      if (!oStr || oStr === ans) return;
+      const cOpt = stripOptionPrefix(opt);
+      if (!cOpt || cOpt === ansClean) return;
 
-      const parsed = extractStepsFromAnswer(oStr);
+      const parsed = splitAnswerIntoLogicalSteps(cOpt);
       if (parsed && parsed.steps.length > 0) {
         parsed.steps.forEach(function(st) {
-          if (correctSteps.indexOf(st) === -1 && distractors.indexOf(st) === -1 && st.length <= 14) {
+          if (correctSteps.indexOf(st) === -1 && distractors.indexOf(st) === -1) {
             distractors.push(st);
           }
         });
-      } else if (oStr.length <= 10 && correctSteps.indexOf(oStr) === -1 && distractors.indexOf(oStr) === -1) {
-        distractors.push(oStr);
+      } else if (correctSteps.indexOf(cOpt) === -1 && distractors.indexOf(cOpt) === -1) {
+        distractors.push(cOpt);
       }
     });
 
-    return shuffleArray(distractors).slice(0, Math.max(0, 6 - correctSteps.length));
+    const maxDist = Math.max(2, 6 - correctSteps.length);
+    return shuffleArray(distractors).slice(0, maxDist);
   }
 
-  // ================= 3. 渲染「原有題目轉換：先後排序／語塊重組題」 =================
-  function renderOriginalAsSequence(q, stepInfo, onResultCallback) {
-    const area = document.getElementById("quiz-interactive-area");
-    const promptEl = document.getElementById("quiz-prompt");
-    const subjBadge = document.getElementById("quiz-subject-badge");
-
-    const isPureOrder = (stepInfo.mode === "arrow");
-    const sMap = {
-      chinese: "中文科",
-      english: "英文科",
-      science: isPureOrder ? "科學科・排序題" : "科學科・重組題",
-      humanities: isPureOrder ? "人文科・排序題" : "人文科・重組題"
-    };
-    if (subjBadge) subjBadge.innerText = sMap[q.subject] || "互動排序題";
-    if (promptEl) promptEl.innerText = q.prompt || "";
-    if (!area) return;
-
-    const correctSteps = stepInfo.steps.slice();
-    const distractors = isPureOrder ? [] : extractDistractorBlocks(q, correctSteps);
-
-    const allCards = correctSteps.map(function(txt, idx) {
-      return { text: txt, isCorrectPart: true, origOrder: idx };
-    });
-    distractors.forEach(function(dTxt, dIdx) {
-      allCards.push({ text: dTxt, isCorrectPart: false, origOrder: 99 + dIdx });
-    });
-
-    let poolSteps = shuffleArray(allCards);
-    if (poolSteps.every(function(item, i) { return item.origOrder === i; }) && poolSteps.length >= 2) {
-      const tmp = poolSteps[0];
-      poolSteps[0] = poolSteps[1];
-      poolSteps[1] = tmp;
+  // ================= 2. 題型轉換 A：互動排序／步驟重組渲染器 =================
+  function renderConvertedSequence(quizUI, q, area, stepInfo) {
+    const typeTag = document.getElementById("q-type-tag");
+    const isArrow = (stepInfo.mode === "arrow" || stepInfo.mode === "clause");
+    if (typeTag) {
+      typeTag.innerText = isArrow ? "先後排序題" : "概念重組題";
     }
 
-    const selectedIndices = [];
+    const correctSteps = stepInfo.steps.slice();
+    const distractors = (stepInfo.mode === "arrow" && correctSteps.length >= 4)
+      ? []
+      : getDistractorsFromOptions(q, correctSteps);
 
-    // 記錄當前步驟供「洞察藥水」提示使用
-    q._activeSequenceSteps = correctSteps;
+    const cardObjects = correctSteps.map(function(txt, i) {
+      return { text: txt, origIdx: i };
+    });
+    distractors.forEach(function(dTxt, dIdx) {
+      cardObjects.push({ text: dTxt, origIdx: 100 + dIdx });
+    });
 
-    function redrawSequenceUI() {
+    let shuffledPool = shuffleArray(cardObjects);
+    if (shuffledPool.every(function(c, i) { return c.origIdx === i; }) && shuffledPool.length >= 2) {
+      const tmp = shuffledPool[0];
+      shuffledPool[0] = shuffledPool[1];
+      shuffledPool[1] = tmp;
+    }
+
+    const selectedPoolIndices = [];
+
+    function refreshSeqUI() {
       let slotsHtml = "";
       for (let i = 0; i < correctSteps.length; i++) {
-        const pickedPoolIdx = selectedIndices[i];
-        const hasVal = (pickedPoolIdx !== undefined);
-        const stepTxt = hasVal ? poolSteps[pickedPoolIdx].text : "點擊下方選擇";
-        const slotTitle = isPureOrder ? ("步驟 " + (i + 1)) : ("片段 " + (i + 1));
+        const pIdx = selectedPoolIndices[i];
+        const filled = (pIdx !== undefined);
+        const txt = filled ? shuffledPool[pIdx].text : "點擊下方選擇";
+        const label = isArrow ? ("步驟 " + (i + 1)) : ("順序 " + (i + 1));
         slotsHtml +=
-          '<div class="seq-slot-box ' + (hasVal ? 'filled' : '') + '" data-slot="' + i + '">' +
-            '<div class="seq-slot-num">' + slotTitle + (hasVal ? ' (點擊移除)' : '') + '</div>' +
-            '<div>' + stepTxt + '</div>' +
+          '<div class="seq-slot-box ' + (filled ? 'filled' : '') + '" data-slot="' + i + '">' +
+            '<div class="seq-slot-num">' + label + (filled ? ' ×' : '') + '</div>' +
+            '<div>' + txt + '</div>' +
           '</div>';
       }
 
       let choicesHtml = "";
-      poolSteps.forEach(function(item, pIdx) {
-        const isUsed = selectedIndices.indexOf(pIdx) !== -1;
+      shuffledPool.forEach(function(item, pIdx) {
+        const used = selectedPoolIndices.indexOf(pIdx) !== -1;
         choicesHtml +=
-          '<button class="seq-choice-btn ' + (isUsed ? 'used' : '') + '" data-pool="' + pIdx + '">' +
+          '<button class="seq-choice-btn ' + (used ? 'used' : '') + '" data-pool="' + pIdx + '">' +
             item.text +
           '</button>';
       });
 
-      const allFilled = (selectedIndices.length === correctSteps.length);
-      const guideTxt = isPureOrder
-        ? ("👆 請依先後次序點擊卡片排入槽位 (" + selectedIndices.length + "/" + correctSteps.length + ")")
-        : ("👆 請依序點擊正確語塊組合答案 (" + selectedIndices.length + "/" + correctSteps.length + ")");
+      const isReady = (selectedPoolIndices.length === correctSteps.length);
+      const guideText = (stepInfo.mode === "list")
+        ? ("👆 請選出正確的 " + correctSteps.length + " 個項目 (" + selectedPoolIndices.length + "/" + correctSteps.length + ")")
+        : ("👆 請按正確先後次序點擊下方卡片 (" + selectedPoolIndices.length + "/" + correctSteps.length + ")");
 
       area.innerHTML =
         '<div class="seq-container">' +
           '<div class="seq-guide-bar">' +
-            '<span>' + guideTxt + '</span>' +
-            '<span>破盾 +1</span>' +
+            '<span>' + guideText + '</span>' +
+            '<span>💡洞察可用</span>' +
           '</div>' +
           '<div class="seq-slots-row">' + slotsHtml + '</div>' +
           '<div class="seq-choices-grid">' + choicesHtml + '</div>' +
           '<div class="seq-action-row">' +
-            '<button class="na-btn" id="btn-seq-reset" style="flex:1; padding:6px;">🔄 重排</button>' +
-            '<button class="na-btn ' + (allFilled ? 'highlight' : '') + '" id="btn-seq-submit" style="flex:2; padding:6px; font-size:13.5px;">✓ 確認答案</button>' +
+            '<button class="na-btn" id="seq-btn-undo" style="flex:1; padding:6px;">⌫ 退回</button>' +
+            '<button class="na-btn" id="seq-btn-Hint" style="flex:1; padding:6px;">💡 提示</button>' +
+            '<button class="na-btn ' + (isReady ? 'highlight' : '') + '" id="seq-btn-ok" style="flex:2; padding:6px; font-size:13px;">✓ 確認提交</button>' +
           '</div>' +
         '</div>';
 
       area.querySelectorAll(".seq-choice-btn").forEach(function(btn) {
         btn.onclick = function() {
           const pIdx = parseInt(btn.getAttribute("data-pool"), 10);
-          if (selectedIndices.indexOf(pIdx) === -1 && selectedIndices.length < correctSteps.length) {
-            selectedIndices.push(pIdx);
+          if (selectedPoolIndices.indexOf(pIdx) === -1 && selectedPoolIndices.length < correctSteps.length) {
             window.Aetheria.Audio.sfxTalkBlip();
-            redrawSequenceUI();
+            selectedPoolIndices.push(pIdx);
+            refreshSeqUI();
           }
         };
       });
 
-      area.querySelectorAll(".seq-slot-box.filled").forEach(function(slotEl) {
-        slotEl.onclick = function() {
-          const sIdx = parseInt(slotEl.getAttribute("data-slot"), 10);
-          if (!isNaN(sIdx) && sIdx < selectedIndices.length) {
-            selectedIndices.splice(sIdx, 1);
+      area.querySelectorAll(".seq-slot-box.filled").forEach(function(slot) {
+        slot.onclick = function() {
+          const sIdx = parseInt(slot.getAttribute("data-slot"), 10);
+          if (!isNaN(sIdx) && sIdx < selectedPoolIndices.length) {
             window.Aetheria.Audio.sfxTalkBlip();
-            redrawSequenceUI();
+            selectedPoolIndices.splice(sIdx, 1);
+            refreshSeqUI();
           }
         };
       });
 
-      const resetBtn = document.getElementById("btn-seq-reset");
-      if (resetBtn) {
-        resetBtn.onclick = function() {
-          selectedIndices.length = 0;
-          window.Aetheria.Audio.sfxTalkBlip();
-          redrawSequenceUI();
+      const undoBtn = document.getElementById("seq-btn-undo");
+      if (undoBtn) {
+        undoBtn.onclick = function() {
+          if (selectedPoolIndices.length > 0) {
+            window.Aetheria.Audio.sfxTalkBlip();
+            selectedPoolIndices.pop();
+            refreshSeqUI();
+          }
         };
       }
 
-      const submitBtn = document.getElementById("btn-seq-submit");
-      if (submitBtn) {
-        submitBtn.onclick = function() {
-          if (selectedIndices.length < correctSteps.length) {
+      const hintBtn = document.getElementById("seq-btn-Hint");
+      if (hintBtn) {
+        hintBtn.onclick = function() {
+          const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+          if (!s.inventory || (s.inventory.potionHint || 0) <= 0) {
+            window.Aetheria.UI.showToast("洞察藥水不足！可在營地工坊提煉或商店購買。");
+            return;
+          }
+          const nextSlot = selectedPoolIndices.length;
+          if (nextSlot >= correctSteps.length) return;
+          const targetTxt = correctSteps[nextSlot];
+          const matchPoolIdx = shuffledPool.findIndex(function(item, idx) {
+            return selectedPoolIndices.indexOf(idx) === -1 && item.text === targetTxt;
+          });
+          if (matchPoolIdx !== -1) {
+            s.inventory.potionHint--;
+            window.Aetheria.State.save();
+            window.Aetheria.Audio.sfxGather();
+            selectedPoolIndices.push(matchPoolIdx);
+            refreshSeqUI();
+          }
+        };
+      }
+
+      const okBtn = document.getElementById("seq-btn-ok");
+      if (okBtn) {
+        okBtn.onclick = function() {
+          if (selectedPoolIndices.length < correctSteps.length) {
             window.Aetheria.UI.showToast("請先排滿上方 " + correctSteps.length + " 個位置！");
             return;
           }
-          const userWords = selectedIndices.map(function(pIdx) { return poolSteps[pIdx].text; });
+          const userArr = selectedPoolIndices.map(function(idx) { return shuffledPool[idx].text; });
           let isRight = false;
-
           if (stepInfo.mode === "list") {
-            // 並列頓號題（如「固體、液體、氣體」）：只要選對全部正確項目即算答對
-            const sortedUser = userWords.slice().sort().join("|");
-            const sortedCorr = correctSteps.slice().sort().join("|");
-            isRight = (sortedUser === sortedCorr);
+            isRight = (userArr.slice().sort().join("|") === correctSteps.slice().sort().join("|"));
           } else {
-            // 箭頭次序題與短句重組題：順序必須完全一致
-            isRight = userWords.every(function(txt, idx) {
-              return txt === correctSteps[idx];
-            });
+            isRight = userArr.every(function(val, i) { return val === correctSteps[i]; });
           }
-
-          if (onResultCallback) {
-            onResultCallback(isRight, q.answer, q);
+          if (quizUI.currentCallback) {
+            quizUI.currentCallback(isRight, stripOptionPrefix(q.answer), q);
           }
         };
       }
     }
 
-    redrawSequenceUI();
+    refreshSeqUI();
   }
 
-  // ================= 4. 將原有題庫 3 題同科題目動態組合為「配對題」 =================
-  function buildDynamicMatchingFromOriginalBank(baseQ) {
-    const bank = getOriginalQuestionBank();
-    if (!bank || bank.length < 3) return null;
+  // ================= 3. 題型轉換 B：從原題庫同一課 (unitKey) 抽取 3 題組成【配對題】 =================
+  function tryBuildSameLessonMatching(q) {
+    const Bridge = window.Aetheria.QuizBridge;
+    if (!Bridge || !Bridge.getAllQuestions) return null;
 
-    // 只從原有題庫同一科目 (science 或 humanities) 篩選答案簡潔的題目
-    const candidates = bank.filter(function(item) {
-      return item &&
-        item.id !== baseQ.id &&
-        item.subject === baseQ.subject &&
-        item.prompt &&
-        item.answer &&
-        String(item.answer).length <= 16 &&
-        String(item.prompt).length <= 42 &&
-        item.answer !== baseQ.answer;
+    const allQ = Bridge.getAllQuestions() || [];
+    const baseAns = stripOptionPrefix(q.answer);
+    if (!baseAns || baseAns.length > 18) return null;
+
+    // 優先從同一課 (unitKey) 篩選答案不重複的題目
+    let peers = allQ.filter(function(item) {
+      if (!item || item.id === q.id || item.subject !== q.subject) return false;
+      if (q.unitKey && item.unitKey !== q.unitKey) return false;
+      const a = stripOptionPrefix(item.answer);
+      return a && a.length >= 2 && a.length <= 18 && a !== baseAns && item.prompt;
     });
 
-    if (candidates.length < 2) return null;
-    const pickedOthers = shuffleArray(candidates).slice(0, 2);
-    const trio = [baseQ, pickedOthers[0], pickedOthers[1]];
+    if (peers.length < 2) return null;
+    const pickedPeers = shuffleArray(peers).slice(0, 2);
+    const trio = [q, pickedPeers[0], pickedPeers[1]];
 
     const pairs = trio.map(function(item) {
-      const cleanPrompt = String(item.prompt)
+      let cleanP = String(item.prompt || "")
         .replace(/^【[^】]+】/, "")
-        .replace(/請問|下列哪一項|是甚麼|是什麼|？|\?/g, "")
+        .replace(/請問|下列哪一項|哪一個|是甚麼|是什麼|？|\?/g, "")
         .trim();
+      if (cleanP.length > 22) cleanP = cleanP.slice(0, 21) + "…";
       return {
-        left: cleanPrompt.length > 22 ? (cleanPrompt.slice(0, 21) + "…") : cleanPrompt,
-        right: String(item.answer).trim()
+        left: cleanP,
+        right: stripOptionPrefix(item.answer)
       };
     });
 
     return {
-      id: baseQ.id,
-      subject: baseQ.subject,
+      id: q.id,
+      subject: q.subject,
+      unitKey: q.unitKey,
       type: "matching",
-      prompt: "【同科重點配對】請將左方的題目概念與右方的正確答案配對：",
+      prompt: "【同課重點連線】請將左方的題目重點與右方的正確答案配對：",
       pairs: pairs,
-      answer: baseQ.answer,
-      explanation: baseQ.explanation || ("正確答案：" + baseQ.answer)
+      answer: stripOptionPrefix(q.answer)
     };
   }
 
-  // ================= 5. 掛載左上角精準血量 HUD 與原題庫動態轉換器 =================
+  // ================= 4. 題型轉換 C：利用原題選項組成【正誤觀念分類籃】 =================
+  function tryBuildTrueFalseClassify(q) {
+    const opts = Array.isArray(q.options) ? q.options : [];
+    if (opts.length < 3) return null;
+
+    const ansClean = stripOptionPrefix(q.answer);
+    const wrongOpts = opts
+      .map(stripOptionPrefix)
+      .filter(function(o) { return o && o !== ansClean; });
+
+    if (wrongOpts.length < 2) return null;
+    const pickedWrongs = shuffleArray(wrongOpts).slice(0, 2);
+
+    const items = shuffleArray([
+      { label: ansClean,         basket: "✅ 正確答案" },
+      { label: pickedWrongs[0],  basket: "❌ 錯誤陷阱" },
+      { label: pickedWrongs[1],  basket: "❌ 錯誤陷阱" }
+    ]);
+
+    return {
+      id: q.id,
+      subject: q.subject,
+      unitKey: q.unitKey,
+      type: "classify",
+      prompt: q.prompt,
+      baskets: ["✅ 正確答案", "❌ 錯誤陷阱"],
+      items: items,
+      answer: ansClean
+    };
+  }
+
+  // ================= 5. 掛載 QuizUI.renderMCQ 與左上角精準血量框 =================
   function hookQuizAndHeartsHUD() {
     const Ren = window.Aetheria.Renderer;
     const QUI = window.Aetheria.QuizUI;
-    const Bat = window.Aetheria.Battle;
     const UI  = window.Aetheria.UI;
 
     // (A) 升級左上角 #hud-hearts-box：顯示「♥ 120/120 + 動態三色迷你血條」
     if (Ren) {
       Ren.updateHeartsDOM = function(s, Sprites) {
+        if (!s) return;
         const curHp = Math.max(0, Math.round(s.hp || 0));
         const maxHp = Math.max(1, Math.round(s.maxHp || 100));
         const stateKey = curHp + "/" + maxHp;
@@ -507,83 +556,57 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // (B) 攔截 QuizUI.renderQuestion：只針對原有題庫的科學與人文科題目進行多樣化題型轉換
-    if (QUI && QUI.renderQuestion) {
-      const origRenderQ = QUI.renderQuestion.bind(QUI);
-      QUI.renderQuestion = function(q, callback) {
-        if (!q) return origRenderQ(q, callback);
+    // (B) 直接攔截 QuizUI.renderMCQ(q, area)：將科學科與人文科的原四選一題目轉為排序/配對/分類題！
+    if (QUI && QUI.renderMCQ) {
+      const origRenderMCQ = QUI.renderMCQ.bind(QUI);
+      let rotateCounter = 0;
 
-        const isSciOrHum = (q.subject === "science" || q.subject === "humanities");
-        const isDefaultMcq = (!q.type || q.type === "multiple_choice");
+      QUI.renderMCQ = function(q, area) {
+        if (isScienceOrHumanities(q)) {
+          const stepInfo = splitAnswerIntoLogicalSteps(q.answer);
+          const promptEl = document.getElementById("q-prompt-text");
+          const typeTag  = document.getElementById("q-type-tag");
 
-        if (isSciOrHum && isDefaultMcq) {
-          const stepInfo = extractStepsFromAnswer(q.answer);
-
-          // 1. 若原題答案本身帶有箭頭次序 (→/➔) 或並列頓號 (、)，100% 轉為互動排序題
-          if (stepInfo && (stepInfo.mode === "arrow" || stepInfo.mode === "list")) {
-            this.currentQuestion = q;
-            this.currentCallback = callback;
-            q._isInteractiveConverted = true;
-            renderOriginalAsSequence(q, stepInfo, callback);
+          // 1. 若原題答案含箭頭或並列詞，優先 100% 轉為【先後排序題】
+          if (stepInfo && (stepInfo.mode === "arrow" || stepInfo.mode === "list" || stepInfo.mode === "clause")) {
+            renderConvertedSequence(this, q, area, stepInfo);
             return;
           }
 
-          // 2. 其他科學/人文四選一題目：動態輪流轉為「語塊重組排序題」或「原題庫同科配對題」
-          const roll = Math.random();
-          if (stepInfo && stepInfo.mode === "chunk" && roll < 0.45) {
-            this.currentQuestion = q;
-            this.currentCallback = callback;
-            q._isInteractiveConverted = true;
-            renderOriginalAsSequence(q, stepInfo, callback);
+          // 2. 其他科學/人文單選題：依序輪換為【排序重組題】、【同課配對題】、【正誤分類籃】
+          rotateCounter = (rotateCounter + 1) % 3;
+
+          if (rotateCounter === 0 && stepInfo) {
+            renderConvertedSequence(this, q, area, stepInfo);
             return;
           }
 
-          if (roll >= 0.45 && roll < 0.72 && String(q.answer || "").length <= 16) {
-            const matchQ = buildDynamicMatchingFromOriginalBank(q);
-            if (matchQ) {
-              q._isInteractiveConverted = true;
-              origRenderQ(matchQ, function(isRight) {
-                if (callback) callback(isRight, q.answer, q);
-              });
+          if (rotateCounter === 1) {
+            const matchObj = tryBuildSameLessonMatching(q);
+            if (matchObj && this.renderMatching) {
+              if (typeTag) typeTag.innerText = "同課配對題";
+              if (promptEl) promptEl.innerText = matchObj.prompt;
+              this.renderMatching(matchObj, area);
               return;
             }
           }
-        }
 
-        origRenderQ(q, callback);
-      };
-
-      // 支援排序/重組題使用「洞察藥水」提示第 1 個步驟
-      if (QUI.useHintPotion) {
-        const origHint = QUI.useHintPotion.bind(QUI);
-        QUI.useHintPotion = function() {
-          const q = this.currentQuestion;
-          const s = window.Aetheria.State.data;
-          if (q && q._activeSequenceSteps && q._activeSequenceSteps.length >= 2) {
-            if ((s.inventory.potionHint || 0) <= 0) {
-              window.Aetheria.UI.showToast("洞察藥水不足！");
+          if (rotateCounter === 2) {
+            const clsObj = tryBuildTrueFalseClassify(q);
+            if (clsObj && this.renderClassifyBaskets) {
+              if (typeTag) typeTag.innerText = "正誤分類籃";
+              this.renderClassifyBaskets(clsObj, area);
               return;
             }
-            s.inventory.potionHint--;
-            window.Aetheria.Audio.sfxGather();
-            window.Aetheria.State.save();
-            window.Aetheria.UI.showToast("💡 洞察提示：第 1 格是【" + q._activeSequenceSteps[0] + "】！");
+          }
+
+          if (stepInfo) {
+            renderConvertedSequence(this, q, area, stepInfo);
             return;
           }
-          origHint();
-        };
-      }
-    }
-
-    // (C) 完成互動排序/重組/配對題時，給予額外 +1 破盾獎勵
-    if (Bat && Bat.resolveTurn) {
-      const origResolve = Bat.resolveTurn.bind(Bat);
-      Bat.resolveTurn = function(isCorrect, correctText, qObj) {
-        if (isCorrect && qObj && qObj._isInteractiveConverted && this.enemy && !this.enemy.broken && this.mode === "combat") {
-          this.enemy.shield = Math.max(0, this.enemy.shield - 1);
-          window.Aetheria.UI.spawnFloatingText("思考共鳴・破盾+1!", "#8ce0ff", true);
         }
-        origResolve(isCorrect, correctText, qObj);
+
+        origRenderMCQ(q, area);
       };
     }
   }
@@ -597,15 +620,15 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Quiz & HUD Upgrade v7.9.1 init error:", err);
+      console.error("Quiz & HUD Upgrade v7.9.2 init error:", err);
     }
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
-    setTimeout(initQuizHudUpgrade, 110);
+    setTimeout(initQuizHudUpgrade, 120);
   } else {
     window.addEventListener("load", function() {
-      setTimeout(initQuizHudUpgrade, 110);
+      setTimeout(initQuizHudUpgrade, 120);
     });
   }
 })();
