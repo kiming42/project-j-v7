@@ -1,14 +1,13 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 進階三石推箱子迷宮、永久鎖定與唯一寶箱模組 (dungeon-puzzles.js - v8.1)
- * 核心升級：
- *   1. 【進階 3 石迷宮解謎】：升級為 3 顆符文巨石 + 內部障礙岩柱陣（不能無腦直推，必須先讓開中央通道、借位繞路推動）
- *   2. 【解題後永久鎖定】：解開機關後寫入存檔 s.solvedPuzzles，所有推石立即永久鎖定不可再移動，重置石碑自動隱藏
- *   3. 【機關秘寶箱限領一次】：開啟狀態寫入存檔 s.claimedPuzzleChests，即使過夜刷新資源或重進荒島亦不可重複領取
+ * Project J：艾瑟瑞亞的破曉 — 進階三石推箱子迷宮、永久鎖定與唯一寶箱模組 (dungeon-puzzles.js - v8.2)
+ * Code Check 修正：
+ *   1. 修正第4區雪原 (zone4_snow) 左上角障礙石柱座標為 (-64, -64)，確保第3顆滑冰石右側推位暢通
+ *   2. 將荒島推石密室移至 (740, 310) 並保護所有 chest 寶箱，徹底避免誤刪荒島中央的「炸彈裂縫秘寶箱」
+ *   3. 防止日夜時段切換 (_refreshToken 更新) 時把玩家推到一半的巨石重置回原位
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入推石滑動動畫與機關標籤 CSS =================
   function injectPuzzleStyles() {
     if (document.getElementById("puzzle-v81-styles")) return;
     const style = document.createElement("style");
@@ -41,7 +40,6 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 註冊推石、感應石板、秘密鐵門與重置石碑像素圖示 =================
   function registerPuzzleSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -81,9 +79,7 @@ window.Aetheria = window.Aetheria || {};
       "..KKKKKKKKKKKK..",
       "................",
       "................"
-    ], {
-      K: "#141013", L: "#94a3b8", G: "#64748b", D: "#334155", C: "#38b6ff"
-    });
+    ], { K: "#141013", L: "#94a3b8", G: "#64748b", D: "#334155", C: "#38b6ff" });
 
     const pushBoulderLitUrl = buildGridDataUrl([
       "...KKKKKKKKKK...",
@@ -102,9 +98,7 @@ window.Aetheria = window.Aetheria || {};
       "..KKKKKKKKKKKK..",
       "................",
       "................"
-    ], {
-      K: "#141013", Y: "#f5b700", G: "#475569", D: "#1e293b", L: "#5ac54f"
-    });
+    ], { K: "#141013", Y: "#f5b700", G: "#475569", D: "#1e293b", L: "#5ac54f" });
 
     const plateOffUrl = buildGridDataUrl([
       "................",
@@ -123,9 +117,7 @@ window.Aetheria = window.Aetheria || {};
       "................",
       "................",
       "................"
-    ], {
-      K: "#141013", D: "#334155", G: "#1e293b", C: "#38b6ff"
-    });
+    ], { K: "#141013", D: "#334155", G: "#1e293b", C: "#38b6ff" });
 
     const plateOnUrl = buildGridDataUrl([
       "................",
@@ -144,9 +136,7 @@ window.Aetheria = window.Aetheria || {};
       "................",
       "................",
       "................"
-    ], {
-      K: "#141013", Y: "#f5b700", L: "#5ac54f", G: "#1e3a2f"
-    });
+    ], { K: "#141013", Y: "#f5b700", L: "#5ac54f", G: "#1e3a2f" });
 
     const secretGateUrl = buildGridDataUrl([
       "KKKKKKKKKKKKKKKK",
@@ -165,9 +155,7 @@ window.Aetheria = window.Aetheria || {};
       "KKKKKKKKKKKKKKKK",
       "KDDDDDDDDDDDDDDK",
       "KKKKKKKKKKKKKKKK"
-    ], {
-      K: "#141013", R: "#9d0208", I: "#64748b", Y: "#f5b700", D: "#334155"
-    });
+    ], { K: "#141013", R: "#9d0208", I: "#64748b", Y: "#f5b700", D: "#334155" });
 
     const puzzleResetUrl = buildGridDataUrl([
       "......KKKK......",
@@ -186,9 +174,7 @@ window.Aetheria = window.Aetheria || {};
       "................",
       "................",
       "................"
-    ], {
-      K: "#141013", P: "#9d4edd", W: "#e0aaff", G: "#64748b", D: "#334155"
-    });
+    ], { K: "#141013", P: "#9d4edd", W: "#e0aaff", G: "#64748b", D: "#334155" });
 
     const customUrls = {
       push_boulder: pushBoulderUrl,
@@ -206,7 +192,7 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 在地圖建立進階 3 石推箱子密室（讀取存檔永久狀態） =================
+  // 清理推石陣周圍隨機樹石，但嚴格保護所有寶箱 (type === "chest")
   function clearAreaAroundPuzzle(mapObj, cx, cy, radius) {
     if (mapObj.trees) {
       mapObj.trees = mapObj.trees.filter(function(t) {
@@ -215,7 +201,7 @@ window.Aetheria = window.Aetheria || {};
     }
     if (mapObj.nodes) {
       mapObj.nodes = mapObj.nodes.filter(function(n) {
-        if (n.isPuzzleVaultChest) return true;
+        if (n.type === "chest" || n.isPuzzleVaultChest) return true;
         return Math.hypot(n.x - cx, n.y - cy) > radius - 10;
       });
     }
@@ -238,22 +224,36 @@ window.Aetheria = window.Aetheria || {};
     mapObj.decos = mapObj.decos || [];
     mapObj.nodes = mapObj.nodes || [];
 
-    mapObj.decos = mapObj.decos.filter(function(d) {
-      return !d.isPuzzleElement;
-    });
-    mapObj.nodes = mapObj.nodes.filter(function(n) {
-      return !n.isPuzzleVaultChest;
-    });
-
     const cx = config.cx;
     const cy = config.cy;
-    clearAreaAroundPuzzle(mapObj, cx, cy, 130);
+    clearAreaAroundPuzzle(mapObj, cx, cy, 125);
 
     const pGroupId = "puz_" + mapObj.id;
     const isAlreadySolved = Boolean(s.solvedPuzzles[pGroupId]);
     const isChestClaimed = Boolean(s.claimedPuzzleChests[pGroupId]);
 
-    // 1. 建造右側密室圍欄石牆（密室入口在 cx + 64, cy，寶箱在 cx + 96, cy）
+    // 若地圖上已有推石機關（例如日夜切換觸發的資源補充），保留推石當前進度並補回機關秘寶箱即可
+    const alreadyHasBoulders = mapObj.decos.some(function(d) { return d.isPushBoulder && d.puzzleGroupId === pGroupId; });
+    if (alreadyHasBoulders) {
+      const hasChest = mapObj.nodes.some(function(n) { return n.isPuzzleVaultChest && n.puzzleGroupId === pGroupId; });
+      if (!hasChest) {
+        mapObj.nodes.push({
+          id: pGroupId + "_vault_chest",
+          x: cx + 96,
+          y: cy,
+          type: "chest",
+          name: "機關秘寶箱",
+          opened: isChestClaimed,
+          isPuzzleVaultChest: true,
+          puzzleGroupId: pGroupId
+        });
+      }
+      return;
+    }
+
+    mapObj.decos = mapObj.decos.filter(function(d) { return !d.isPuzzleElement; });
+    mapObj.nodes = mapObj.nodes.filter(function(n) { return !n.isPuzzleVaultChest; });
+
     const vaultX = cx + 96;
     const vaultY = cy;
     const wallOffsets = [
@@ -279,7 +279,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 2. 放置推石陣內部的固定障礙岩柱 (blockers)，迫使玩家必須規劃先後順序繞路推石！
     (config.blockers || []).forEach(function(blk, idx) {
       mapObj.decos.push({
         id: pGroupId + "_blk_" + idx,
@@ -294,7 +293,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 3. 密室正門的【遠古封印鐵門】（若存檔已解開則直接開啟）
     mapObj.decos.push({
       id: pGroupId + "_gate",
       x: cx + 64,
@@ -311,7 +309,6 @@ window.Aetheria = window.Aetheria || {};
       name: "秘密鐵門 [推石解鎖]"
     });
 
-    // 4. 密室內的【遠古機關秘寶箱】（全存檔限領一次！）
     mapObj.nodes.push({
       id: pGroupId + "_vault_chest",
       x: vaultX,
@@ -323,7 +320,6 @@ window.Aetheria = window.Aetheria || {};
       puzzleGroupId: pGroupId
     });
 
-    // 5. 放置 3 塊感應石板 (Rune Plates)
     const platesList = config.plates || [];
     platesList.forEach(function(pl, idx) {
       mapObj.decos.push({
@@ -341,7 +337,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 6. 放置 3 顆可推動的符文巨石（若已解題成功，直接鎖定在石板位置不可再推！）
     (config.boulders || []).forEach(function(b, idx) {
       const targetPlate = platesList[idx] || b;
       const initX = cx + (isAlreadySolved ? targetPlate.dx : b.dx);
@@ -366,7 +361,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 7. 放置【🔄重置石碑】（解開後自動隱藏）
     if (!isAlreadySolved) {
       mapObj.decos.push({
         id: pGroupId + "_reset",
@@ -384,11 +378,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 4. 精心設計的 3 石 Sokoban 迷宮陣配置（100% 可解且需動腦規劃順序） =================
-  // 每個單位格為 32px，密室門在 (+64, 0)，確保解開後 (0,0) -> (+32,0) -> (+64,0) 通往寶箱的走廊暢通無阻！
   const ZONE_PUZZLE_CONFIGS = {
-    // 【1-B 蘑菇洞窟：雙柱借道陣】
-    // 解法提示：1.先從(0,0)將上石推入(0,-64) ➔ 2.從左方將中石(-32,0)連推兩格至(+32,0)再往上推入(+32,-32) ➔ 3.將左下石(-64,+32)往下推一格再往右連推兩格入(0,+64)！
     cave1_mushroom: {
       cx: 420,
       cy: 290,
@@ -397,9 +387,6 @@ window.Aetheria = window.Aetheria || {};
       blockers: [{ dx: -32, dy: -32 }, { dx: -32, dy: 32 }],
       boulders: [{ dx: 0, dy: -32 }, { dx: -32, dy: 0 }, { dx: -64, dy: 32 }]
     },
-
-    // 【2. 流沙峽谷：十字連環陣】
-    // 解法提示：中央 3 顆石頭互相卡位！必須先將上石(0,-32)往右推入(+32,-32)，再將中心石(0,0)往上推兩格入(0,-64)，最後將左下石(-32,+32)往右推兩格入(+32,+32)！
     zone2_canyon: {
       cx: 600,
       cy: 310,
@@ -408,20 +395,14 @@ window.Aetheria = window.Aetheria || {};
       blockers: [{ dx: -32, dy: 0 }, { dx: -32, dy: 64 }],
       boulders: [{ dx: 0, dy: -32 }, { dx: 0, dy: 0 }, { dx: -32, dy: 32 }]
     },
-
-    // 【4. 霜語雪原：極地滑冰陣（推一下滑行 2 格）】
-    // 解法提示：利用滑行 2 格特性，先將右方中石(0,0)往上滑入(0,-64)，再將左石(-64,0)往右滑至(0,0)後往下滑入(0,+64)，最後將(-32,-32)往右滑入(+32,-32)！
     zone4_snow: {
       cx: 560,
       cy: 300,
       iceSlide: true,
       plates:   [{ dx: 0, dy: -64 }, { dx: 32, dy: -32 }, { dx: 0, dy: 64 }],
-      blockers: [{ dx: -64, dy: -32 }, { dx: -32, dy: 32 }],
+      blockers: [{ dx: -64, dy: -64 }, { dx: -32, dy: 32 }],
       boulders: [{ dx: 0, dy: 0 }, { dx: -64, dy: 0 }, { dx: -32, dy: -32 }]
     },
-
-    // 【5. 熔岩火山：雙門迴旋陣】
-    // 解法提示：先將(-32,-32)往上推再往右推入(0,-64)；再將(0,0)往右推至(+32,0)再往上推入(+32,-32)；最後將(-32,+32)往右推兩格入(+32,+32)！
     zone5_volcano: {
       cx: 540,
       cy: 300,
@@ -444,8 +425,9 @@ window.Aetheria = window.Aetheria || {};
       buildPuzzleRoomInMap(mapObj, ZONE_PUZZLE_CONFIGS[mapObj.id]);
     } else if (ISLAND_PUZZLE_ZONES.indexOf(mapObj.id) !== -1) {
       mapObj._puzzleInjectedToken = tokenKey;
+      // 荒島推石密室設於 (740, 310)，避開 (520, 310) 的炸彈裂縫密室與 (960, 310) 的首領
       buildPuzzleRoomInMap(mapObj, {
-        cx: 640,
+        cx: 740,
         cy: 310,
         iceSlide: false,
         plates:   [{ dx: 0, dy: -64 }, { dx: 32, dy: -32 }, { dx: 32, dy: 32 }],
@@ -456,7 +438,6 @@ window.Aetheria = window.Aetheria || {};
     return mapObj;
   }
 
-  // ================= 5. 推石移動、解題後永久鎖定與唯一寶箱邏輯 =================
   const PuzzleManager = {
     lastPushTime: 0,
 
@@ -505,7 +486,6 @@ window.Aetheria = window.Aetheria || {};
       const now = performance.now();
       if (now - this.lastPushTime < 190) return false;
 
-      // ★ 規則修正：解題成功後，推石永久鎖定不可再移動！
       if (boulder.locked || this.isGroupSolved(boulder.puzzleGroupId)) {
         this.lastPushTime = now;
         window.Aetheria.UI.showToast("🔒 符文機關已解開並永久鎖定，巨石不可再移動！");
@@ -590,7 +570,6 @@ window.Aetheria = window.Aetheria || {};
         }
       });
 
-      // 當 3 塊感應石板全部點亮：開啟秘門、永久鎖定所有巨石、隱藏重置碑並存檔！
       if (plates.length > 0 && activeCount >= plates.length) {
         s.solvedPuzzles[groupId] = true;
         boulders.forEach(function(b) {
@@ -639,7 +618,6 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Puzzles = PuzzleManager;
 
-  // ================= 6. 掛載地圖載入、推動碰撞、A鍵互動與唯一秘寶箱 =================
   function hookSystemsForPuzzles() {
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
     const Exp  = window.Aetheria.Explore;
@@ -686,7 +664,6 @@ window.Aetheria = window.Aetheria || {};
             s.heroX = prevX;
             s.heroY = prevY;
 
-            // 若已解題鎖定，僅作普通實心石柱阻擋，不再觸發推動
             if (d.locked || PuzzleManager.isGroupSolved(d.puzzleGroupId)) {
               return;
             }
@@ -759,7 +736,6 @@ window.Aetheria = window.Aetheria || {};
         origHint(mapObj, s);
       };
 
-      // ★ 規則修正：機關秘寶箱全存檔只能領取一次！
       const origHarvest = Exp.harvestNode.bind(Exp);
       Exp.harvestNode = function(node) {
         if (node && node.isPuzzleVaultChest) {
@@ -877,7 +853,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Dungeon Puzzles v8.1 init error:", err);
+      console.error("Dungeon Puzzles v8.2 init error:", err);
     }
   }
 
