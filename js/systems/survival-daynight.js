@@ -1,9 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 左上角精準血量、減慢日夜流逝與高密度生態模組 (survival-daynight.js - v7.9)
+ * Project J：艾瑟瑞亞的破曉 — 24小時制日夜時鐘、精準血量與高密度生態模組 (survival-daynight.js - v8.0)
  * 核心升級：
- *   1. 【左上角精準血量 HUD】：直接內建「♥ 120/120 實時數字 + 動態三色迷你血條」，點擊可快速飲用生命藥水
- *   2. 【減慢時間流逝速度】：日夜流轉速度減慢約 3 倍 (0.32x)，且在曙光營地與帳篷內不消耗日夜時間
- *   3. 保留 v7.8 高密度魔物群、主角 1.42x 高速移動、高壓迫感追擊 AI、隨機防重疊素材與主角睡袋日出動畫
+ *   1. 【日夜時間 24 小時制顯示】：頂部徽章實時顯示「D1 ☀08:00」(破曉05:00 / 白晝08:00 / 黃昏17:00 / 黑夜20:00)，點擊徽章可查看換日倒數
+ *   2. 【左上角精準血量 HUD】：「♥ 120/120 + 動態三色迷你血條」，點擊可快速飲用生命藥水
+ *   3. 【減慢時間流逝 & 睡袋升級聯動】：野外時間流逝減慢為 0.32x，營地內時間暫停，並自動整合豪華睡袋 (bedLv) 加成
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -56,13 +56,12 @@ window.Aetheria = window.Aetheria || {};
     setTimeout(fitAppToScreen, 100);
   }
 
-  // ================= 1. 注入介面優化 CSS（含左上角精準血量框） =================
+  // ================= 1. 注入介面優化 CSS =================
   function injectSurvivalStylesAndDOM() {
     if (!document.getElementById("survival-v71-styles")) {
       const style = document.createElement("style");
       style.id = "survival-v71-styles";
       style.textContent = `
-        /* 左上角精準數字血量膠囊 (#hud-hearts-box 升級版) */
         #hud-hearts-box {
           position: absolute !important;
           top: 4px !important;
@@ -118,21 +117,25 @@ window.Aetheria = window.Aetheria || {};
           transition: width 0.25s ease, background-color 0.25s ease;
         }
 
-        /* 頂部 HUD 緊湊單行化（預留左方 90px 給精準血量框） */
         #hud-overlay {
           top: 5px !important;
-          left: 90px !important;
-          right: 5px !important;
+          left: 88px !important;
+          right: 4px !important;
           display: flex !important;
           flex-wrap: nowrap !important;
           justify-content: space-between !important;
           align-items: center !important;
-          gap: 3px !important;
+          gap: 2px !important;
         }
         #hud-overlay .na-badge {
-          padding: 2px 5px !important;
-          font-size: 10.5px !important;
+          padding: 2px 4px !important;
+          font-size: 10px !important;
           line-height: 1.2 !important;
+          white-space: nowrap !important;
+        }
+        #hud-time {
+          pointer-events: auto !important;
+          cursor: pointer !important;
         }
 
         .dom-label {
@@ -312,7 +315,34 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 2. 輔助函式：短標籤精簡器 =================
+  // ================= 2. 24 小時制日夜時鐘換算器與短標籤工具 =================
+  // 將 worldClock (0 ~ 359) 精準換算為 24 小時制時間字串 (HH:MM)，與四個日夜時段完全對齊：
+  //   🌅 破曉 (0~44)    -> 05:00 ~ 07:59
+  //   ☀ 白晝 (45~219)  -> 08:00 ~ 16:59
+  //   🌇 黃昏 (220~269) -> 17:00 ~ 19:59
+  //   🌙 黑夜 (270~359) -> 20:00 ~ 04:59
+  function formatWorldClock24H(worldClock) {
+    const c = ((worldClock || 0) % 360 + 360) % 360;
+    let totalMinutes = 8 * 60;
+
+    if (c < 45) {
+      totalMinutes = 5 * 60 + Math.floor((c / 45) * 180);
+    } else if (c < 220) {
+      totalMinutes = 8 * 60 + Math.floor(((c - 45) / 175) * 540);
+    } else if (c < 270) {
+      totalMinutes = 17 * 60 + Math.floor(((c - 220) / 50) * 180);
+    } else {
+      totalMinutes = (20 * 60 + Math.floor(((c - 270) / 90) * 540)) % 1440;
+    }
+
+    const hh = Math.floor(totalMinutes / 60) % 24;
+    // 以 10 分鐘為跳動單位，閱讀更清晰穩定
+    const mm = Math.floor((totalMinutes % 60) / 10) * 10;
+    const hhStr = hh < 10 ? ("0" + hh) : String(hh);
+    const mmStr = mm < 10 ? ("0" + mm) : String(mm);
+    return hhStr + ":" + mmStr;
+  }
+
   function simplifyPortalName(rawName) {
     if (!rawName) return "";
     if (rawName.indexOf("公會帳篷") !== -1) return "公會帳篷";
@@ -510,7 +540,7 @@ window.Aetheria = window.Aetheria || {};
 
       let hitDeco = false;
       (mapObj.decos || []).forEach(function(d) {
-        const radius = (d.w && d.w > 40) ? 44 : 32;
+        const radius = d.isPuzzleElement ? 48 : ((d.w && d.w > 40) ? 44 : 32);
         if (Math.hypot(cx - (d.x + (d.w || 26) / 2), cy - (d.y + (d.h || 26) / 2)) < radius) hitDeco = true;
       });
       if (hitDeco) continue;
@@ -888,10 +918,11 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
       const phase = window.Aetheria.State.getTimePhase();
+      const timeStr = formatWorldClock24H(s.worldClock);
 
       window.Aetheria.UI.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML =
-        S.iconHtml("sleeping_bag") + "主角專屬睡袋 (第 " + (s.dayCount || 1) + " 天｜" + phase.label + ")";
+        S.iconHtml("sleeping_bag") + "主角專屬睡袋 (第 " + (s.dayCount || 1) + " 天 " + timeStr + "｜" + phase.label + ")";
 
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
@@ -911,8 +942,8 @@ window.Aetheria = window.Aetheria || {};
       morningCard.innerHTML =
         '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
           '<div>' +
-            '<b style="color:#5ac54f; font-size:14px;">🌅 鑽入睡袋睡到天亮 (推薦)</b>' +
-            '<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">播放黑夜轉天亮動畫 ➔ 迎接清晨白晝、回滿 HP 與 100% 飽食度</div>' +
+            '<b style="color:#5ac54f; font-size:14px;">🌅 鑽入睡袋睡到天亮 (08:00 白晝)</b>' +
+            '<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">播放黑夜轉天亮動畫 ➔ 迎接清晨 08:00、回滿 HP 與 100% 飽食度</div>' +
           '</div>' +
           '<button class="na-btn highlight" style="padding:8px 14px; font-size:14px;" onclick="Aetheria.Survival.playSleepToMorning()">立即睡覺</button>' +
         '</div>';
@@ -925,8 +956,8 @@ window.Aetheria = window.Aetheria || {};
         nightCard.innerHTML =
           '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
             '<div>' +
-              '<b style="color:#e0aaff; font-size:14px;">🌙 閉目養神至黑夜降臨 (高危夜獵)</b>' +
-              '<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">回滿 HP 與飽食度並推進至黑夜（刷出大量狂暴夜魔與夜間稀有礦植，獎賞+50%）</div>' +
+              '<b style="color:#e0aaff; font-size:14px;">🌙 閉目養神至黑夜降臨 (20:30 夜獵)</b>' +
+              '<div style="font-size:12px; color:#cbd5e1; margin-top:2px;">回滿 HP 與飽食度並推進至 20:30 黑夜（刷出狂暴夜魔與夜間稀有礦植，獎賞+50%）</div>' +
             '</div>' +
             '<button class="na-btn" style="padding:8px 12px;" onclick="Aetheria.Survival.playSleepToNight()">睡到黑夜</button>' +
           '</div>';
@@ -977,10 +1008,11 @@ window.Aetheria = window.Aetheria || {};
           celestial.innerText = "🌅";
           celestial.style.top = "42px";
         }
-        if (titleEl) titleEl.innerText = "🌅 破曉時分，晨曦照亮艾瑟瑞亞大陸……";
+        if (titleEl) titleEl.innerText = "🌅 06:00 破曉時分，晨曦照亮艾瑟瑞亞大陸……";
 
         window.Aetheria.State.sleepUntilMorning();
-        s.wellRestedBattles = 3;
+        const bedLv = (s.campUpgrades && s.campUpgrades.bedLv) || 0;
+        s.wellRestedBattles = 3 + bedLv;
         window.Aetheria.State.save();
         window.Aetheria.Audio.sfxLevelUp();
         window.Aetheria.UI.updateAllHud();
@@ -994,7 +1026,7 @@ window.Aetheria = window.Aetheria || {};
           celestial.style.top = "10px";
         }
         if (zzzTag) zzzTag.style.display = "none";
-        if (titleEl) titleEl.innerText = "☀️ 第 " + s.dayCount + " 天清晨天亮了！";
+        if (titleEl) titleEl.innerText = "☀️ 第 " + s.dayCount + " 天清晨 08:00 天亮了！";
         if (subEl) subEl.innerText = "HP與飽食度 100% 恢復！全大陸已隨機長出新素材！";
       }, 2500);
 
@@ -1003,7 +1035,7 @@ window.Aetheria = window.Aetheria || {};
         setTimeout(function() {
           overlay.style.display = "none";
           self.isSleepingAnim = false;
-          window.Aetheria.UI.showToast("☀️ 早安！第 " + s.dayCount + " 天開始，全大陸素材已於隨機位置刷新！");
+          window.Aetheria.UI.showToast("☀️ 早安！第 " + s.dayCount + " 天 08:00 開始，全大陸素材已於隨機位置刷新！");
         }, 650);
       }, 3700);
     },
@@ -1044,7 +1076,7 @@ window.Aetheria = window.Aetheria || {};
           celestial.innerText = "🌙";
           celestial.style.top = "12px";
         }
-        s.worldClock = 285;
+        s.worldClock = 278; // 對應晚上 20:30
         window.Aetheria.State.restoreHunger(100, s.maxHp);
         window.Aetheria.Data.Maps.refreshAllResources();
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
@@ -1052,7 +1084,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.renderWorld();
 
-        if (titleEl) titleEl.innerText = "🌙 黑夜降臨！大批【夜行狂暴魔物】已湧現！";
+        if (titleEl) titleEl.innerText = "🌙 20:30 黑夜降臨！大批【夜行狂暴魔物】已湧現！";
         if (subEl) subEl.innerText = "夜魔數量暴增且高速追擊！擊敗獲 +50% 經驗金幣，點燃【松脂火把】可破除其暗夜護盾！";
       }, 1400);
 
@@ -1091,11 +1123,12 @@ window.Aetheria = window.Aetheria || {};
       const guideCard = document.createElement("div");
       guideCard.className = "sys-card";
       guideCard.innerHTML =
-        '<b style="color:var(--na-gold);">【Survival RPG 日夜激戰指南】</b>' +
+        '<b style="color:var(--na-gold);">【24 小時制日夜作息指南】</b>' +
         '<div style="font-size:12px; color:#cbd5e1; margin-top:4px; line-height:1.5;">' +
-          '• <b>🌱 隨機生態刷新</b>：每當日夜時段轉換或過夜，各區會在不重疊的新地點長出不同素材。<br>' +
-          '• <b>🌙 黑夜狂暴魔潮</b>：黑夜野外魔物數量暴增（每區 12~16 隻）、等級+3 且高速追擊！擊敗可獲 <b>+50% 經驗與金幣</b>！<br>' +
-          '• <b>🔥 松脂火把破盾</b>：手持點燃的【松脂火把】開戰時，可直接燒毀夜行魔物 1 層暗夜護盾！' +
+          '• <b>🌅 05:00～07:59（破曉）</b>：晨光初現，全大陸刷新晨間靈植。<br>' +
+          '• <b>☀ 08:00～16:59（白晝）</b>：視野明亮，最適合推進主線、解開推石密室與造船出海。<br>' +
+          '• <b>🌇 17:00～19:59（黃昏）</b>：水波釣魚點命中區加寬 25%，請把握入夜前最後時間垂釣或返回營地。<br>' +
+          '• <b>🌙 20:00～04:59（黑夜）</b>：野外魔物進入【夜行狂暴】（數量暴增、等級+3、獎賞+50%），記得點燃【松脂火把】！' +
         '</div>';
       body.appendChild(guideCard);
     },
@@ -1109,7 +1142,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Survival = SurvivalDayNight;
 
-  // ================= 7. 掛載減慢時間流逝 (0.32x)、左上角精準血量條、主角高速移動與激戰 AI =================
+  // ================= 7. 掛載 24 小時制時間顯示、減慢時間流逝 (0.32x)、精準血量與激戰 AI =================
   function hookSystemsForSurvivalV71() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
@@ -1127,14 +1160,13 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      // ★ 修正 1：大幅減慢時間流逝速度（約減慢 3 倍至 0.32x），且在營地與帳篷內不流逝日夜時間！
       if (St.advanceTime) {
         let timeAccumulator = 0;
         const origAdvance = St.advanceTime.bind(St);
         St.advanceTime = function(ticks) {
           const s = this.data;
           if (s && (s.currentZone === "camp_hub" || s.currentZone === "tent_guild" || s.currentZone === "tent_forge" || s.currentZone === "tent_hero")) {
-            return; // 在營地及室內帳篷整理物資時，時間不會流逝
+            return;
           }
           timeAccumulator += (ticks || 1) * 0.32;
           const wholeTicks = Math.floor(timeAccumulator);
@@ -1304,7 +1336,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Ren) {
-      // ★ 修正 4：左上角 #hud-hearts-box 升級為「♥ 120/120 實時數字 + 動態三色迷你血條」
       Ren.updateHeartsDOM = function(s, Sprites) {
         if (!s) return;
         const curHp = Math.max(0, Math.round(s.hp || 0));
@@ -1538,10 +1569,34 @@ window.Aetheria = window.Aetheria || {};
         origUpdateHud();
         const s = window.Aetheria.State.data;
         const S = window.Aetheria.Data.Sprites;
+
         const lvEl = document.getElementById("hud-lv");
         if (lvEl && S) {
           lvEl.innerHTML = S.iconHtml("icon_sword") + "Lv." + s.lv;
         }
+
+        // ★ 頂部日夜徽章：顯示「D1 ☀08:00」（若有火把則附加 🔥步數）
+        const timeEl = document.getElementById("hud-time");
+        if (timeEl && window.Aetheria.State.getTimePhase) {
+          const phase = window.Aetheria.State.getTimePhase();
+          const clockStr = formatWorldClock24H(s.worldClock);
+          const pIcon = (phase.id === "night") ? "🌙" : (phase.id === "dusk") ? "🌇" : (phase.id === "dawn") ? "🌅" : "☀";
+          const torchTag = (s.torchTicks && s.torchTicks > 0) ? (" 🔥" + s.torchTicks) : "";
+          timeEl.innerText = "D" + (s.dayCount || 1) + " " + pIcon + clockStr + torchTag;
+
+          if (!timeEl._boundTimeClick) {
+            timeEl._boundTimeClick = true;
+            timeEl.onclick = function() {
+              const st = window.Aetheria.State.data;
+              const ph = window.Aetheria.State.getTimePhase();
+              const curT = formatWorldClock24H(st.worldClock);
+              window.Aetheria.UI.showToast(
+                "🕒 第 " + (st.dayCount || 1) + " 天 " + curT + " (" + ph.label + ")｜05:00破曉・08:00白晝・17:00黃昏・20:00黑夜"
+              );
+            };
+          }
+        }
+
         if (window.Aetheria.Renderer && window.Aetheria.Renderer.updateHeartsDOM) {
           window.Aetheria.Renderer.lastHeartsState = "";
           window.Aetheria.Renderer.updateHeartsDOM(s, S);
@@ -1590,7 +1645,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Survival v7.9 module init error:", err);
+      console.error("Survival v8.0 module init error:", err);
     }
   }
 
