@@ -1,19 +1,19 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 擴大地圖、高低差懸崖山洞與格仔分類工坊模組 (survival-highlands-workshop.js - v9.4)
- * Cross-Check 重大修正：
- *   1. 【真正擴大版圖並拆走舊邊界樹牆】：1~6區與洞窟全面擴大至 1560x1020，自動拆除舊底邊(y=636)與舊右邊(x=1150)的封路樹牆，鋪設泥土道路通往新區域！
- *   2. 【修復高低差懸崖動線】：於南側新領土建立 L 型黃土高台、深啡色懸崖壁、黑色山洞拱門與南北雙向繩梯口，從主幹道往下走即可直接抵達！
- *   3. 【100% 顯示新增配方與新武防】：修正 Data.WORKSHOP_RECIPES 讀寫格式，內建 8 項加工配方 + 3 把新武器 + 3 件新防具，並修復格仔工坊「立即裝備」功能！
- *   4. 【視覺去標籤化】：平時隱藏普通礦石與草木的頭頂文字牌，走近 (<62px) 才浮現，畫面乾淨清爽！
+ * Project J：艾瑟瑞亞的破曉 — 擴大地圖、高低差懸崖山洞與格仔分類工坊模組 (survival-highlands-workshop.js - v9.5)
+ * 實機截圖 4 大問題全面修正：
+ *   1. 【修復圖1工坊底部被裁切】：將頂部檢視盒設為 Sticky 置頂，格仔區預留充足底部空間，拉到最底 100% 完整顯示
+ *   2. 【修復圖2工具分頁空白】：點擊「⛏️工具」時直接原汁原味呈現原版 5 大採集工具升級列表
+ *   3. 【修復圖3懸崖重疊與怪物穿牆】：將高低差懸崖移至全新南側領地 (y:800~1070) 避開原有封印柱，加入明顯【🧗架設繩梯】標籤，並阻擋怪物穿過懸崖
+ *   4. 【修復工坊點擊無反應】：保留捲軸位置不跳動，並在每個「●可做」格仔內直接加上【🔨製作】一鍵合成按鈕！
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入高低差懸崖地形與全新格仔工坊 CSS =================
+  // ================= 1. 注入高低差懸崖地形與修正版格仔工坊 CSS =================
   function injectHighlandsAndWorkshopStyles() {
-    if (document.getElementById("highlands-wk-v94-styles")) return;
+    if (document.getElementById("highlands-wk-v95-styles")) return;
     const style = document.createElement("style");
-    style.id = "highlands-wk-v94-styles";
+    style.id = "highlands-wk-v95-styles";
     style.textContent = `
       /* ================= A. 參考圖風格：L型高低差黃土高台與深啡色垂直懸崖壁 ================= */
       .srpg-plateau-top {
@@ -77,21 +77,42 @@ window.Aetheria = window.Aetheria || {};
         z-index: 4;
       }
 
-      /* ================= B. 全新格仔分類工坊 UI ================= */
+      /* 繩梯專屬高亮標籤 */
+      .dom-label.ladder-spot-lbl {
+        background: linear-gradient(90deg, #5c3824 0%, #8f563b 100%);
+        color: #ffd166;
+        border: 1.5px solid #f5b700;
+        box-shadow: 0 0 6px rgba(245, 183, 0, 0.85);
+        font-weight: 900;
+      }
+
+      /* ================= B. 修正版格仔分類工坊 UI (徹底解決底部裁切與點擊問題) ================= */
+      #panel-modal #modal-body {
+        overflow-y: auto !important;
+        padding-bottom: 36px !important;
+      }
+      .wk-sticky-top-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        background: #141013;
+        padding-top: 2px;
+        padding-bottom: 4px;
+      }
       .wk-inspector-box {
         background: linear-gradient(180deg, #261c14 0%, #18120e 100%);
         border: 2px solid #f5b700;
         border-radius: 8px;
-        padding: 8px 10px;
-        margin-bottom: 7px;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.65);
+        padding: 7px 9px;
+        margin-bottom: 4px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.8);
       }
       .wk-subfilter-bar {
         display: flex;
         gap: 4px;
         overflow-x: auto;
         padding-bottom: 4px;
-        margin-bottom: 6px;
+        margin-bottom: 5px;
       }
       .wk-filter-pill {
         background: #1c1619;
@@ -113,23 +134,21 @@ window.Aetheria = window.Aetheria || {};
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 6px;
-        max-height: 220px;
-        overflow-y: auto;
-        padding: 2px;
+        padding: 2px 2px 38px 2px;
       }
       .wk-grid-cell {
         position: relative;
         background: #181316;
         border: 2px solid #4a3e44;
         border-radius: 7px;
-        padding: 6px 4px 5px;
+        padding: 16px 4px 6px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: space-between;
         text-align: center;
         cursor: pointer;
-        min-height: 62px;
+        min-height: 68px;
         transition: transform 0.1s ease, border-color 0.15s ease;
       }
       .wk-grid-cell:active {
@@ -157,7 +176,7 @@ window.Aetheria = window.Aetheria || {};
       }
       .wk-cell-craft-dot {
         position: absolute;
-        top: 3px;
+        top: 2px;
         left: 4px;
         font-size: 9px;
         font-weight: 900;
@@ -167,12 +186,28 @@ window.Aetheria = window.Aetheria || {};
         font-size: 11px;
         font-weight: 900;
         color: #ffffff;
-        margin-top: 3px;
+        margin-top: 2px;
         line-height: 1.15;
         max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      .wk-cell-quick-btn {
+        margin-top: 3px;
+        width: 92%;
+        background: #f5b700;
+        color: #141013;
+        border: 1px solid #000;
+        border-radius: 4px;
+        padding: 2px 0;
+        font-size: 10.5px;
+        font-weight: 900;
+        cursor: pointer;
+        box-shadow: 0 1px 0 #000;
+      }
+      .wk-cell-quick-btn:active {
+        transform: translateY(1px);
       }
       .wk-mat-chip {
         display: inline-flex;
@@ -200,7 +235,7 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 註冊《Survival RPG》像素圖示 =================
+  // ================= 2. 註冊《Survival RPG》像素圖示（新增懸崖繩梯木樁 cliff_stake） =================
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -241,6 +276,26 @@ window.Aetheria = window.Aetheria || {};
       "................",
       "................"
     ], { K: "#2b2623", L: "#9ca3af", G: "#6b7280", D: "#4b5563" });
+
+    // 懸崖未架設繩梯前的【繩梯木樁標記】(帶金色向上攀爬箭頭與雙木樁)
+    const cliffStakeUrl = buildGridDataUrl([
+      ".......YY.......",
+      "......YYYY......",
+      ".....YYKKYY.....",
+      "....YYKYYKYY....",
+      "......KYYK......",
+      "..KK..KYYK..KK..",
+      ".KLLK.KYYK.KLLK.",
+      ".KDDK..KK..KDDK.",
+      ".KDDKYYYYYYKDDK.",
+      ".KDDKDDDDDDKDDK.",
+      ".KDDK......KDDK.",
+      ".KDDK......KDDK.",
+      ".KDDK......KDDK.",
+      "..KK........KK..",
+      "................",
+      "................"
+    ], { K: "#141013", Y: "#ffd166", L: "#d9a066", D: "#8f563b" });
 
     const ropeLadderUrl = buildGridDataUrl([
       "..KK........KK..",
@@ -377,6 +432,7 @@ window.Aetheria = window.Aetheria || {};
 
     const customUrls = {
       cluster_boulder: clusterBoulderUrl,
+      cliff_stake: cliffStakeUrl,
       rope_ladder: ropeLadderUrl,
       mat_ropeLadder: ropeLadderUrl,
       mat_coal: coalUrl,
@@ -407,9 +463,7 @@ window.Aetheria = window.Aetheria || {};
     rationJerky:  { id: "rationJerky",  name: "風乾肉脯",   tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚與獸肉，食用立即恢復 +80% 飽食度與 +90 HP！" }
   };
 
-  // 內建完整工坊配方清單（兼容原版配方 + 新增 8 款 Survival RPG 配方，確保 100% 顯示！）
   const COMPLETE_WORKSHOP_RECIPES = [
-    // --- 開路與探索工具 (explore) ---
     {
       id: "wk_rope_ladder",
       name: "攀岩繩梯 x1",
@@ -455,8 +509,6 @@ window.Aetheria = window.Aetheria || {};
       cost: { coal: 2, flint: 1, clay: 1 },
       desc: "【★新配方・高效爆破】以黑曜木炭調配黑火藥，一次大量製造 3 顆爆破炸彈！"
     },
-
-    // --- 冶煉與加工建材 (smelt) ---
     {
       id: "wk_charcoal",
       name: "窯燒黑木炭 x2",
@@ -495,7 +547,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "wk_rope",
-      name: "強韌麻繩索 x1",
+      name: "強化麻繩索 x1",
       category: "smelt",
       toKey: "rope",
       toCount: 1,
@@ -556,8 +608,6 @@ window.Aetheria = window.Aetheria || {};
       cost: { sinew: 2, hemp: 1 },
       desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。"
     },
-
-    // --- 口糧與鍊金靈藥 (survival) ---
     {
       id: "wk_ration_jerky",
       name: "岩鹽風乾肉脯 x2",
@@ -605,7 +655,6 @@ window.Aetheria = window.Aetheria || {};
     }
   ];
 
-  // 新增 3 把《Survival RPG》合成武器與 3 件合成防具
   const NEW_SRPG_WEAPONS = {
     w_srpg_machete: {
       id: "w_srpg_machete",
@@ -691,7 +740,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // 同時兼容 Data.WORKSHOP_RECIPES 為 Array 或 Object 字典
     if (Array.isArray(Data.WORKSHOP_RECIPES)) {
       COMPLETE_WORKSHOP_RECIPES.forEach(function(rec) {
         if (!Data.WORKSHOP_RECIPES.some(function(r) { return r.id === rec.id; })) {
@@ -709,22 +757,18 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 4. 擴大地圖尺寸、拆除舊邊界封路樹牆、建立高低差懸崖與山洞 =================
+  // ================= 4. 擴大地圖尺寸至 1560x1180，將高低差懸崖設於 y:800~1070（徹底避開 y:600 的封印柱！） =================
   const HIGHLAND_ZONES = {
-    zone1_forest:   { targetW: 1560, targetH: 1020, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"] },
-    cave1_mushroom: { targetW: 1480, targetH: 980,  ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"] },
-    zone2_canyon:   { targetW: 1560, targetH: 1020, ores: ["mithril", "quartz", "rockSalt", "coal"],     grottoOres: ["coal", "mithril", "quartz", "basalt"] },
-    zone3_coast:    { targetW: 1560, targetH: 1020, ores: ["coral", "rockSalt", "quartz", "coal"],       grottoOres: ["coal", "coral", "rockSalt", "mithril"] },
-    zone4_snow:     { targetW: 1560, targetH: 1020, ores: ["obsidian", "rockSalt", "quartz", "mithril"], grottoOres: ["coal", "obsidian", "quartz", "mithril"] },
-    zone5_volcano:  { targetW: 1560, targetH: 1020, ores: ["starIron", "obsidian", "coal", "quartz"],    grottoOres: ["coal", "starIron", "obsidian", "quartz"] },
-    zone6_sky:      { targetW: 1560, targetH: 1020, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "obsidian", "quartz", "mithril"] }
+    zone1_forest:   { targetW: 1560, targetH: 1180, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"] },
+    cave1_mushroom: { targetW: 1480, targetH: 1140, ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"] },
+    zone2_canyon:   { targetW: 1560, targetH: 1180, ores: ["mithril", "quartz", "rockSalt", "coal"],     grottoOres: ["coal", "mithril", "quartz", "basalt"] },
+    zone3_coast:    { targetW: 1560, targetH: 1180, ores: ["coral", "rockSalt", "quartz", "coal"],       grottoOres: ["coal", "coral", "rockSalt", "mithril"] },
+    zone4_snow:     { targetW: 1560, targetH: 1180, ores: ["obsidian", "rockSalt", "quartz", "mithril"], grottoOres: ["coal", "obsidian", "quartz", "mithril"] },
+    zone5_volcano:  { targetW: 1560, targetH: 1180, ores: ["starIron", "obsidian", "coal", "quartz"],    grottoOres: ["coal", "starIron", "obsidian", "quartz"] },
+    zone6_sky:      { targetW: 1560, targetH: 1180, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "obsidian", "quartz", "mithril"] }
   };
 
   const grottoMapsCache = {};
-
-  function randBetween(min, max) {
-    return min + Math.floor(Math.random() * (max - min + 1));
-  }
 
   function buildCliffGrottoMap(parentZoneId) {
     const cfg = HIGHLAND_ZONES[parentZoneId] || HIGHLAND_ZONES.zone1_forest;
@@ -785,14 +829,27 @@ window.Aetheria = window.Aetheria || {};
           y: 278,
           targetZone: parentZoneId,
           targetX: 495,
-          targetY: 815,
+          targetY: 995,
           icon: "stairs"
         }
       ]
     };
   }
 
-  // ★ 核心升級：真正擴大版圖、拆走舊邊界封路樹牆、鋪設南下泥土路與南北雙繩梯高台
+  // 判斷座標 (x, y) 是否位於 L 型黃土高台內部 (elevation === 1，新座標 y: 800 ~ 1060)
+  function isInsideHighlandPlateau(x, y) {
+    const inTopWing   = (x >= 395 && x <= 895 && y >= 802 && y <= 920);
+    const inRightWing = (x >= 715 && x <= 895 && y >= 915 && y <= 1058);
+    return inTopWing || inRightWing;
+  }
+
+  // 判斷平地 (elevation === 0) 座標 (x, y) 是否撞上 L 型懸崖岩壁或高台區 (y: 795 ~ 1098)
+  function isBlockedByCliffFromLowland(x, y) {
+    if (x >= 385 && x <= 710 && y >= 795 && y <= 965) return true;
+    if (x >= 705 && x <= 910 && y >= 795 && y <= 1098) return true;
+    return false;
+  }
+
   function injectHighlandCliffIntoMap(mapObj) {
     if (!mapObj || !HIGHLAND_ZONES[mapObj.id]) return mapObj;
     const token = mapObj._refreshToken || "init";
@@ -809,23 +866,20 @@ window.Aetheria = window.Aetheria || {};
     mapObj._origBaseWidth = oldW;
     mapObj._origBaseHeight = oldH;
 
-    // 1. 全面擴大地图尺寸 (1560 x 1020)
+    // 1. 擴大版圖至 1560 x 1180
     mapObj.width = Math.max(oldW, cfg.targetW);
     mapObj.height = Math.max(oldH, cfg.targetH);
 
-    // 2. ★ 關鍵修正：拆除原版在 y ≈ 636 的舊底邊封路樹牆，以及 x ≈ 1156 的舊右邊封路樹牆！
+    // 2. 拆除舊底邊 (y ≈ 636) 與舊右邊 (x ≈ 1156) 的封路樹牆，並清空新懸崖區 (y: 760~1120)
     if (mapObj.trees) {
       mapObj.trees = mapObj.trees.filter(function(t) {
         if (t.isExpandedPerimeterTree) return false;
-        // 拆走舊底邊樹牆 (y >= oldH - 72) 與舊右邊樹牆 (x >= oldW - 68)
         if (t.y >= oldH - 72) return false;
         if (t.x >= oldW - 68) return false;
-        // 清空南側高台與綠草谷地區域
-        if (t.x >= 180 && t.x <= 960 && t.y >= 560 && t.y <= 960) return false;
+        if (t.x >= 180 && t.x <= 960 && t.y >= 740 && t.y <= 1120) return false;
         return true;
       });
 
-      // 在擴大後的新外圍邊界 (width: 1560, height: 1020) 重建整齊的邊界樹牆
       for (let bx = 20; bx < mapObj.width - 20; bx += 42) {
         if (mapObj.hasRiver && Math.abs(bx - (mapObj.riverX || 1030)) < 48) continue;
         mapObj.trees.push({ x: bx, y: mapObj.height - 42, isExpandedPerimeterTree: true });
@@ -839,32 +893,44 @@ window.Aetheria = window.Aetheria || {};
           mapObj.trees.push({ x: 18, y: by, isExpandedPerimeterTree: true });
         }
       }
-      // 在下層綠草谷地左下角點綴兩棵樹（還原附圖左下角的樹叢）
+      // 還原附圖左下角的樹叢
       mapObj.trees.push(
-        { x: 345, y: 890, isExpandedPerimeterTree: true },
-        { x: 405, y: 905, isExpandedPerimeterTree: true }
+        { x: 345, y: 1065, isExpandedPerimeterTree: true },
+        { x: 405, y: 1080, isExpandedPerimeterTree: true }
       );
     }
 
-    // 3. 鋪設通往南側高台谷地與東側擴建區的泥土道路 (dirtBlobs)，視覺引導清晰
+    // 3. 將誤生在懸崖內的怪物移至谷地草坪，避免卡在懸崖內
+    if (mapObj.monsters) {
+      mapObj.monsters.forEach(function(m) {
+        if (!m.isBoss && isBlockedByCliffFromLowland(m.x, m.y)) {
+          m.x = 240;
+          m.y = 920;
+          m.homeX = 240;
+          m.homeY = 920;
+        }
+      });
+    }
+
+    // 4. 鋪設通往南側高台谷地與東側擴建區的泥土道路
     mapObj.dirtBlobs = (mapObj.dirtBlobs || []).filter(function(b) { return !b.isExpandedBlob; });
     mapObj.dirtBlobs.push(
-      { cx: 280, cy: 650, rx: 95,  ry: 140, isExpandedBlob: true }, // 左側南下大道 (連接主幹道與谷地)
-      { cx: 520, cy: 845, rx: 195, ry: 75,  isExpandedBlob: true }, // 懸崖前方的綠草谷地小徑
-      { cx: 1320, cy: 360, rx: 145, ry: 180, isExpandedBlob: true }, // 東側擴建新領地大道
-      { cx: 1280, cy: 780, rx: 155, ry: 120, isExpandedBlob: true }  // 東南側擴建秘境
+      { cx: 280,  cy: 820,  rx: 95,  ry: 210, isExpandedBlob: true },
+      { cx: 520,  cy: 1025, rx: 195, ry: 75,  isExpandedBlob: true },
+      { cx: 1320, cy: 380,  rx: 145, ry: 190, isExpandedBlob: true },
+      { cx: 1280, cy: 860,  rx: 155, ry: 140, isExpandedBlob: true }
     );
 
     mapObj.decos = (mapObj.decos || []).filter(function(d) { return !d.isHighlandElement; });
     mapObj.nodes = (mapObj.nodes || []).filter(function(n) { return !n.isHighlandOre; });
     mapObj.portals = (mapObj.portals || []).filter(function(p) { return !p.isCliffCavePortal; });
 
-    // 4. 懸崖壁中央的【⛰️ 岩壁山洞口】傳送點 (x: 495, y: 766)
+    // 5. 懸崖壁中央的【⛰️ 岩壁山洞口】傳送點 (x: 495, y: 948)
     mapObj.portals.push({
       id: "p_cliff_cave_" + mapObj.id,
       name: "山洞",
       x: 495,
-      y: 766,
+      y: 948,
       targetZone: "grotto_" + mapObj.id,
       targetX: 240,
       targetY: 235,
@@ -872,46 +938,44 @@ window.Aetheria = window.Aetheria || {};
       isCliffCavePortal: true
     });
 
-    // 5. ★ 雙向攀岩繩梯錨點：
-    //    - 北側繩梯口 (x: 560, y: 615)：玩家從主地圖往下走第一步就能直接架設繩梯爬上高台！
-    //    - 南側繩梯口 (x: 645, y: 758)：玩家從谷地山洞旁亦可上下攀爬高台！
+    // 6. ★ 雙向攀岩繩梯錨點（不設 raw .name 屬性，徹底防止底層 v6.7 誤判為封印柱！）
     mapObj.decos.push(
       {
         id: "cliff_ladder_north_" + mapObj.id,
         x: 560,
-        y: 612,
-        sprite: rigged ? "rope_ladder" : "boulder_block",
-        w: 28,
-        h: 36,
+        y: 800,
+        sprite: rigged ? "rope_ladder" : "cliff_stake",
+        w: 30,
+        h: 38,
         solid: false,
         isHighlandElement: true,
         isCliffLadderSpot: true,
         ladderSide: "north",
         zoneId: mapObj.id,
-        name: rigged ? "繩梯" : "高台[需繩梯]"
+        ladderTitle: rigged ? "🧗繩梯(上下)" : "🧗架設繩梯"
       },
       {
         id: "cliff_ladder_south_" + mapObj.id,
-        x: 645,
-        y: 758,
-        sprite: rigged ? "rope_ladder" : "boulder_block",
-        w: 28,
-        h: 44,
+        x: 625,
+        y: 940,
+        sprite: rigged ? "rope_ladder" : "cliff_stake",
+        w: 30,
+        h: 46,
         solid: false,
         isHighlandElement: true,
         isCliffLadderSpot: true,
         ladderSide: "south",
         zoneId: mapObj.id,
-        name: rigged ? "繩梯" : "懸崖[需繩梯]"
+        ladderTitle: rigged ? "🧗繩梯(上下)" : "🧗架設繩梯"
       }
     );
 
-    // 6. 在 L 型黃土高台上擺放附圖同款的【4 簇高台礦石】(含岩鹽、石英砂、黑曜木炭)
+    // 7. 在 L 型黃土高台上擺放附圖同款的【4 簇高台礦石】(y: 840 ~ 1015)
     const plateauOreCoords = [
-      { x: 485, y: 660 },
-      { x: 655, y: 685 },
-      { x: 785, y: 755 },
-      { x: 785, y: 830 }
+      { x: 485, y: 845 },
+      { x: 655, y: 870 },
+      { x: 785, y: 940 },
+      { x: 785, y: 1015 }
     ];
 
     plateauOreCoords.forEach(function(pt, idx) {
@@ -934,14 +998,14 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 7. 在新擴建的東側 (x: 1180~1480) 與南側谷地 (x: 120~360, y: 660~920) 額外生成新礦產與木材
+    // 8. 在擴建的東側與南側谷地額外生成新礦產
     const extraExpansionCoords = [
-      { x: 210, y: 720, key: "coal",     type: "crystal" },
-      { x: 260, y: 860, key: "rockSalt", type: "crystal" },
-      { x: 1240, y: 240, key: "quartz",   type: "crystal" },
-      { x: 1380, y: 390, key: "coal",     type: "crystal" },
-      { x: 1320, y: 680, key: "rockSalt", type: "crystal" },
-      { x: 1220, y: 840, key: "quartz",   type: "crystal" }
+      { x: 210,  y: 860,  key: "coal",     type: "crystal" },
+      { x: 260,  y: 1020, key: "rockSalt", type: "crystal" },
+      { x: 1240, y: 260,  key: "quartz",   type: "crystal" },
+      { x: 1380, y: 440,  key: "coal",     type: "crystal" },
+      { x: 1320, y: 760,  key: "rockSalt", type: "crystal" },
+      { x: 1220, y: 960,  key: "quartz",   type: "crystal" }
     ];
     extraExpansionCoords.forEach(function(ec, idx) {
       const mInfo = matsDB[ec.key] || { name: ec.key };
@@ -965,26 +1029,13 @@ window.Aetheria = window.Aetheria || {};
     return mapObj;
   }
 
-  // 判斷座標 (x, y) 是否位於 L 型黃土高台內部 (elevation === 1)
-  function isInsideHighlandPlateau(x, y) {
-    const inTopWing   = (x >= 395 && x <= 895 && y >= 622 && y <= 735);
-    const inRightWing = (x >= 715 && x <= 895 && y >= 730 && y <= 872);
-    return inTopWing || inRightWing;
-  }
-
-  // 判斷平地 (elevation === 0) 座標 (x, y) 是否撞上 L 型懸崖岩壁或高台區
-  // 左側 x: 60 ~ 380 為 320px 超寬南下綠草大道，完全暢通無阻！
-  function isBlockedByCliffFromLowland(x, y) {
-    if (x >= 385 && x <= 710 && y >= 615 && y <= 780) return true;
-    if (x >= 705 && x <= 910 && y >= 615 && y <= 915) return true;
-    return false;
-  }
-
-  // ================= 5. 全新格仔化分類工坊系統（內建獨立合成與一鍵換裝引擎） =================
+  // ================= 5. 全新格仔化分類工坊系統（支援捲軸記憶、格仔內一鍵製作、原版工具分頁） =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
     selectedItemId: null,
+    savedScrollTop: 0,
+    origOpenForgeFn: null,
 
     canAffordRecipe: function(s, costMap, goldCost) {
       if (goldCost && (s.gold || 0) < goldCost) return false;
@@ -1006,7 +1057,6 @@ window.Aetheria = window.Aetheria || {};
       return "smelt";
     },
 
-    // ★ 獨立加工合成執行器：100% 支援所有原版與新增的《Survival RPG》配方！
     executeCraftRecipe: function(rec) {
       const s = window.Aetheria.State.data;
       if (!rec) return;
@@ -1024,9 +1074,11 @@ window.Aetheria = window.Aetheria || {};
         s.gold = Math.max(0, (s.gold || 0) - rec.goldCost);
       }
 
-      const outKey = rec.toKey;
-      const outCnt = rec.toCount || 1;
-      s.inventory[outKey] = (s.inventory[outKey] || 0) + outCnt;
+      const outKey = rec.toKey || rec.giveKey || rec.outKey;
+      const outCnt = rec.toCount || rec.count || rec.qty || 1;
+      if (outKey) {
+        s.inventory[outKey] = (s.inventory[outKey] || 0) + outCnt;
+      }
 
       window.Aetheria.Audio.sfxLevelUp();
       window.Aetheria.State.save();
@@ -1034,45 +1086,20 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.showToast("🔨 合成成功！獲得【" + rec.name + "】！");
     },
 
-    // ★ 獨立武器/防具/聖物/工具鍛造與換裝執行器（修正已擁有裝備無法裝備的問題）
     executePrimaryItemAction: function(selectedObj) {
       const s = window.Aetheria.State.data;
-      const Data = window.Aetheria.Data;
       const UI = window.Aetheria.UI;
       if (!selectedObj) return;
 
-      // 1. 工坊加工配方
+      const modalBody = document.getElementById("modal-body");
+      if (modalBody) this.savedScrollTop = modalBody.scrollTop;
+
       if (selectedObj.itemType === "recipe") {
         this.executeCraftRecipe(selectedObj.raw);
         this.renderGridWorkshopModal(this.curTab);
         return;
       }
 
-      // 2. 採集工具升級
-      if (selectedObj.itemType === "tool") {
-        if (selectedObj.isMax) return;
-        const tKey = selectedObj.toolKey;
-        const beforeLv = (s.tools && s.tools[tKey]) || 0;
-        if (UI.upgradeTool) UI.upgradeTool(tKey);
-        else if (UI.craftToolUpgrade) UI.craftToolUpgrade(tKey);
-
-        // 保底直接升級邏輯
-        if (((s.tools && s.tools[tKey]) || 0) === beforeLv && selectedObj.canCraft) {
-          Object.entries(selectedObj.costMap || {}).forEach(function(entry) {
-            s.inventory[entry[0]] -= entry[1];
-          });
-          if (selectedObj.goldCost) s.gold -= selectedObj.goldCost;
-          s.tools[tKey] = beforeLv + 1;
-          window.Aetheria.Audio.sfxLevelUp();
-          window.Aetheria.State.save();
-          UI.updateAllHud();
-          UI.showToast("⛏️ 工具升級成功！【" + selectedObj.shortName + "】已升至 Lv." + s.tools[tKey] + "！");
-        }
-        this.renderGridWorkshopModal(this.curTab);
-        return;
-      }
-
-      // 3. 武器鍛造與立即裝備
       if (selectedObj.itemType === "weapon") {
         const wId = selectedObj.uid;
         if (selectedObj.unlocked) {
@@ -1103,7 +1130,6 @@ window.Aetheria = window.Aetheria || {};
         return;
       }
 
-      // 4. 防具鍛造與立即穿戴
       if (selectedObj.itemType === "armor") {
         const aId = selectedObj.uid;
         if (selectedObj.unlocked) {
@@ -1137,7 +1163,6 @@ window.Aetheria = window.Aetheria || {};
         return;
       }
 
-      // 5. 遠古聖物合成
       if (selectedObj.itemType === "relic") {
         if (selectedObj.unlocked) return;
         if (!selectedObj.canCraft) {
@@ -1188,28 +1213,10 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.updateAllHud();
     },
 
-    renderGridWorkshopModal: function(activeTab) {
-      const s = window.Aetheria.State.data;
-      const S = window.Aetheria.Data.Sprites;
-      const Data = window.Aetheria.Data;
-      const UI = window.Aetheria.UI;
+    buildMainTabBar: function(activeTab) {
       const self = this;
-
-      // 每次打開工坊時確保新素材與新武防已註冊
-      registerSrpgDataIntoGame();
-
-      if (activeTab) this.curTab = activeTab;
-      const tab = this.curTab;
-
-      UI.setActivePanel("panel-modal");
-      document.getElementById("modal-title").innerHTML =
-        S.iconHtml("icon_forge") + "巴爾隨身工坊與鍛造台 (💰 " + (s.gold || 0) + " G)";
-
-      const body = document.getElementById("modal-body");
-      body.innerHTML = "";
-
       const mainTabBar = document.createElement("div");
-      mainTabBar.style.cssText = "display:grid; grid-template-columns:repeat(5, 1fr); gap:3px; margin-bottom:6px;";
+      mainTabBar.style.cssText = "display:grid; grid-template-columns:repeat(5, 1fr); gap:3px; margin-bottom:5px;";
       [
         { id: "workshop", label: "🔨加工" },
         { id: "tools",    label: "⛏️工具" },
@@ -1218,20 +1225,61 @@ window.Aetheria = window.Aetheria || {};
         { id: "reforge",  label: "✨洗煉" }
       ].forEach(function(t) {
         const b = document.createElement("button");
-        b.className = "na-btn" + (tab === t.id ? " highlight" : "");
+        b.className = "na-btn" + (activeTab === t.id ? " highlight" : "");
         b.style.cssText = "padding:5px 2px; font-size:11.5px;";
         b.innerText = t.label;
         b.onclick = function() {
           self.curTab = t.id;
           self.curSubFilter = "all";
           self.selectedItemId = null;
+          self.savedScrollTop = 0;
           self.renderGridWorkshopModal(t.id);
         };
         mainTabBar.appendChild(b);
       });
-      body.appendChild(mainTabBar);
+      return mainTabBar;
+    },
 
+    renderGridWorkshopModal: function(activeTab) {
+      const s = window.Aetheria.State.data;
+      const S = window.Aetheria.Data.Sprites;
+      const Data = window.Aetheria.Data;
+      const UI = window.Aetheria.UI;
+      const self = this;
+
+      registerSrpgDataIntoGame();
+
+      if (activeTab) this.curTab = activeTab;
+      const tab = this.curTab;
+
+      // ★ 修正圖2：當點選「⛏️工具」時，直接調用原版 v6.7 工具升級面板，並換上統一的 5 大分頁列！
+      if (tab === "tools" && this.origOpenForgeFn) {
+        const realZone = s.currentZone;
+        if (!s.projectsBuilt) s.projectsBuilt = {};
+        s.projectsBuilt.proj_camp_forge = true;
+        s.currentZone = "camp_hub";
+        try {
+          this.origOpenForgeFn("tools");
+        } finally {
+          s.currentZone = realZone;
+        }
+        const body = document.getElementById("modal-body");
+        if (body && body.firstElementChild) {
+          body.replaceChild(this.buildMainTabBar("tools"), body.firstElementChild);
+        }
+        return;
+      }
+
+      UI.setActivePanel("panel-modal");
+      document.getElementById("modal-title").innerHTML =
+        S.iconHtml("icon_forge") + "巴爾隨身工坊與鍛造台 (💰 " + (s.gold || 0) + " G)";
+
+      const body = document.getElementById("modal-body");
+      body.innerHTML = "";
+
+      // 若點選「✨洗煉」，掛載頂部 5 分頁列並呼叫 Reforge 模組渲染
       if (tab === "reforge" && window.Aetheria.Reforge && window.Aetheria.Reforge.renderReforgeTab) {
+        body.appendChild(this.buildMainTabBar("reforge"));
         window.Aetheria.Reforge.renderReforgeTab(body);
         return;
       }
@@ -1240,7 +1288,6 @@ window.Aetheria = window.Aetheria || {};
       const matsDB = Data.MATERIALS || {};
 
       if (tab === "workshop") {
-        // 合併原版與 COMPLETE_WORKSHOP_RECIPES，保證 100% 完整顯示所有新舊配方
         const recipeMap = {};
         COMPLETE_WORKSHOP_RECIPES.forEach(function(r) { recipeMap[r.id] = r; });
         const rawWks = Array.isArray(Data.WORKSHOP_RECIPES)
@@ -1253,13 +1300,14 @@ window.Aetheria = window.Aetheria || {};
         Object.values(recipeMap).forEach(function(r) {
           const subCat = self.getRecipeSubCategory(r);
           const canDo = self.canAffordRecipe(s, r.cost, r.goldCost || 0);
-          const owned = (s.inventory && s.inventory[r.toKey]) || 0;
+          const outKey = r.toKey || r.giveKey || r.outKey;
+          const owned = (s.inventory && s.inventory[outKey]) || 0;
           itemsList.push({
             uid: r.id,
             raw: r,
             itemType: "recipe",
             subCat: subCat,
-            iconKey: "mat_" + r.toKey,
+            iconKey: "mat_" + outKey,
             shortName: r.name.replace(/\s*x\d+$/i, "").replace(/\s*\([^)]*\)/g, ""),
             fullName: r.name,
             badgeText: "持有 " + owned,
@@ -1267,34 +1315,6 @@ window.Aetheria = window.Aetheria || {};
             costMap: r.cost,
             goldCost: r.goldCost || 0,
             desc: r.desc || "工坊合成加工品。"
-          });
-        });
-      } else if (tab === "tools") {
-        const toolOrder = ["axe", "pickaxe", "rod", "hook", "pouch"];
-        const toolIcons = { axe: "icon_axe", pickaxe: "icon_pickaxe", rod: "fishing_spot", hook: "icon_compass", pouch: "icon_bag" };
-        toolOrder.forEach(function(tKey) {
-          const tDef = Data.TOOLS && Data.TOOLS[tKey];
-          if (!tDef) return;
-          const curLv = (s.tools && s.tools[tKey]) || 0;
-          const nextTier = tDef.tiers && tDef.tiers[curLv + 1];
-          const curTierObj = (tDef.tiers && tDef.tiers[curLv]) || { name: tDef.name };
-          const isMax = !nextTier;
-          const canDo = !isMax && self.canAffordRecipe(s, nextTier.cost, nextTier.gold || 0);
-
-          itemsList.push({
-            uid: "tool_" + tKey,
-            toolKey: tKey,
-            itemType: "tool",
-            subCat: "all",
-            iconKey: toolIcons[tKey] || "icon_forge",
-            shortName: tDef.name,
-            fullName: tDef.name + " (當前：" + curTierObj.name + ")",
-            badgeText: isMax ? "★滿級" : ("Lv." + curLv),
-            canCraft: canDo,
-            isMax: isMax,
-            costMap: nextTier ? nextTier.cost : null,
-            goldCost: nextTier ? (nextTier.gold || 0) : 0,
-            desc: nextTier ? ("下一階【" + nextTier.name + "】：" + (nextTier.desc || "")) : "已達最高階級！"
           });
         });
       } else if (tab === "weapons") {
@@ -1362,6 +1382,11 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
+      // 建立 Sticky 置頂控制區（包含主分頁列 + 子分類列 + 配方檢視盒），往下滾動格仔時檢視盒永遠停留在上方！
+      const stickyTop = document.createElement("div");
+      stickyTop.className = "wk-sticky-top-wrap";
+      stickyTop.appendChild(this.buildMainTabBar(tab));
+
       const filterBar = document.createElement("div");
       filterBar.className = "wk-subfilter-bar";
 
@@ -1396,11 +1421,12 @@ window.Aetheria = window.Aetheria || {};
         pill.onclick = function() {
           self.curSubFilter = sf.id;
           self.selectedItemId = null;
+          self.savedScrollTop = 0;
           self.renderGridWorkshopModal(tab);
         };
         filterBar.appendChild(pill);
       });
-      if (subFilters.length > 0) body.appendChild(filterBar);
+      if (subFilters.length > 0) stickyTop.appendChild(filterBar);
 
       const filteredItems = itemsList.filter(function(item) {
         if (self.curSubFilter === "all") return true;
@@ -1441,8 +1467,9 @@ window.Aetheria = window.Aetheria || {};
 
         let actionBtnHtml = "";
         if (selectedObj.itemType === "recipe") {
-          const canUseBuff = (selectedObj.raw.toKey === "steelIngot" || selectedObj.raw.toKey === "curedLeather" || selectedObj.raw.toKey === "rationJerky") &&
-                             ((s.inventory && s.inventory[selectedObj.raw.toKey]) || 0) > 0;
+          const outKey = selectedObj.raw.toKey || selectedObj.raw.giveKey;
+          const canUseBuff = (outKey === "steelIngot" || outKey === "curedLeather" || outKey === "rationJerky") &&
+                             ((s.inventory && s.inventory[outKey]) || 0) > 0;
           actionBtnHtml =
             '<div style="display:flex; flex-direction:column; gap:4px;">' +
               '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; font-size:13px; white-space:nowrap;" id="wk-main-craft-btn">🔨 立即製作</button>' +
@@ -1450,10 +1477,6 @@ window.Aetheria = window.Aetheria || {};
                 ? '<button class="na-btn" style="padding:4px 8px; font-size:11px; border-color:#5ac54f; color:#5ac54f;" id="wk-use-buff-btn">✨ 使用強化</button>'
                 : '') +
             '</div>';
-        } else if (selectedObj.itemType === "tool") {
-          actionBtnHtml = selectedObj.isMax
-            ? '<span style="color:#5ac54f; font-weight:900;">★ 已滿級</span>'
-            : '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; white-space:nowrap;" id="wk-main-craft-btn">⛏️ 升級工具</button>';
         } else if (selectedObj.itemType === "weapon" || selectedObj.itemType === "armor") {
           if (selectedObj.equipped) {
             actionBtnHtml = '<span style="color:#ffd166; font-weight:900; white-space:nowrap;">✓ 裝備中</span>';
@@ -1474,7 +1497,7 @@ window.Aetheria = window.Aetheria || {};
               '<div style="font-size:13.5px; font-weight:900; color:#ffd166;">' +
                 S.iconHtml(selectedObj.iconKey, true) + selectedObj.fullName +
               '</div>' +
-              '<div style="font-size:11.5px; color:#cbd5e1; margin-top:2px; line-height:1.35;">' + selectedObj.desc + '</div>' +
+              '<div style="font-size:11px; color:#cbd5e1; margin-top:2px; line-height:1.3;">' + selectedObj.desc + '</div>' +
               (chipsHtml ? '<div style="margin-top:4px;">' + chipsHtml + '</div>' : '') +
             '</div>' +
             actionBtnHtml +
@@ -1482,7 +1505,9 @@ window.Aetheria = window.Aetheria || {};
       } else {
         inspector.innerHTML = '<div style="color:#94a3b8; font-size:12px; text-align:center;">此分類下暫無項目</div>';
       }
-      body.appendChild(inspector);
+
+      stickyTop.appendChild(inspector);
+      body.appendChild(stickyTop);
 
       const mainBtn = inspector.querySelector("#wk-main-craft-btn");
       if (mainBtn && selectedObj) {
@@ -1498,6 +1523,7 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
+      // ★ 修正圖1與問題4：底部 3 欄格仔選單（每個可製作格仔內建「🔨製作」一鍵按鈕，且保留捲軸位置！）
       const grid = document.createElement("div");
       grid.className = "wk-icon-grid";
 
@@ -1505,27 +1531,53 @@ window.Aetheria = window.Aetheria || {};
         const isSel = (selectedObj && selectedObj.uid === item.uid);
         const cell = document.createElement("div");
         cell.className = "wk-grid-cell" + (item.canCraft ? " can-craft" : "") + (isSel ? " selected" : "");
+
+        const showQuickBtn = item.canCraft || (item.unlocked && !item.equipped && (item.itemType === "weapon" || item.itemType === "armor"));
+        const quickBtnLabel = item.unlocked ? "⚡裝備" : "🔨製作";
+
         cell.innerHTML =
           (item.canCraft ? '<span class="wk-cell-craft-dot">●可做</span>' : '') +
           '<span class="wk-cell-badge">' + item.badgeText + '</span>' +
-          '<div style="margin-top:4px;">' + S.iconHtml(item.iconKey) + '</div>' +
-          '<div class="wk-cell-name">' + item.shortName + '</div>';
+          '<div>' + S.iconHtml(item.iconKey) + '</div>' +
+          '<div class="wk-cell-name">' + item.shortName + '</div>' +
+          (showQuickBtn ? ('<button class="wk-cell-quick-btn">' + quickBtnLabel + '</button>') : '');
 
+        // 點擊格仔內的黃色「🔨製作 / ⚡裝備」按鈕：直接一鍵合成或換裝！
+        const qBtn = cell.querySelector(".wk-cell-quick-btn");
+        if (qBtn) {
+          qBtn.onclick = function(ev) {
+            ev.stopPropagation();
+            self.selectedItemId = item.uid;
+            self.executePrimaryItemAction(item);
+          };
+        }
+
+        // 點擊格仔本體：選中以查看配方（若已選中且可製作，再點一下亦可直接製作！），並記憶捲軸高度
         cell.onclick = function() {
+          if (isSel && showQuickBtn) {
+            self.executePrimaryItemAction(item);
+            return;
+          }
           if (window.Aetheria.Audio) window.Aetheria.Audio.sfxTalkBlip();
+          self.savedScrollTop = body.scrollTop;
           self.selectedItemId = item.uid;
           self.renderGridWorkshopModal(tab);
         };
+
         grid.appendChild(cell);
       });
 
       body.appendChild(grid);
+
+      if (this.savedScrollTop > 0) {
+        body.scrollTop = this.savedScrollTop;
+      }
     }
   };
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 6. 掛載高低差移動碰撞、南北雙繩梯攀爬、去標籤化與格仔工坊 =================
+  // ================= 6. 掛載高低差移動碰撞、怪物防穿懸崖、雙繩梯攀爬與格仔工坊 =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -1593,6 +1645,7 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Exp) {
+      // A. 主角高低差碰撞阻擋
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const s = window.Aetheria.State.data;
@@ -1625,6 +1678,40 @@ window.Aetheria = window.Aetheria || {};
         }
       };
 
+      // ★ B. 修正圖3：禁止野外魔物穿過懸崖岩壁！
+      if (Exp.updateMonstersAI) {
+        const origAI = Exp.updateMonstersAI.bind(Exp);
+        Exp.updateMonstersAI = function(mapObj, s) {
+          const hasCliff = Boolean(mapObj && HIGHLAND_ZONES[mapObj.id]);
+          const prevCoords = [];
+          if (hasCliff && mapObj.monsters) {
+            mapObj.monsters.forEach(function(m, idx) {
+              prevCoords[idx] = { x: m.x, y: m.y };
+            });
+          }
+
+          origAI(mapObj, s);
+
+          if (hasCliff && mapObj.monsters) {
+            mapObj.monsters.forEach(function(m, idx) {
+              if (!m || m.alive === false) return;
+              if (isBlockedByCliffFromLowland(m.x, m.y)) {
+                if (prevCoords[idx] && !isBlockedByCliffFromLowland(prevCoords[idx].x, prevCoords[idx].y)) {
+                  m.x = prevCoords[idx].x;
+                  m.y = prevCoords[idx].y;
+                } else {
+                  m.x = 240;
+                  m.y = 920;
+                }
+                m.vx = -(m.vx || 0);
+                m.vy = -(m.vy || 0);
+              }
+            });
+          }
+        };
+      }
+
+      // C. 懸崖繩梯攀爬互動 (南北雙錨點，距離放寬至 68px)
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
@@ -1632,7 +1719,7 @@ window.Aetheria = window.Aetheria || {};
         if (mapObj && mapObj.decos) {
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
-            if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 58) {
+            if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
               if (!s.riggedCliffs) s.riggedCliffs = {};
               const isRigged = Boolean(s.riggedCliffs[mapObj.id]);
 
@@ -1647,7 +1734,7 @@ window.Aetheria = window.Aetheria || {};
                 (mapObj.decos || []).forEach(function(dc) {
                   if (dc.isCliffLadderSpot) {
                     dc.sprite = "rope_ladder";
-                    dc.name = "繩梯";
+                    dc.ladderTitle = "🧗繩梯(上下)";
                   }
                 });
                 if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
@@ -1658,10 +1745,10 @@ window.Aetheria = window.Aetheria || {};
                 s.onHighland = false;
                 if (d.ladderSide === "north") {
                   s.heroX = d.x;
-                  s.heroY = 588;
+                  s.heroY = 772;
                 } else {
                   s.heroX = d.x;
-                  s.heroY = 798;
+                  s.heroY = 982;
                 }
                 s.petX = s.heroX - 20;
                 s.petY = s.heroY;
@@ -1670,10 +1757,10 @@ window.Aetheria = window.Aetheria || {};
                 s.onHighland = true;
                 if (d.ladderSide === "north") {
                   s.heroX = d.x;
-                  s.heroY = 655;
+                  s.heroY = 835;
                 } else {
                   s.heroX = d.x;
-                  s.heroY = 710;
+                  s.heroY = 895;
                 }
                 s.petX = s.heroX - 20;
                 s.petY = s.heroY;
@@ -1694,7 +1781,7 @@ window.Aetheria = window.Aetheria || {};
         if (hintEl && mapObj && mapObj.decos) {
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
-            if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 58) {
+            if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
               const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
               hintEl.innerText = !rigged ? "架設繩梯" : (s.onHighland ? "爬下懸崖" : "爬上高台");
               return;
@@ -1709,7 +1796,7 @@ window.Aetheria = window.Aetheria || {};
         const s = window.Aetheria.State.data;
         if (node && node.reqHighland && !s.onHighland) {
           window.Aetheria.Audio.sfxWrong();
-          window.Aetheria.UI.showToast("🧗 此礦簇位於高台上！請先從懸崖邊的【繩梯】爬上高台再開採！");
+          window.Aetheria.UI.showToast("🧗 此礦簇位於高台上！請先從懸崖邊的【🧗繩梯】爬上高台再開採！");
           return;
         }
         origHarvest(node);
@@ -1741,38 +1828,51 @@ window.Aetheria = window.Aetheria || {};
         const S = window.Aetheria.Data.Sprites;
         if (!terrainLayer || !mapObj) return;
 
-        // 繪製附圖 1000311094.jpg 的 L 型黃土高台、垂直深啡色懸崖壁與黑色山洞拱門
+        // 繪製下移至 y: 800 ~ 1062 的 L 型黃土高台、垂直深啡色懸崖壁與黑色山洞拱門
         if (HIGHLAND_ZONES[mapObj.id]) {
           const platTop = document.createElement("div");
           platTop.className = "srpg-plateau-top";
-          platTop.style.cssText = "left:390px; top:618px; width:515px; height:122px;";
+          platTop.style.cssText = "left:390px; top:800px; width:515px; height:122px;";
           terrainLayer.appendChild(platTop);
 
           const platRight = document.createElement("div");
           platRight.className = "srpg-plateau-top";
-          platRight.style.cssText = "left:710px; top:732px; width:195px; height:148px; border-top:none; border-radius:0;";
+          platRight.style.cssText = "left:710px; top:914px; width:195px; height:148px; border-top:none; border-radius:0;";
           terrainLayer.appendChild(platRight);
 
           const cliffMain = document.createElement("div");
           cliffMain.className = "srpg-cliff-wall";
-          cliffMain.style.cssText = "left:390px; top:736px; width:324px; height:46px;";
+          cliffMain.style.cssText = "left:390px; top:918px; width:324px; height:46px;";
           terrainLayer.appendChild(cliffMain);
 
           const cliffStepSide = document.createElement("div");
           cliffStepSide.className = "srpg-cliff-side-wall";
-          cliffStepSide.style.cssText = "left:704px; top:736px; width:14px; height:144px;";
+          cliffStepSide.style.cssText = "left:704px; top:918px; width:14px; height:144px;";
           terrainLayer.appendChild(cliffStepSide);
 
           const cliffRightBottom = document.createElement("div");
           cliffRightBottom.className = "srpg-cliff-wall";
-          cliffRightBottom.style.cssText = "left:710px; top:876px; width:195px; height:44px;";
+          cliffRightBottom.style.cssText = "left:710px; top:1058px; width:195px; height:44px;";
           terrainLayer.appendChild(cliffRightBottom);
 
           const caveArch = document.createElement("div");
           caveArch.className = "srpg-cave-arch";
-          caveArch.style.cssText = "left:468px; top:738px;";
+          caveArch.style.cssText = "left:468px; top:920px;";
           terrainLayer.appendChild(caveArch);
         }
+
+        // 為繩梯錨點強制建立專屬標籤與圖示
+        Object.keys(this.domPool.decos || {}).forEach(function(k) {
+          const item = Ren.domPool.decos[k];
+          if (item && item.data && item.data.isCliffLadderSpot && item.el) {
+            if (!item.lbl) {
+              const lbl = document.createElement("div");
+              lbl.className = "dom-label ladder-spot-lbl";
+              item.el.appendChild(lbl);
+              item.lbl = lbl;
+            }
+          }
+        });
 
         Object.keys(this.domPool.nodes || {}).forEach(function(nId) {
           const item = Ren.domPool.nodes[nId];
@@ -1783,12 +1883,30 @@ window.Aetheria = window.Aetheria || {};
         });
       };
 
-      // 去標籤化：普通採集物走近 (<62px) 才顯示文字標籤
       const origRender = Ren.renderWorld.bind(Ren);
       Ren.renderWorld = function() {
         origRender();
         try {
           const s = window.Aetheria.State.data;
+          const S = window.Aetheria.Data.Sprites;
+          const rigged = Boolean(s && s.riggedCliffs && s.riggedCliffs[s.currentZone]);
+
+          // 強制更新懸崖繩梯錨點的圖示與「🧗架設繩梯 / 🧗繩梯(上下)」標籤
+          Object.keys(this.domPool.decos || {}).forEach(function(k) {
+            const item = Ren.domPool.decos[k];
+            if (item && item.data && item.data.isCliffLadderSpot) {
+              if (item.img && S) {
+                item.img.src = S.getDataURL(rigged ? "rope_ladder" : "cliff_stake");
+              }
+              if (item.lbl) {
+                item.lbl.style.display = "block";
+                item.lbl.className = "dom-label ladder-spot-lbl";
+                item.lbl.innerText = rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯";
+              }
+            }
+          });
+
+          // 去標籤化：普通採集物走近 (<62px) 才顯示文字標籤
           Object.keys(this.domPool.nodes || {}).forEach(function(nId) {
             const item = Ren.domPool.nodes[nId];
             if (!item || !item.data || !item.lbl) return;
@@ -1806,6 +1924,10 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (UI) {
+      if (!WorkshopUIManager.origOpenForgeFn && UI.openForgeModal) {
+        WorkshopUIManager.origOpenForgeFn = UI.openForgeModal.bind(UI);
+      }
+
       UI.openForgeModal = function(activeTab) {
         const s = window.Aetheria.State && window.Aetheria.State.data;
         const forgeUnlocked = Boolean(
@@ -1854,7 +1976,6 @@ window.Aetheria = window.Aetheria || {};
       registerSrpgDataIntoGame();
       hookSystemsForHighlandsAndWorkshop();
 
-      // ★ 啟動時立即將所有 1~6 區與蘑菇洞窟進行擴大與拆舊樹牆，確保進入任何地圖即刻生效！
       const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
       if (Maps && Maps.getMap) {
         Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
@@ -1877,15 +1998,15 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival Highlands & Grid Workshop v9.4 init error:", err);
+      console.error("Survival Highlands & Grid Workshop v9.5 init error:", err);
     }
   }
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
-    setTimeout(initHighlandsAndWorkshopModule, 180);
+    setTimeout(initHighlandsAndWorkshopModule, 185);
   } else {
     window.addEventListener("load", function() {
-      setTimeout(initHighlandsAndWorkshopModule, 180);
+      setTimeout(initHighlandsAndWorkshopModule, 185);
     });
   }
 })();
