@@ -1,51 +1,20 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 全大陸擴建、營地東翼戰利品博物館與練功木人樁模組 (world-expansion.js - v9.0)
- * 核心升級：
- *   1. 【營地東翼：🏛️ 艾瑟瑞亞戰利品博物館】：
- *      - 包含營地東翼外觀建築與專屬室內展廳地圖 (tent_museum)
- *      - 支援上架展示「領主核心標本」、「自然奇珍礦植」與領取「冒險里程碑」，提供永久 ATK / DEF / MaxHP 館藏共鳴加成！
- *   2. 【營地東翼：🥋 機關練功木人樁道場】：
- *      - 支援「零受傷實戰連擊修練 (敵方0傷害，擊破獲EXP/金幣/BP+2)」、「錯題弱點特訓」與「木人樁三階升級」
- *   3. 完整保留 v8.9 全大陸版圖擴大 (1880x980) 與四大野外互動奇物 (探險行囊/翡翠靈泉/遠古石碑/秘境釣魚點)
+ * Project J：艾瑟瑞亞的破曉 — 營地東翼博物館、練功木人樁與野外奇物模組 (world-expansion.js - v9.1 原生融合改善版)
+ * 改善重點：
+ *   1. 【修復營地動線與樹牆】：營地適度擴闊至 780x480，自動將「翠風森林」入口移至最右緣 (x:735)，並延伸底部海岸樹牆至右界
+ *   2. 【建築並排與標籤統一】：博物館與公會/主角/鐵匠帳篷整齊並列於北排 (y:76)，移除重複標籤；所有奇物統一為 2~3 字原生短標籤
+ *   3. 【保留野外地圖黃金比例】：不盲目拉闊野外 Boss 身後空地，確保河流、橋樑與小地圖比例 100% 自然準確
+ *   4. 【適量精緻奇物】：每區野外僅點綴 1 座【靈泉】、1 座【古石碑】與 2 個【行囊】，畫面乾淨不雜亂
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入東翼博物館、木人樁與野外奇物 CSS =================
+  // ================= 1. 注入原生風格簡約 CSS =================
   function injectExpansionStyles() {
-    if (document.getElementById("world-exp-v90-styles")) return;
+    if (document.getElementById("world-exp-v91-styles")) return;
     const style = document.createElement("style");
-    style.id = "world-exp-v90-styles";
+    style.id = "world-exp-v91-styles";
     style.textContent = `
-      .dom-label.spring-lbl {
-        background: linear-gradient(90deg, #0f4c5c 0%, #1e3a2f 100%);
-        color: #8ce0ff;
-        border: 1.5px solid #5ac54f;
-        box-shadow: 0 0 6px rgba(90, 197, 79, 0.7);
-      }
-      .dom-label.monolith-lbl {
-        background: linear-gradient(90deg, #2d1442 0%, #1d3557 100%);
-        color: #ffd166;
-        border: 1.5px solid #e0aaff;
-        box-shadow: 0 0 6px rgba(224, 170, 255, 0.7);
-      }
-      .dom-label.crate-lbl {
-        background: #4a2c11;
-        color: #fff3b0;
-        border: 1.5px solid #f5b700;
-      }
-      .dom-label.museum-lbl {
-        background: linear-gradient(90deg, #5c3824 0%, #1d3557 100%);
-        color: #ffd166;
-        border: 1.5px solid #f5b700;
-        box-shadow: 0 0 8px rgba(245, 183, 0, 0.75);
-      }
-      .dom-label.dummy-lbl {
-        background: linear-gradient(90deg, #7f2b1d 0%, #4a2c11 100%);
-        color: #fff3b0;
-        border: 1.5px solid #ff9f1c;
-        box-shadow: 0 0 6px rgba(255, 159, 28, 0.75);
-      }
       .exhibit-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -93,29 +62,29 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    // 🏛️ 戰利品博物館建築外觀 (16x16 金頂古典聖殿)
+    // 🏛️ 博物館帳篷/聖殿外觀 (與營地其他帳篷風格協調的金白榮耀帳篷)
     const museumBldgUrl = buildGridDataUrl([
       ".......YY.......",
-      ".....YYYYYY.....",
-      "...YYYYYYYYYY...",
-      ".KKKKKKKKKKKKKK.",
-      "KWWWWWWWWWWWWWWK",
-      "KYYYYYYYYYYYYYYK",
-      ".KWWKWWKWWKWWKW.",
-      ".KWWKWWKWWKWWKW.",
-      ".KWWKWWKWWKWWKW.",
-      ".KWWKWWOOOOOWKW.",
-      ".KWWKWWOOOOOWKW.",
-      ".KWWKWWOOOOOWKW.",
-      "KGGGGGGYYYYGGGGK",
-      "KWWWWWWWWWWWWWWK",
-      "KKKKKKKKKKKKKKKK",
-      "................"
+      "......YYYY......",
+      ".....WWWWWW.....",
+      "....WWWWWWWW....",
+      "...WYYYYYYYYW...",
+      "..WWWWWWWWWWWW..",
+      ".WWWWWWWWWWWWWW.",
+      "WWWWYYYYYYYYWWWW",
+      "WWWWWWWWWWWWWWWW",
+      ".WWWWWWYYWWWWWW.",
+      ".WWWWWYYYYWWWWW.",
+      ".WWWWYYOOYYWWWW.",
+      ".WWWWYOOOOYWWWW.",
+      ".WWWWYOOOOYWWWW.",
+      ".YYYYYOOOOYYYYY.",
+      "KKKKKKKKKKKKKKKK"
     ], {
-      K: "#141013", Y: "#f5b700", W: "#f8fafc", G: "#94a3b8", O: "#2b2118"
+      K: "#141013", Y: "#f5b700", W: "#e2e8f0", O: "#2b2118"
     });
 
-    // 🏆 博物館室內黃金展示台 (16x16)
+    // 🏆 博物館室內展示台
     const trophyPedestalUrl = buildGridDataUrl([
       "......YYYY......",
       "....YYWWWWYY....",
@@ -137,7 +106,7 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", Y: "#f5b700", W: "#ffffff", R: "#e03c4b", G: "#94a3b8"
     });
 
-    // 🥋 機關練功木人樁 (16x16 詠春/RPG 標靶木人樁)
+    // 🥋 練功木人樁
     const trainingDummyUrl = buildGridDataUrl([
       ".....KKKKKK.....",
       "....KLLLLLLK....",
@@ -159,7 +128,7 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", L: "#d9a066", D: "#8f563b", Y: "#f5b700", R: "#e03c4b", W: "#ffffff", I: "#475569"
     });
 
-    // 🎒 遺落探險行囊
+    // 🎒 探險行囊
     const lootCrateUrl = buildGridDataUrl([
       "....KKKKKKKK....",
       "...KLLLLLLLLK...",
@@ -181,7 +150,7 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", L: "#d9a066", D: "#8f563b", Y: "#f5b700", W: "#ffffff"
     });
 
-    // ⛲ 翡翠療癒靈泉
+    // ⛲ 療癒靈泉
     const healingSpringUrl = buildGridDataUrl([
       "......WWWW......",
       "....WWCCCCWW....",
@@ -203,7 +172,7 @@ window.Aetheria = window.Aetheria || {};
       K: "#141013", W: "#ffffff", C: "#8ce0ff", B: "#38b6ff", G: "#5ac54f", D: "#64748b"
     });
 
-    // 🗿 遠古知識共鳴石碑
+    // 🗿 遠古石碑
     const loreMonolithUrl = buildGridDataUrl([
       ".....KKKKKK.....",
       "....KDDDDDDK....",
@@ -360,276 +329,119 @@ window.Aetheria = window.Aetheria || {};
     return { atk: atk, def: def, hp: hp };
   }
 
-  // ================= 4. 建立【戰利品博物館室內展廳 (tent_museum)】地圖 =================
+  // ================= 4. 建立【博物館室內展廳 (tent_museum)】（與公會/主角帳篷室內格式 100% 一致） =================
   function buildMuseumInteriorMap() {
-    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
-    const donated = s.museumDonated || {};
-
-    const decos = [
-      // 館長與中央榮耀聖火
-      { id: "museum_curator_desk", x: 260, y: 72,  sprite: "brazier_on",      w: 28, h: 28, solid: true, isMuseumPedestal: true, tab: "trophies",   name: "🏛️館藏總覽台" },
-      // 左翼：領主討伐雕像展台
-      { id: "ped_boss_1",          x: 110, y: 120, sprite: "trophy_pedestal", w: 28, h: 30, solid: true, isMuseumPedestal: true, tab: "trophies",   name: "🦖領主雕像展" },
-      { id: "ped_boss_2",          x: 110, y: 205, sprite: "trophy_pedestal", w: 28, h: 30, solid: true, isMuseumPedestal: true, tab: "trophies",   name: "⚓航海秘寶展" },
-      // 右翼：自然奇珍礦植展台
-      { id: "ped_nat_1",           x: 410, y: 120, sprite: "trophy_pedestal", w: 28, h: 30, solid: true, isMuseumPedestal: true, tab: "specimens",  name: "💎稀世礦石展" },
-      { id: "ped_nat_2",           x: 410, y: 205, sprite: "trophy_pedestal", w: 28, h: 30, solid: true, isMuseumPedestal: true, tab: "specimens",  name: "🌿奇珍靈植展" },
-      // 中央：冒險榮耀紀念碑
-      { id: "ped_milestone",       x: 260, y: 160, sprite: "lore_monolith",   w: 30, h: 34, solid: true, isMuseumPedestal: true, tab: "milestones", name: "🎖️榮耀紀念碑" }
-    ];
-
     return {
       id: "tent_museum",
       _refreshToken: Date.now(),
-      name: "戰利品博物館",
+      name: "博物館",
       recLv: 1,
       bgm: "forest",
-      theme: "sky",
+      theme: "canyon",
       rain: false,
       fog: false,
       hasRiver: false,
-      width: 520,
-      height: 320,
-      dirtBlobs: [
-        { cx: 260, cy: 160, rx: 210, ry: 115 }
-      ],
+      width: 380,
+      height: 260,
+      dirtBlobs: [{ x: 30, y: 30, w: 320, h: 200, cx: 190, cy: 130, rx: 160, ry: 100 }],
       trees: [],
-      decos: decos,
+      decos: [
+        { id: "ped_boss_1",    x: 95,  y: 82,  sprite: "trophy_pedestal", w: 28, h: 30, solid: true, isMuseumPedestal: true, tab: "trophies",   name: "領主展台" },
+        { id: "ped_milestone", x: 190, y: 78,  sprite: "lore_monolith",   w: 28, h: 32, solid: true, isMuseumPedestal: true, tab: "milestones", name: "榮耀石碑" },
+        { id: "ped_nat_1",     x: 285, y: 82,  sprite: "trophy_pedestal", w: 28, h: 30, solid: true, isMuseumPedestal: true, tab: "specimens",  name: "標本展台" },
+        { id: "indoor_dummy",  x: 95,  y: 155, sprite: "training_dummy",  w: 28, h: 30, solid: true, isTrainingDummy: true,                   name: "木人樁" },
+        { x: 190, y: 145, sprite: "deco_bench", w: 30, h: 16, solid: false }
+      ],
       nodes: [],
       npcs: [],
       monsters: [],
       portals: [
         {
           id: "p_exit_museum",
-          name: "離開博物館 ▾",
-          x: 260,
-          y: 282,
+          name: "離開帳篷 ▾",
+          x: 190,
+          y: 228,
           targetZone: "camp_hub",
-          targetX: 766,
-          targetY: 168,
+          targetX: 622,
+          targetY: 182,
           icon: "stairs"
         }
-      ],
-      _donatedCount: Object.keys(donated).length
+      ]
     };
   }
 
-  // ================= 5. 各區域擴建尺寸與新增教材/怪物配置表 =================
-  const ZONE_EXPANSION_SPECS = {
-    camp_hub: {
-      targetW: 980,
-      targetH: 480,
-      extraTrees: 6,
-      extraNodes: 6,
-      crates: 2,
-      springs: 1,
-      monoliths: 1,
-      extraFishSpots: [{ x: 760, y: 402 }],
-      nodePool: [
-        { giveKey: "branch", type: "wood",    reqTool: "axe",     reqToolLv: 0 },
-        { giveKey: "flint",  type: "crystal", reqTool: "pickaxe", reqToolLv: 0 },
-        { giveKey: "clay",   type: "crystal", reqTool: "pickaxe", reqToolLv: 0, southShore: true },
-        { giveKey: "wood",   type: "wood",    reqTool: "axe",     reqToolLv: 1 }
-      ]
-    },
-    zone1_forest: {
-      targetW: 1880,
-      targetH: 980,
-      extraTrees: 26,
-      extraNodes: 15,
-      extraMons: 6,
-      crates: 5,
-      springs: 2,
-      monoliths: 2,
-      extraFishSpots: [{ x: 620, y: 820 }, { x: 1480, y: 780 }],
-      rewardKey: "coreBamboo",
-      monName: "深林守衛木妖",
-      nodePool: [
-        { giveKey: "wood",   type: "wood",    reqTool: "axe",     reqToolLv: 1 },
-        { giveKey: "vine",   type: "wood",    reqTool: "axe",     reqToolLv: 1 },
-        { giveKey: "herb",   type: "wood",    reqTool: "axe",     reqToolLv: 1 },
-        { giveKey: "resin",  type: "wood",    reqTool: "axe",     reqToolLv: 1 },
-        { giveKey: "iron",   type: "crystal", reqTool: "pickaxe", reqToolLv: 1 },
-        { giveKey: "branch", type: "wood",    reqTool: "axe",     reqToolLv: 0 }
-      ]
-    },
-    cave1_mushroom: {
-      targetW: 1680,
-      targetH: 900,
-      extraTrees: 20,
-      extraNodes: 14,
-      extraMons: 5,
-      crates: 4,
-      springs: 1,
-      monoliths: 2,
-      extraFishSpots: [{ x: 1280, y: 680 }],
-      rewardKey: "mithril",
-      monName: "深窟晶簇魔兵",
-      nodePool: [
-        { giveKey: "herb",    type: "wood",    reqTool: "axe",     reqToolLv: 1 },
-        { giveKey: "iron",    type: "crystal", reqTool: "pickaxe", reqToolLv: 1 },
-        { giveKey: "basalt",  type: "crystal", reqTool: "pickaxe", reqToolLv: 2 },
-        { giveKey: "mithril", type: "crystal", reqTool: "pickaxe", reqToolLv: 2 }
-      ]
-    },
-    zone2_canyon: {
-      targetW: 1880,
-      targetH: 980,
-      extraTrees: 22,
-      extraNodes: 15,
-      extraMons: 6,
-      crates: 5,
-      springs: 2,
-      monoliths: 2,
-      extraFishSpots: [{ x: 1380, y: 810 }],
-      rewardKey: "shell",
-      monName: "荒漠秘境巨蠍",
-      nodePool: [
-        { giveKey: "basalt",  type: "crystal", reqTool: "pickaxe", reqToolLv: 2 },
-        { giveKey: "mithril", type: "crystal", reqTool: "pickaxe", reqToolLv: 2 },
-        { giveKey: "hemp",    type: "wood",    reqTool: "axe",     reqToolLv: 2 },
-        { giveKey: "flower",  type: "wood",    reqTool: "axe",     reqToolLv: 2 },
-        { giveKey: "iron",    type: "crystal", reqTool: "pickaxe", reqToolLv: 1 }
-      ]
-    },
-    zone3_coast: {
-      targetW: 1880,
-      targetH: 980,
-      extraTrees: 20,
-      extraNodes: 16,
-      extraMons: 6,
-      crates: 5,
-      springs: 2,
-      monoliths: 2,
-      extraFishSpots: [{ x: 1360, y: 520 }, { x: 820, y: 840 }],
-      rewardKey: "coreSiren",
-      monName: "外海深淵海妖",
-      nodePool: [
-        { giveKey: "coral",     type: "crystal", reqTool: "pickaxe", reqToolLv: 2 },
-        { giveKey: "sailCloth", type: "wood",    reqTool: "axe",     reqToolLv: 0 },
-        { giveKey: "hemp",      type: "wood",    reqTool: "axe",     reqToolLv: 2 },
-        { giveKey: "mithril",   type: "crystal", reqTool: "pickaxe", reqToolLv: 2 },
-        { giveKey: "wood",      type: "wood",    reqTool: "axe",     reqToolLv: 1 }
-      ]
-    },
-    zone4_snow: {
-      targetW: 1880,
-      targetH: 980,
-      extraTrees: 24,
-      extraNodes: 15,
-      extraMons: 6,
-      crates: 5,
-      springs: 2,
-      monoliths: 2,
-      extraFishSpots: [{ x: 1420, y: 760 }],
-      rewardKey: "iceCrystal",
-      monName: "極地冰原巨狼",
-      nodePool: [
-        { giveKey: "iceLotus", type: "wood",    reqTool: "axe",     reqToolLv: 2 },
-        { giveKey: "sinew",    type: "wood",    reqTool: "axe",     reqToolLv: 0 },
-        { giveKey: "obsidian", type: "crystal", reqTool: "pickaxe", reqToolLv: 3 },
-        { giveKey: "basalt",   type: "crystal", reqTool: "pickaxe", reqToolLv: 2 }
-      ]
-    },
-    zone5_volcano: {
-      targetW: 1880,
-      targetH: 980,
-      extraTrees: 22,
-      extraNodes: 15,
-      extraMons: 6,
-      crates: 5,
-      springs: 2,
-      monoliths: 2,
-      extraFishSpots: [],
-      rewardKey: "magmaScale",
-      monName: "熔岩煉獄火魔",
-      nodePool: [
-        { giveKey: "obsidian", type: "crystal", reqTool: "pickaxe", reqToolLv: 3 },
-        { giveKey: "starIron", type: "crystal", reqTool: "pickaxe", reqToolLv: 3 },
-        { giveKey: "mithril",  type: "crystal", reqTool: "pickaxe", reqToolLv: 2 },
-        { giveKey: "basalt",   type: "crystal", reqTool: "pickaxe", reqToolLv: 2 }
-      ]
-    },
-    zone6_sky: {
-      targetW: 1880,
-      targetH: 980,
-      extraTrees: 20,
-      extraNodes: 16,
-      extraMons: 6,
-      crates: 5,
-      springs: 2,
-      monoliths: 2,
-      extraFishSpots: [{ x: 1450, y: 680 }],
-      rewardKey: "tabletShard",
-      monName: "天界星辰神兵",
-      nodePool: [
-        { giveKey: "starIron", type: "crystal", reqTool: "pickaxe", reqToolLv: 3 },
-        { giveKey: "goldLeaf", type: "wood",    reqTool: "axe",     reqToolLv: 3 },
-        { giveKey: "obsidian", type: "crystal", reqTool: "pickaxe", reqToolLv: 3 }
-      ]
-    }
+  // ================= 5. 野外各區奇物配置（保留原版地圖長寬比例，不拉出空白死角） =================
+  const WILD_CURIO_CONFIG = {
+    zone1_forest:   { rewardKey: "coreBamboo" },
+    cave1_mushroom: { rewardKey: "mithril" },
+    zone2_canyon:   { rewardKey: "shell" },
+    zone3_coast:    { rewardKey: "coreSiren" },
+    zone4_snow:     { rewardKey: "iceCrystal" },
+    zone5_volcano:  { rewardKey: "magmaScale" },
+    zone6_sky:      { rewardKey: "tabletShard" }
   };
 
   function randBetween(min, max) {
     return min + Math.floor(Math.random() * (max - min + 1));
   }
 
-  function findSafeExpansionSpot(mapObj, opts) {
+  function findSafeCurioSpot(mapObj, opts) {
     opts = opts || {};
     const W = mapObj.width || 1200;
-    const H = opts.maxY || ((mapObj.height || 680) - 65);
-    const minX = opts.minX || 75;
-    const maxX = opts.maxX || (W - 75);
-    const minY = opts.minY || 75;
+    const H = mapObj.height || 680;
+    const minX = opts.minX || 120;
+    const maxX = opts.maxX || (mapObj.hasRiver ? ((mapObj.riverX || 1030) - 70) : (W - 140));
+    const minY = opts.minY || 80;
+    const maxY = opts.maxY || (H - 80);
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
 
-    for (let attempt = 0; attempt < 110; attempt++) {
+    for (let attempt = 0; attempt < 100; attempt++) {
       const cx = randBetween(minX, Math.max(minX + 40, maxX));
-      const cy = randBetween(minY, Math.max(minY + 40, H));
+      const cy = randBetween(minY, Math.max(minY + 40, maxY));
 
       if (mapObj.hasRiver) {
         const rx = mapObj.riverX || 1030;
-        if (cx > rx - 38 && cx < rx + 65) continue;
+        if (cx > rx - 45 && cx < rx + 70) continue;
       }
 
-      if (s.currentZone === mapObj.id && Math.hypot(cx - (s.heroX || 0), cy - (s.heroY || 0)) < 60) {
+      if (s.currentZone === mapObj.id && Math.hypot(cx - (s.heroX || 0), cy - (s.heroY || 0)) < 65) {
         continue;
       }
 
       let hitPortal = false;
       (mapObj.portals || []).forEach(function(p) {
-        if (Math.hypot(cx - p.x, cy - p.y) < 68) hitPortal = true;
+        if (Math.hypot(cx - p.x, cy - p.y) < 75) hitPortal = true;
       });
       if (hitPortal) continue;
 
       let hitTree = false;
       (mapObj.trees || []).forEach(function(t) {
-        if (Math.hypot(cx - (t.x + 14), cy - (t.y + 14)) < 38) hitTree = true;
+        if (Math.hypot(cx - (t.x + 14), cy - (t.y + 14)) < 40) hitTree = true;
       });
       if (hitTree) continue;
 
       let hitNpc = false;
       (mapObj.npcs || []).forEach(function(n) {
-        if (Math.hypot(cx - n.x, cy - n.y) < 48) hitNpc = true;
+        if (Math.hypot(cx - n.x, cy - n.y) < 55) hitNpc = true;
       });
       if (hitNpc) continue;
 
       let hitDeco = false;
       (mapObj.decos || []).forEach(function(d) {
-        const rad = (d.isPuzzleElement || d.isMuseumBuilding) ? 68 : 44;
+        const rad = d.isPuzzleElement ? 85 : 48;
         if (Math.hypot(cx - d.x, cy - d.y) < rad) hitDeco = true;
       });
       if (hitDeco) continue;
 
       let hitNode = false;
       (mapObj.nodes || []).forEach(function(n) {
-        if (!n.opened && Math.hypot(cx - n.x, cy - n.y) < 40) hitNode = true;
+        if (!n.opened && Math.hypot(cx - n.x, cy - n.y) < 42) hitNode = true;
       });
       if (hitNode) continue;
 
       let hitMon = false;
       (mapObj.monsters || []).forEach(function(m) {
-        if (m.alive !== false && Math.hypot(cx - m.x, cy - m.y) < 46) hitMon = true;
+        if (m.alive !== false && Math.hypot(cx - m.x, cy - m.y) < 55) hitMon = true;
       });
       if (hitMon) continue;
 
@@ -638,358 +450,140 @@ window.Aetheria = window.Aetheria || {};
     return null;
   }
 
-  // ================= 6. 動態擴建各區版圖並注入【東翼博物館 + 練功木人樁】 =================
-  function expandAndEnrichMap(mapObj) {
+  // ================= 6. 自然融入營地東翼與野外奇物（不破壞原有動線） =================
+  function enrichMapNaturally(mapObj) {
     if (!mapObj) return mapObj;
     const token = mapObj._refreshToken || "init";
     if (mapObj._worldExpandedToken === token) return mapObj;
     mapObj._worldExpandedToken = token;
 
-    const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
-    const s = (window.Aetheria.State && window.Aetheria.State.data) || { lv: 1 };
-
-    if (mapObj.id === "ocean_sea") {
-      mapObj.width = Math.max(mapObj.width || 1420, 1960);
-      mapObj.height = Math.max(mapObj.height || 760, 1060);
-      mapObj.dirtBlobs = mapObj.dirtBlobs || [];
-      mapObj.dirtBlobs.push(
-        { cx: 1580, cy: 260, rx: 95, ry: 65, isAtoll: true },
-        { cx: 1620, cy: 760, rx: 105, ry: 70, isAtoll: true },
-        { cx: 420,  cy: 840, rx: 90, ry: 60, isAtoll: true }
-      );
-      for (let b = 0; b < 6; b++) {
-        const pt = findSafeExpansionSpot(mapObj, { minX: 250, maxX: 1850, minY: 120, maxY: 960 });
-        if (pt) {
-          mapObj.nodes.push({
-            id: "exp_sea_barrel_" + b + "_" + Date.now(),
-            x: pt.x,
-            y: pt.y,
-            type: "chest",
-            name: "漂流補給桶",
-            isSeaBarrel: true,
-            reqToolLv: 0,
-            opened: false
-          });
-        }
-      }
-      return mapObj;
-    }
-
-    const isIsland = ["island_coral", "island_wreck", "dungeon_abyss", "island_volcano"].indexOf(mapObj.id) !== -1;
-    if (isIsland) {
-      mapObj.width = Math.max(mapObj.width || 1120, 1520);
-      mapObj.height = Math.max(mapObj.height || 640, 860);
-      mapObj.dirtBlobs = mapObj.dirtBlobs || [];
-      mapObj.dirtBlobs.push(
-        { cx: 1260, cy: 260, rx: 120, ry: 85 },
-        { cx: 1260, cy: 620, rx: 125, ry: 85 },
-        { cx: 680,  cy: 710, rx: 140, ry: 80 }
-      );
-      for (let c = 0; c < 3; c++) {
-        const cPt = findSafeExpansionSpot(mapObj);
-        if (cPt) {
-          mapObj.decos.push({
-            id: "exp_crate_" + mapObj.id + "_" + c,
-            x: cPt.x,
-            y: cPt.y,
-            sprite: "loot_crate",
-            w: 26,
-            h: 26,
-            solid: true,
-            isLootCrate: true,
-            opened: false,
-            name: "🎒探險行囊"
-          });
-        }
-      }
-      const spPt = findSafeExpansionSpot(mapObj);
-      if (spPt) {
-        mapObj.decos.push({
-          id: "exp_spring_" + mapObj.id,
-          x: spPt.x,
-          y: spPt.y,
-          sprite: "healing_spring",
-          w: 30,
-          h: 30,
-          solid: true,
-          isHealingSpring: true,
-          name: "⛲翡翠靈泉"
-        });
-      }
-      const moPt = findSafeExpansionSpot(mapObj);
-      if (moPt) {
-        mapObj.decos.push({
-          id: "exp_mono_" + mapObj.id,
-          x: moPt.x,
-          y: moPt.y,
-          sprite: "lore_monolith",
-          w: 28,
-          h: 32,
-          solid: true,
-          isLoreMonolith: true,
-          rewardKey: "seaChart",
-          name: "🗿遠古石碑"
-        });
-      }
-      return mapObj;
-    }
-
-    const spec = ZONE_EXPANSION_SPECS[mapObj.id];
-    if (!spec) return mapObj;
-
-    const origW = mapObj.width || 640;
-    const origH = mapObj.height || 480;
-    mapObj.width = Math.max(origW, spec.targetW);
-    mapObj.height = Math.max(origH, spec.targetH);
-
-    mapObj.dirtBlobs = mapObj.dirtBlobs || [];
-    mapObj.trees = mapObj.trees || [];
-    mapObj.portals = mapObj.portals || [];
     mapObj.decos = (mapObj.decos || []).filter(function(d) { return !d.isExpandedWorldObj; });
-    mapObj.nodes = (mapObj.nodes || []).filter(function(n) { return !n.isExpandedWorldNode; });
-    mapObj.monsters = (mapObj.monsters || []).filter(function(m) { return !m.isExpandedWorldMon; });
 
-    // ★ 曙光營地東翼專屬建設：【🏛️戰利品博物館】與【🥋機關練功木人樁道場】
+    // (A) 曙光營地 (camp_hub)：精準擴闊至 780x480，讓博物館排在鐵匠帳篷右邊，並將森林入口移至最右緣
     if (mapObj.id === "camp_hub") {
-      mapObj.dirtBlobs.push(
-        { cx: 765, cy: 145, rx: 115, ry: 65 }, // 東北：博物館前庭廣場
-        { cx: 635, cy: 235, rx: 75,  ry: 55 }, // 東中：練功木人樁武道場
-        { cx: 855, cy: 255, rx: 95,  ry: 70 }  // 東南：翡翠靈泉與遠古石碑區
-      );
+      mapObj.width = 780;
+      mapObj.height = 480;
 
-      // 1. 🏛️ 艾瑟瑞亞戰利品博物館建築外觀 + 室內展廳傳送門
-      mapObj.decos.push({
-        id: "deco_camp_museum_ext",
-        x: 740,
-        y: 74,
-        sprite: "museum_building",
-        w: 58,
-        h: 52,
-        solid: true,
-        isMuseumBuilding: true,
-        isExpandedWorldObj: true,
-        name: "🏛️戰利品博物館"
+      // 1. 將通往「1.翠風森林」的傳送門移至新右邊界 (x: 735)，不再擋在營地中間！
+      (mapObj.portals || []).forEach(function(p) {
+        if (p.targetZone === "zone1_forest") {
+          p.x = 735;
+          p.y = 240;
+        }
       });
 
+      // 2. 補齊營地南岸海灘底部的樹牆 (x: 640 ~ 760)，消除斷層感
+      mapObj.trees = (mapObj.trees || []).filter(function(t) { return !t.isCampEastBorderTree; });
+      [635, 675, 715, 755].forEach(function(tx) {
+        mapObj.trees.push({ x: tx, y: 430, isCampEastBorderTree: true });
+      });
+
+      // 3. 在北排帳篷區 (y: 76) 並排放置【博物館帳篷】+ 門口傳送點 (與公會/主角/鐵匠帳篷完全對齊！)
+      mapObj.decos.push({
+        id: "deco_camp_museum_ext",
+        x: 595,
+        y: 76,
+        sprite: "museum_building",
+        w: 54,
+        h: 48,
+        solid: true,
+        isMuseumBuilding: true,
+        isExpandedWorldObj: true
+      });
+
+      mapObj.portals = mapObj.portals || [];
       if (!mapObj.portals.some(function(p) { return p.id === "p_enter_museum"; })) {
         mapObj.portals.push({
           id: "p_enter_museum",
-          name: "戰利品博物館",
-          x: 768,
+          name: "博物館",
+          x: 622,
           y: 138,
           targetZone: "tent_museum",
-          targetX: 260,
-          targetY: 240,
+          targetX: 190,
+          targetY: 185,
           icon: "door",
           labelBottom: true
         });
       }
 
-      // 2. 🥋 機關練功木人樁 + 武道場火盆
-      mapObj.decos.push(
-        {
-          id: "deco_camp_dummy",
-          x: 635,
-          y: 225,
-          sprite: "training_dummy",
-          w: 32,
-          h: 34,
-          solid: true,
-          isTrainingDummy: true,
-          isExpandedWorldObj: true,
-          name: "🥋練功木人樁"
-        },
-        {
-          id: "deco_dojo_brazier_1",
-          x: 590,
-          y: 205,
-          sprite: "brazier_on",
-          w: 24,
-          h: 26,
-          solid: true,
-          isExpandedWorldObj: true
-        },
-        {
-          id: "deco_dojo_brazier_2",
-          x: 680,
-          y: 205,
-          sprite: "brazier_on",
-          w: 24,
-          h: 26,
-          solid: true,
-          isExpandedWorldObj: true
-        }
-      );
-    } else {
-      mapObj.dirtBlobs.push(
-        { cx: 1420, cy: 280, rx: 165, ry: 110 },
-        { cx: 1580, cy: 680, rx: 175, ry: 120 },
-        { cx: 520,  cy: 790, rx: 180, ry: 95 },
-        { cx: 1080, cy: 810, rx: 165, ry: 95 }
-      );
-    }
-
-    // 鋪設擴建區域防重疊林木
-    for (let t = 0; t < (spec.extraTrees || 0); t++) {
-      const inEast = (t % 2 === 0);
-      const tSpot = findSafeExpansionSpot(mapObj, {
-        minX: (mapObj.id === "camp_hub") ? 600 : (inEast ? Math.max(580, origW - 60) : 90),
-        maxX: mapObj.width - 70,
-        minY: (mapObj.id === "camp_hub") ? 260 : (inEast ? 80 : Math.max(200, origH - 60)),
-        maxY: (mapObj.id === "camp_hub") ? 335 : (mapObj.height - 70)
-      });
-      if (tSpot) {
-        mapObj.trees.push({ x: tSpot.x, y: tSpot.y, isExpandedTree: true });
-      }
-    }
-
-    // 秘境釣魚點
-    (spec.extraFishSpots || []).forEach(function(fp, idx) {
+      // 4. 在博物館與鐵匠帳篷之間放置【木人樁】
       mapObj.decos.push({
-        id: "exp_fish_" + mapObj.id + "_" + idx,
-        x: fp.x,
-        y: fp.y,
-        sprite: "fishing_spot",
+        id: "deco_camp_dummy",
+        x: 548,
+        y: 162,
+        sprite: "training_dummy",
         w: 28,
-        h: 28,
-        isFishingSpot: true,
-        isExpandedWorldObj: true
+        h: 30,
+        solid: true,
+        isTrainingDummy: true,
+        isExpandedWorldObj: true,
+        name: "木人樁"
       });
-    });
 
-    // ⛲ 翡翠療癒靈泉
-    for (let sp = 0; sp < (spec.springs || 0); sp++) {
-      const spSpot = (mapObj.id === "camp_hub")
-        ? { x: 845, y: 215 }
-        : findSafeExpansionSpot(mapObj, {
-            minX: sp === 0 ? 220 : 1120,
-            maxX: mapObj.width - 110,
-            minY: sp === 0 ? Math.max(480, origH - 40) : 140,
-            maxY: mapObj.height - 95
-          });
+      return mapObj;
+    }
+
+    // (B) 野外 1~6 區與荒島：保持原版尺寸比例，僅在安全空地放置 1 座【靈泉】、1 座【古石碑】與 2 個【行囊】
+    const wildCfg = WILD_CURIO_CONFIG[mapObj.id];
+    const isIsland = ["island_coral", "island_wreck", "dungeon_abyss", "island_volcano"].indexOf(mapObj.id) !== -1;
+
+    if (wildCfg || isIsland) {
+      const rewardKey = (wildCfg && wildCfg.rewardKey) || "seaChart";
+
+      // 1 座療癒靈泉
+      const spSpot = findSafeCurioSpot(mapObj);
       if (spSpot) {
         mapObj.decos.push({
-          id: "exp_spring_" + mapObj.id + "_" + sp,
+          id: "exp_spring_" + mapObj.id,
           x: spSpot.x,
           y: spSpot.y,
           sprite: "healing_spring",
-          w: 30,
-          h: 30,
+          w: 28,
+          h: 28,
           solid: true,
           isHealingSpring: true,
           isExpandedWorldObj: true,
-          name: "⛲翡翠靈泉"
+          name: "靈泉"
         });
       }
-    }
 
-    // 🗿 遠古知識共鳴碑
-    for (let mo = 0; mo < (spec.monoliths || 0); mo++) {
-      const moSpot = (mapObj.id === "camp_hub")
-        ? { x: 865, y: 295 }
-        : findSafeExpansionSpot(mapObj, {
-            minX: mo === 0 ? 300 : 1200,
-            maxX: mapObj.width - 110,
-            minY: 120,
-            maxY: mapObj.height - 95
-          });
+      // 1 座遠古石碑
+      const moSpot = findSafeCurioSpot(mapObj);
       if (moSpot) {
         mapObj.decos.push({
-          id: "exp_mono_" + mapObj.id + "_" + mo,
+          id: "exp_mono_" + mapObj.id,
           x: moSpot.x,
           y: moSpot.y,
           sprite: "lore_monolith",
           w: 28,
-          h: 32,
+          h: 30,
           solid: true,
           isLoreMonolith: true,
           isExpandedWorldObj: true,
-          rewardKey: spec.rewardKey || "iron",
-          name: "🗿遠古石碑"
+          rewardKey: rewardKey,
+          name: "古石碑"
         });
       }
-    }
 
-    // 🎒 遺落探險行囊
-    for (let cr = 0; cr < (spec.crates || 0); cr++) {
-      const crSpot = findSafeExpansionSpot(mapObj, {
-        minX: (mapObj.id === "camp_hub") ? 590 : 120,
-        maxX: mapObj.width - 80,
-        minY: (mapObj.id === "camp_hub") ? 270 : 95,
-        maxY: (mapObj.id === "camp_hub") ? 342 : (mapObj.height - 80)
-      });
-      if (crSpot) {
-        mapObj.decos.push({
-          id: "exp_crate_" + mapObj.id + "_" + cr + "_" + token,
-          x: crSpot.x,
-          y: crSpot.y,
-          sprite: "loot_crate",
-          w: 26,
-          h: 26,
-          solid: true,
-          isLootCrate: true,
-          isExpandedWorldObj: true,
-          opened: false,
-          name: "🎒探險行囊"
-        });
+      // 2 個遺落行囊
+      for (let c = 0; c < 2; c++) {
+        const crSpot = findSafeCurioSpot(mapObj);
+        if (crSpot) {
+          mapObj.decos.push({
+            id: "exp_crate_" + mapObj.id + "_" + c + "_" + token,
+            x: crSpot.x,
+            y: crSpot.y,
+            sprite: "loot_crate",
+            w: 24,
+            h: 24,
+            solid: true,
+            isLootCrate: true,
+            isExpandedWorldObj: true,
+            opened: false,
+            name: "行囊"
+          });
+        }
       }
-    }
-
-    // 額外防重疊採集素材點
-    const pool = spec.nodePool || [];
-    for (let nIdx = 0; nIdx < (spec.extraNodes || 0) && pool.length > 0; nIdx++) {
-      const tpl = pool[nIdx % pool.length];
-      const nSpot = findSafeExpansionSpot(mapObj, {
-        minX: (mapObj.id === "camp_hub") ? 580 : 100,
-        maxX: (mapObj.id === "zone1_forest" && nIdx < 6) ? 960 : (mapObj.width - 75),
-        minY: tpl.southShore ? 320 : ((mapObj.id === "camp_hub") ? 150 : 85),
-        maxY: tpl.southShore ? 350 : ((mapObj.id === "camp_hub") ? 345 : (mapObj.height - 75))
-      });
-      if (!nSpot) continue;
-
-      const matObj = matsDB[tpl.giveKey] || { name: tpl.giveKey };
-      const isPerf = (tpl.reqToolLv >= 1 && Math.random() < 0.28);
-
-      mapObj.nodes.push({
-        id: "exp_node_" + mapObj.id + "_" + nIdx + "_" + Date.now(),
-        x: nSpot.x,
-        y: nSpot.y,
-        type: tpl.type || "wood",
-        giveKey: tpl.giveKey,
-        reqTool: tpl.reqTool || "axe",
-        reqToolLv: tpl.reqToolLv !== undefined ? tpl.reqToolLv : 1,
-        perfect: isPerf,
-        name: (isPerf ? "高純度" : "") + matObj.name,
-        opened: false,
-        isExpandedWorldNode: true
-      });
-    }
-
-    // 外圍巡邏魔物
-    for (let mIdx = 0; mIdx < (spec.extraMons || 0); mIdx++) {
-      const mSpot = findSafeExpansionSpot(mapObj, {
-        minX: (mIdx % 2 === 0) ? Math.max(650, origW - 100) : 220,
-        maxX: mapObj.width - 90,
-        minY: (mIdx % 2 === 0) ? 120 : Math.max(450, origH - 80),
-        maxY: mapObj.height - 90
-      });
-      if (!mSpot) continue;
-
-      const baseLv = Math.max(2, (mapObj.recLv || s.lv || 2) + randBetween(0, 2));
-      mapObj.monsters.push({
-        id: "exp_mon_" + mapObj.id + "_" + mIdx + "_" + Date.now(),
-        name: spec.monName || "外圍秘境魔物",
-        lv: baseLv,
-        x: mSpot.x,
-        y: mSpot.y,
-        homeX: mSpot.x,
-        homeY: mSpot.y,
-        type: (mIdx % 2 === 0) ? "skull" : "bamboo",
-        isBoss: false,
-        isShiny: (Math.random() < 0.20),
-        alive: true,
-        isExpandedWorldMon: true
-      });
     }
 
     return mapObj;
@@ -997,7 +591,6 @@ window.Aetheria = window.Aetheria || {};
 
   // ================= 7. 博物館、練功木人樁與奇物互動邏輯 =================
   const WorldExpansionManager = {
-    // 🏛️ 打開【艾瑟瑞亞戰利品博物館】介面
     openMuseumModal: function(activeTab) {
       activeTab = activeTab || "trophies";
       const s = window.Aetheria.State.data;
@@ -1020,7 +613,7 @@ window.Aetheria = window.Aetheria || {};
       const summaryCard = document.createElement("div");
       summaryCard.className = "sys-card-scroll";
       summaryCard.innerHTML =
-        '<b>✨ 東翼館藏與木人樁永久共鳴加成：</b>' +
+        '<b>✨ 博物館與木人樁永久屬性加成：</b>' +
         '<div style="font-size:12px; color:#1d3557; font-weight:900; margin-top:2px;">' +
           '⚔️ 攻擊力 +' + bonuses.atk + ' ｜ 🛡️ 防禦力 +' + bonuses.def + ' ｜ ❤️ 最大生命 +' + bonuses.hp +
         '</div>';
@@ -1160,7 +753,6 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.showToast("🎖️ 領取榮耀成就獎勵：+" + ms.gold + " G、+" + ms.exp + " EXP！");
     },
 
-    // 🥋 打開【東翼機關練功木人樁道場】介面
     openTrainingDummyModal: function() {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
@@ -1171,7 +763,7 @@ window.Aetheria = window.Aetheria || {};
 
       window.Aetheria.UI.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML =
-        S.iconHtml("training_dummy") + "東翼機關練功木人樁道場 (" + curDef.name + ")";
+        S.iconHtml("training_dummy") + "機關練功木人樁 (" + curDef.name + ")";
 
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
@@ -1183,7 +775,6 @@ window.Aetheria = window.Aetheria || {};
         '<div style="font-size:12px; color:#5c3824; margin-top:2px;">' + curDef.desc + '</div>';
       body.appendChild(infoCard);
 
-      // 模式 1：實戰連擊木人樁（零受傷練功）
       const sparCard = document.createElement("div");
       sparCard.className = "sys-card";
       sparCard.style.borderColor = "#5ac54f";
@@ -1199,7 +790,6 @@ window.Aetheria = window.Aetheria || {};
         '</div>';
       body.appendChild(sparCard);
 
-      // 模式 2：錯題本弱點特訓
       const wrongCard = document.createElement("div");
       wrongCard.className = "sys-card";
       wrongCard.style.borderColor = "#38b6ff";
@@ -1215,7 +805,6 @@ window.Aetheria = window.Aetheria || {};
         '</div>';
       body.appendChild(wrongCard);
 
-      // 模式 3：升級改造木人樁
       if (nextDef) {
         const mats = window.Aetheria.Data.MATERIALS || {};
         const costHtml = Object.entries(nextDef.cost).map(function(entry) {
@@ -1352,8 +941,8 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.Audio.sfxLevelUp();
       window.Aetheria.State.save();
       window.Aetheria.UI.updateAllHud();
-      window.Aetheria.UI.spawnFloatingText("⛲靈泉療癒 HP+80 BP+2!", "#5ac54f", true);
-      window.Aetheria.UI.showToast("⛲ 飲用翡翠療癒靈泉：恢復 +80 HP、+35% 飽食度，並充能 +2 顆 BP 珠！");
+      window.Aetheria.UI.spawnFloatingText("⛲靈泉 HP+80 BP+2!", "#5ac54f", true);
+      window.Aetheria.UI.showToast("⛲ 飲用靈泉：恢復 +80 HP、+35% 飽食度，並充能 +2 顆 BP 珠！");
     },
 
     activateLoreMonolith: function(deco) {
@@ -1363,7 +952,7 @@ window.Aetheria = window.Aetheria || {};
 
       if (s.clearedMonoliths[monoKey]) {
         window.Aetheria.Audio.sfxTalkBlip();
-        window.Aetheria.UI.showToast("🗿 此遠古石碑今日已完成知識共鳴！睡覺過夜後可再次感悟。");
+        window.Aetheria.UI.showToast("🗿 此古石碑今日已完成知識共鳴！睡覺過夜後可再次感悟。");
         return;
       }
 
@@ -1371,7 +960,7 @@ window.Aetheria = window.Aetheria || {};
       if (!Bat || !Bat.startForageChallenge) return;
 
       window.Aetheria.Audio.sfxTalkBlip();
-      window.Aetheria.UI.showToast("🗿 觸發【遠古知識共鳴碑】！答對即可獲得石碑秘寶獎勵（答錯不扣血）！");
+      window.Aetheria.UI.showToast("🗿 觸發【遠古石碑】！答對即可獲得石碑秘寶獎勵（答錯不扣血）！");
 
       Bat._pendingMonolithDeco = deco;
       Bat._pendingMonolithKey = monoKey;
@@ -1381,7 +970,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.WorldExpansion = WorldExpansionManager;
 
-  // ================= 8. 掛載館藏屬性加成、木人樁零傷對練與地圖渲染 =================
+  // ================= 8. 掛載館藏屬性加成、木人樁零傷對練與原生短標籤渲染 =================
   function hookSystemsForExpansion() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -1389,7 +978,6 @@ window.Aetheria = window.Aetheria || {};
     const Ren  = window.Aetheria.Renderer;
     const Bat  = window.Aetheria.Battle;
 
-    // 1. 掛載博物館與木人樁永久屬性加成 (ATK / DEF / MaxHP)
     if (St) {
       if (St.getTotalAtk) {
         const origAtk = St.getTotalAtk.bind(St);
@@ -1431,7 +1019,7 @@ window.Aetheria = window.Aetheria || {};
           return museumInterior;
         }
         const m = origGetMap(zoneId);
-        if (m) expandAndEnrichMap(m);
+        if (m) enrichMapNaturally(m);
         return m;
       };
     }
@@ -1445,7 +1033,7 @@ window.Aetheria = window.Aetheria || {};
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
             if (!d || d.cleared) continue;
-            if (Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
+            if (Math.hypot(s.heroX - d.x, s.heroY - d.y) < 42) {
               if (d.isMuseumBuilding || d.isMuseumPedestal) {
                 window.Aetheria.Audio.sfxTalkBlip();
                 WorldExpansionManager.openMuseumModal(d.tab || "trophies");
@@ -1481,9 +1069,9 @@ window.Aetheria = window.Aetheria || {};
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
             if (!d || d.cleared) continue;
-            if (Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
-              if (d.isMuseumBuilding || d.isMuseumPedestal) { hintEl.innerText = "戰利博物館"; return; }
-              if (d.isTrainingDummy) { hintEl.innerText = "練功木人樁"; return; }
+            if (Math.hypot(s.heroX - d.x, s.heroY - d.y) < 42) {
+              if (d.isMuseumBuilding || d.isMuseumPedestal) { hintEl.innerText = "博物館"; return; }
+              if (d.isTrainingDummy) { hintEl.innerText = "木人樁"; return; }
               if (d.isLootCrate)     { hintEl.innerText = "搜刮行囊"; return; }
               if (d.isHealingSpring) { hintEl.innerText = "飲用靈泉"; return; }
               if (d.isLoreMonolith)  { hintEl.innerText = "共鳴石碑"; return; }
@@ -1494,7 +1082,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 2. 掛載戰鬥系統：處理【機關練功木人樁（0 傷害、充能 BP、專屬獎勵）】與【Lv.3 木人樁開局 BP+1】
     if (Bat) {
       if (Bat.startBattle) {
         const origStart = Bat.startBattle.bind(Bat);
@@ -1504,7 +1091,6 @@ window.Aetheria = window.Aetheria || {};
           const s = window.Aetheria.State.data;
           const e = this.enemy;
 
-          // Lv.3 星隕神機木人樁被動加成：每場戰鬥開局額外 +1 BP
           if ((s.dummyLevel || 1) >= 3 && this.mode === "combat") {
             s.bp = Math.min(s.maxBp || 5, (s.bp || 0) + 1);
           }
@@ -1512,7 +1098,7 @@ window.Aetheria = window.Aetheria || {};
           if (mapMonsterNode && mapMonsterNode.isTrainingDummy && e) {
             e.isTrainingDummy = true;
             e.focusWrongBook = Boolean(mapMonsterNode.focusWrongBook);
-            e.atk = 0; // 木人樁攻擊力鎖定為 0！
+            e.atk = 0;
             e.maxShield = 2;
             e.shield = 2;
             e.maxHp = Math.max(80, Math.round(window.Aetheria.State.getTotalAtk() * 2.2));
@@ -1527,7 +1113,6 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      // 木人樁反擊階段：完全不扣主角血量，只顯示「🥋木人樁格擋招式」
       if (Bat.executeEnemyCounterPhase) {
         const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
         Bat.executeEnemyCounterPhase = function(answeredRight) {
@@ -1535,7 +1120,7 @@ window.Aetheria = window.Aetheria || {};
             const s = window.Aetheria.State.data;
             const savedHp = s.hp;
             origCounter(answeredRight);
-            s.hp = savedHp; // 確保 0 受傷！
+            s.hp = savedHp;
             this.updateBattleHUD();
             return;
           }
@@ -1620,37 +1205,35 @@ window.Aetheria = window.Aetheria || {};
             if (!item || !item.data || !item.el) return;
             const d = item.data;
 
+            // ★ 修正：博物館建築外觀隱藏多餘標籤（只保留門口的「博物館」傳送門標籤，與公會/主角/鐵匠帳篷完全一致！）
             if (d.isMuseumBuilding && item.lbl) {
-              item.lbl.style.display = "block";
-              item.lbl.className = "dom-label museum-lbl";
-              item.lbl.innerText = "🏛️戰利品博物館";
+              item.lbl.style.display = "none";
             } else if (d.isMuseumPedestal && item.lbl) {
               item.lbl.style.display = "block";
-              item.lbl.className = "dom-label museum-lbl";
-              item.lbl.innerText = d.name || "🏆展示台";
+              item.lbl.className = "dom-label portal-lbl";
+              item.lbl.innerText = d.name || "展示台";
             } else if (d.isTrainingDummy && item.lbl) {
-              const dLv = (s && s.dummyLevel) || 1;
               item.lbl.style.display = "block";
-              item.lbl.className = "dom-label dummy-lbl";
-              item.lbl.innerText = "🥋木人樁 Lv." + dLv;
+              item.lbl.className = "dom-label portal-lbl";
+              item.lbl.innerText = "木人樁";
             } else if (d.isLootCrate) {
               if (d.cleared || d.opened) {
                 item.el.style.display = "none";
               } else if (item.lbl) {
                 item.lbl.style.display = "block";
-                item.lbl.className = "dom-label crate-lbl";
-                item.lbl.innerText = "🎒探險行囊";
+                item.lbl.className = "dom-label";
+                item.lbl.innerText = "行囊";
               }
             } else if (d.isHealingSpring && item.lbl) {
               const used = Boolean(s.usedSpringsDay && s.usedSpringsDay[(s.dayCount || 1) + "_" + d.id]);
               item.lbl.style.display = "block";
-              item.lbl.className = "dom-label " + (used ? "" : "spring-lbl");
-              item.lbl.innerText = used ? "⛲靈泉(已飲)" : "⛲翡翠靈泉";
+              item.lbl.className = "dom-label " + (used ? "" : "portal-lbl");
+              item.lbl.innerText = used ? "靈泉✓" : "靈泉";
             } else if (d.isLoreMonolith && item.lbl) {
               const done = Boolean(s.clearedMonoliths && s.clearedMonoliths[(s.dayCount || 1) + "_" + d.id]);
               item.lbl.style.display = "block";
-              item.lbl.className = "dom-label " + (done ? "" : "monolith-lbl");
-              item.lbl.innerText = done ? "🗿石碑✓" : "🗿遠古石碑";
+              item.lbl.className = "dom-label " + (done ? "" : "portal-lbl");
+              item.lbl.innerText = done ? "石碑✓" : "古石碑";
             }
           });
         } catch (e) {}
@@ -1666,11 +1249,16 @@ window.Aetheria = window.Aetheria || {};
 
       const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
       if (Maps && Maps.getMap) {
-        Object.keys(ZONE_EXPANSION_SPECS).forEach(function(zId) {
+        const camp = Maps.getMap("camp_hub");
+        if (camp) {
+          camp._worldExpandedToken = null;
+          enrichMapNaturally(camp);
+        }
+        Object.keys(WILD_CURIO_CONFIG).forEach(function(zId) {
           const m = Maps.getMap(zId);
           if (m) {
             m._worldExpandedToken = null;
-            expandAndEnrichMap(m);
+            enrichMapNaturally(m);
           }
         });
       }
@@ -1686,7 +1274,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("World Expansion v9.0 init error:", err);
+      console.error("World Expansion v9.1 init error:", err);
     }
   }
 
