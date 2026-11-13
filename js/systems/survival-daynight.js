@@ -1,14 +1,13 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 24小時制日夜時鐘、精準血量與高密度生態模組 (survival-daynight.js - v8.0)
- * 核心升級：
- *   1. 【日夜時間 24 小時制顯示】：頂部徽章實時顯示「D1 ☀08:00」(破曉05:00 / 白晝08:00 / 黃昏17:00 / 黑夜20:00)，點擊徽章可查看換日倒數
- *   2. 【左上角精準血量 HUD】：「♥ 120/120 + 動態三色迷你血條」，點擊可快速飲用生命藥水
- *   3. 【減慢時間流逝 & 睡袋升級聯動】：野外時間流逝減慢為 0.32x，營地內時間暫停，並自動整合豪華睡袋 (bedLv) 加成
+ * Project J：艾瑟瑞亞的破曉 — 24小時制日夜時鐘、精準血量與高密度生態模組 (survival-daynight.js - v8.8)
+ * Cross-Check 修正：
+ *   1. 直接內建【豪華睡袋 (bedLv)】Lv.1~Lv.3 的睡醒口糧與 BP 獎勵，解決跨模組載入時序問題
+ *   2. 強化魔物 AI 地形邊界：防止魔物走入營地南側大海或穿過推石密室石牆
+ *   3. 完整包含 24 小時制時鐘、0.32x 減慢時間流逝、1.42x 主角高速移動與防重疊隨機素材
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 0. 手機全螢幕自動適配器 =================
   function setupFullScreenAutoFit() {
     function fitAppToScreen() {
       const app = document.getElementById("app-container");
@@ -56,25 +55,25 @@ window.Aetheria = window.Aetheria || {};
     setTimeout(fitAppToScreen, 100);
   }
 
-  // ================= 1. 注入介面優化 CSS =================
   function injectSurvivalStylesAndDOM() {
-    if (!document.getElementById("survival-v71-styles")) {
+    if (!document.getElementById("survival-v88-styles")) {
       const style = document.createElement("style");
-      style.id = "survival-v71-styles";
+      style.id = "survival-v88-styles";
       style.textContent = `
         #hud-hearts-box {
           position: absolute !important;
           top: 4px !important;
-          left: 5px !important;
+          left: 4px !important;
           z-index: 25 !important;
           display: flex !important;
           flex-direction: column !important;
           justify-content: center !important;
           background: rgba(20, 16, 19, 0.92) !important;
-          border: 2px solid #f5b700 !important;
+          border: 1.5px solid #f5b700 !important;
           border-radius: 6px !important;
-          padding: 2px 6px 3px !important;
-          min-width: 78px !important;
+          padding: 2px 5px 3px !important;
+          min-width: 64px !important;
+          max-width: 72px !important;
           box-shadow: 0 2px 6px rgba(0,0,0,0.75) !important;
           pointer-events: auto !important;
           cursor: pointer !important;
@@ -91,21 +90,21 @@ window.Aetheria = window.Aetheria || {};
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 4px;
-          font-size: 11px;
+          gap: 2px;
+          font-size: 9.5px;
           font-weight: 900;
           color: #ffffff;
           line-height: 1.1;
           text-shadow: 1px 1px 0 #000;
         }
         .hud-hp-top-row img {
-          width: 12px !important;
-          height: 12px !important;
+          width: 10px !important;
+          height: 10px !important;
           image-rendering: pixelated;
         }
         .hud-hp-mini-track {
           width: 100%;
-          height: 5px;
+          height: 4px;
           background: #2b2129;
           border: 1px solid #000;
           border-radius: 3px;
@@ -118,20 +117,22 @@ window.Aetheria = window.Aetheria || {};
         }
 
         #hud-overlay {
-          top: 5px !important;
-          left: 88px !important;
-          right: 4px !important;
+          top: 4px !important;
+          left: 76px !important;
+          right: 3px !important;
           display: flex !important;
           flex-wrap: nowrap !important;
           justify-content: space-between !important;
           align-items: center !important;
           gap: 2px !important;
+          overflow: hidden !important;
         }
         #hud-overlay .na-badge {
-          padding: 2px 4px !important;
-          font-size: 10px !important;
-          line-height: 1.2 !important;
+          padding: 2px 3.5px !important;
+          font-size: 9.5px !important;
+          line-height: 1.15 !important;
           white-space: nowrap !important;
+          flex-shrink: 1 !important;
         }
         #hud-time {
           pointer-events: auto !important;
@@ -169,7 +170,6 @@ window.Aetheria = window.Aetheria || {};
           gap: 8px !important;
           box-sizing: border-box !important;
         }
-
         #panel-explore .dpad {
           display: grid !important;
           grid-template-columns: repeat(3, 52px) !important;
@@ -183,7 +183,6 @@ window.Aetheria = window.Aetheria || {};
           height: 46px !important;
           font-size: 20px !important;
         }
-
         #panel-explore .action-cluster {
           display: flex !important;
           flex-direction: column !important;
@@ -195,7 +194,6 @@ window.Aetheria = window.Aetheria || {};
           max-width: 150px !important;
           flex-shrink: 0 !important;
         }
-
         #panel-explore .btn-action-a {
           width: 76px !important;
           height: 76px !important;
@@ -203,7 +201,6 @@ window.Aetheria = window.Aetheria || {};
         }
         #panel-explore .action-main-txt { font-size: 16px !important; }
         #panel-explore .action-sub-txt  { font-size: 10.5px !important; }
-
         #panel-explore .survival-mini-grid {
           display: grid !important;
           grid-template-columns: 1fr 1fr !important;
@@ -241,7 +238,6 @@ window.Aetheria = window.Aetheria || {};
         #sleep-transition-overlay.phase-dusk-night {
           background: linear-gradient(180deg, #09070f 0%, #191233 60%, #3c096c 100%);
         }
-
         .sleep-sky-stage {
           position: relative;
           width: 180px;
@@ -315,12 +311,6 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 2. 24 小時制日夜時鐘換算器與短標籤工具 =================
-  // 將 worldClock (0 ~ 359) 精準換算為 24 小時制時間字串 (HH:MM)，與四個日夜時段完全對齊：
-  //   🌅 破曉 (0~44)    -> 05:00 ~ 07:59
-  //   ☀ 白晝 (45~219)  -> 08:00 ~ 16:59
-  //   🌇 黃昏 (220~269) -> 17:00 ~ 19:59
-  //   🌙 黑夜 (270~359) -> 20:00 ~ 04:59
   function formatWorldClock24H(worldClock) {
     const c = ((worldClock || 0) % 360 + 360) % 360;
     let totalMinutes = 8 * 60;
@@ -336,7 +326,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     const hh = Math.floor(totalMinutes / 60) % 24;
-    // 以 10 分鐘為跳動單位，閱讀更清晰穩定
     const mm = Math.floor((totalMinutes % 60) / 10) * 10;
     const hhStr = hh < 10 ? ("0" + hh) : String(hh);
     const mmStr = mm < 10 ? ("0" + mm) : String(mm);
@@ -380,7 +369,6 @@ window.Aetheria = window.Aetheria || {};
       .replace("無盡試煉之塔", "試煉塔");
   }
 
-  // ================= 3. 高密度魔物群與隨機素材生態池 =================
   const ZONE_ECOLOGY_POOLS = {
     camp_hub: {
       nodeCount: 7,
@@ -540,7 +528,7 @@ window.Aetheria = window.Aetheria || {};
 
       let hitDeco = false;
       (mapObj.decos || []).forEach(function(d) {
-        const radius = d.isPuzzleElement ? 48 : ((d.w && d.w > 40) ? 44 : 32);
+        const radius = d.isPuzzleElement ? 52 : ((d.w && d.w > 40) ? 44 : 32);
         if (Math.hypot(cx - (d.x + (d.w || 26) / 2), cy - (d.y + (d.h || 26) / 2)) < radius) hitDeco = true;
       });
       if (hitDeco) continue;
@@ -585,7 +573,7 @@ window.Aetheria = window.Aetheria || {};
     const isNight = Boolean(phase.isNight);
     const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
 
-    const chests = (mapObj.nodes || []).filter(function(n) { return n.type === "chest"; });
+    const chests = (mapObj.nodes || []).filter(function(n) { return n.type === "chest" || n.isWeatherNode; });
     const activeNodes = onlyReplenishNodes
       ? (mapObj.nodes || []).filter(function(n) { return !n.opened; })
       : chests.slice();
@@ -704,7 +692,6 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 4. 註冊主角帳篷、睡袋與書桌像素圖示 =================
   function registerCustomTentSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -797,7 +784,6 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 5. 注入【主角專屬帳篷】與全地圖動態生態掛載 =================
   function buildHeroTentInterior() {
     return {
       id: "tent_hero",
@@ -910,7 +896,6 @@ window.Aetheria = window.Aetheria || {};
     });
   }
 
-  // ================= 6. 睡袋互動、日出漸變動畫與書桌溫習功能 =================
   const SurvivalDayNight = {
     isSleepingAnim: false,
 
@@ -919,6 +904,7 @@ window.Aetheria = window.Aetheria || {};
       const S = window.Aetheria.Data.Sprites;
       const phase = window.Aetheria.State.getTimePhase();
       const timeStr = formatWorldClock24H(s.worldClock);
+      const bedLv = (s.campUpgrades && s.campUpgrades.bedLv) || 0;
 
       window.Aetheria.UI.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML =
@@ -930,9 +916,9 @@ window.Aetheria = window.Aetheria || {};
       const statusCard = document.createElement("div");
       statusCard.className = "sys-card-scroll";
       statusCard.innerHTML =
-        '<b>🛏️ 溫暖的個人行軍睡袋</b>' +
+        '<b>🛏️ 溫暖的個人行軍睡袋 ' + (bedLv > 0 ? ('(已升至 Lv.' + bedLv + ')') : '') + '</b>' +
         '<div style="font-size:12px; margin-top:4px; color:#5c3824;">' +
-          '在自己的睡袋中休息，能將<b>生命值與飽食度 100% 恢復</b>，睡醒後獲得<b>【晨間活力】</b>，並讓全大陸在不同位置重新長出隨機素材！' +
+          '在自己的睡袋中休息，能將<b>生命值與飽食度 100% 恢復</b>，睡醒後獲得 <b>' + (3 + bedLv) + ' 場【晨間活力】</b>，並讓全大陸在不同位置重新長出隨機素材！' +
         '</div>';
       body.appendChild(statusCard);
 
@@ -1011,8 +997,17 @@ window.Aetheria = window.Aetheria || {};
         if (titleEl) titleEl.innerText = "🌅 06:00 破曉時分，晨曦照亮艾瑟瑞亞大陸……";
 
         window.Aetheria.State.sleepUntilMorning();
+
+        // ★ Cross-Check 修正：直接在此結算豪華睡袋 (bedLv) 的所有額外口糧與 BP 獎勵！
         const bedLv = (s.campUpgrades && s.campUpgrades.bedLv) || 0;
         s.wellRestedBattles = 3 + bedLv;
+        if (bedLv >= 3) {
+          s.bp = Math.min(s.maxBp || 5, (s.bp || 0) + 1);
+          s.inventory.rationFish = (s.inventory.rationFish || 0) + 1;
+        } else if (bedLv > 0) {
+          s.inventory.rationHerb = (s.inventory.rationHerb || 0) + bedLv;
+        }
+
         window.Aetheria.State.save();
         window.Aetheria.Audio.sfxLevelUp();
         window.Aetheria.UI.updateAllHud();
@@ -1076,7 +1071,7 @@ window.Aetheria = window.Aetheria || {};
           celestial.innerText = "🌙";
           celestial.style.top = "12px";
         }
-        s.worldClock = 278; // 對應晚上 20:30
+        s.worldClock = 278;
         window.Aetheria.State.restoreHunger(100, s.maxHp);
         window.Aetheria.Data.Maps.refreshAllResources();
         if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
@@ -1142,7 +1137,6 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Survival = SurvivalDayNight;
 
-  // ================= 7. 掛載 24 小時制時間顯示、減慢時間流逝 (0.32x)、精準血量與激戰 AI =================
   function hookSystemsForSurvivalV71() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
@@ -1335,178 +1329,129 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    if (Ren) {
-      Ren.updateHeartsDOM = function(s, Sprites) {
-        if (!s) return;
-        const curHp = Math.max(0, Math.round(s.hp || 0));
-        const maxHp = Math.max(1, Math.round(s.maxHp || 100));
-        const stateKey = curHp + "/" + maxHp;
-        if (this.lastHeartsState === stateKey) return;
-        this.lastHeartsState = stateKey;
+    if (Ren && Ren.renderWorld) {
+      const origRenderWorld = Ren.renderWorld.bind(Ren);
+      Ren.renderWorld = function() {
+        origRenderWorld();
+        try {
+          const s = window.Aetheria.State.data;
+          const isNight = window.Aetheria.State.getTimePhase().isNight;
+          const dnEl = document.getElementById("daynight-overlay");
+          if (dnEl && s && s.currentZone === "tent_hero") {
+            dnEl.className = "dn-day";
+          }
 
-        const box = document.getElementById("hud-hearts-box");
-        if (!box) return;
+          Object.keys(this.domPool.portals || {}).forEach(function(pId) {
+            const item = Ren.domPool.portals[pId];
+            if (!item || !item.lbl || !item.data) return;
+            const p = item.data;
+            const shortPName = simplifyPortalName(p.name);
+            const bottomCls = p.labelBottom ? " lbl-bottom" : "";
 
-        const pct = Math.max(0, Math.min(100, Math.round((curHp / maxHp) * 100)));
-        const barColor = (pct >= 60) ? "#5ac54f" : (pct >= 30) ? "#f5b700" : "#ff595e";
-        const heartUrl = (Sprites && Sprites.getDataURL) ? Sprites.getDataURL("heart") : "";
-
-        if (pct < 30) box.classList.add("hp-low-pulse");
-        else box.classList.remove("hp-low-pulse");
-
-        box.title = "點擊可快速飲用生命藥水";
-        box.innerHTML =
-          '<div class="hud-hp-top-row">' +
-            (heartUrl ? '<img src="' + heartUrl + '" alt="HP">' : '<span style="color:#ff595e;">♥</span>') +
-            '<span>' + curHp + '/' + maxHp + '</span>' +
-          '</div>' +
-          '<div class="hud-hp-mini-track">' +
-            '<div class="hud-hp-mini-fill" style="width:' + pct + '%; background:' + barColor + ';"></div>' +
-          '</div>';
-
-        if (!box._boundQuickHeal) {
-          box._boundQuickHeal = true;
-          box.onclick = function() {
-            const st = window.Aetheria.State.data;
-            if (st.hp >= st.maxHp) {
-              window.Aetheria.UI.showToast("❤️ 當前生命值已滿 (" + st.hp + "/" + st.maxHp + ")！");
-              return;
-            }
-            if ((st.inventory.potionHeal || 0) > 0) {
-              window.Aetheria.Battle.useHealPotion();
-              Ren.lastHeartsState = "";
-              Ren.updateHeartsDOM(st, window.Aetheria.Data.Sprites);
-            } else {
-              window.Aetheria.UI.showToast("❤️ 當前生命值：" + st.hp + "/" + st.maxHp + "（可按右下角「口糧」進食或回營地睡覺恢復）");
-            }
-          };
-        }
-      };
-
-      if (Ren.renderWorld) {
-        const origRenderWorld = Ren.renderWorld.bind(Ren);
-        Ren.renderWorld = function() {
-          origRenderWorld();
-          try {
-            const s = window.Aetheria.State.data;
-            const isNight = window.Aetheria.State.getTimePhase().isNight;
-            const dnEl = document.getElementById("daynight-overlay");
-            if (dnEl && s && s.currentZone === "tent_hero") {
-              dnEl.className = "dn-day";
-            }
-
-            Object.keys(this.domPool.portals || {}).forEach(function(pId) {
-              const item = Ren.domPool.portals[pId];
-              if (!item || !item.lbl || !item.data) return;
-              const p = item.data;
-              const shortPName = simplifyPortalName(p.name);
-              const bottomCls = p.labelBottom ? " lbl-bottom" : "";
-
-              if (p.linkedNpcId && window.Aetheria.Data.getNpcMarkerState) {
-                const marker = window.Aetheria.Data.getNpcMarkerState(s, p.linkedNpcId);
-                if (marker === "ready") {
-                  item.lbl.className = "dom-label quest-ready-lbl" + bottomCls;
-                  item.lbl.innerText = "✓ " + shortPName;
-                } else if (marker === "avail") {
-                  item.lbl.className = "dom-label quest-avail-lbl" + bottomCls;
-                  item.lbl.innerText = "! " + shortPName;
-                } else if (marker === "active") {
-                  item.lbl.className = "dom-label quest-active-lbl" + bottomCls;
-                  item.lbl.innerText = "⏳ " + shortPName;
-                } else {
-                  item.lbl.className = "dom-label portal-lbl" + bottomCls;
-                  item.lbl.innerText = shortPName;
-                }
+            if (p.linkedNpcId && window.Aetheria.Data.getNpcMarkerState) {
+              const marker = window.Aetheria.Data.getNpcMarkerState(s, p.linkedNpcId);
+              if (marker === "ready") {
+                item.lbl.className = "dom-label quest-ready-lbl" + bottomCls;
+                item.lbl.innerText = "✓ " + shortPName;
+              } else if (marker === "avail") {
+                item.lbl.className = "dom-label quest-avail-lbl" + bottomCls;
+                item.lbl.innerText = "! " + shortPName;
+              } else if (marker === "active") {
+                item.lbl.className = "dom-label quest-active-lbl" + bottomCls;
+                item.lbl.innerText = "⏳ " + shortPName;
               } else {
                 item.lbl.className = "dom-label portal-lbl" + bottomCls;
                 item.lbl.innerText = shortPName;
               }
-            });
+            } else {
+              item.lbl.className = "dom-label portal-lbl" + bottomCls;
+              item.lbl.innerText = shortPName;
+            }
+          });
 
-            Object.keys(this.domPool.decos || {}).forEach(function(k) {
-              const item = Ren.domPool.decos[k];
-              if (!item || !item.lbl || !item.data) return;
-              const d = item.data;
+          Object.keys(this.domPool.decos || {}).forEach(function(k) {
+            const item = Ren.domPool.decos[k];
+            if (!item || !item.lbl || !item.data) return;
+            const d = item.data;
 
-              if (d.isHeroBed) {
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label bed-lbl";
-                item.lbl.innerText = "睡袋";
-              } else if (d.isHeroDesk) {
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label portal-lbl";
-                item.lbl.innerText = "書桌";
-              } else if (d.isCookPot) {
-                item.lbl.innerText = "料理鍋";
-              } else if (d.isFishingSpot) {
-                item.lbl.innerText = "釣魚點";
-              } else if (d.isBrazier && item.lbl.style.display !== "none") {
-                item.lbl.innerText = "火盆";
-              } else if (d.isSealPillar) {
-                const unsealed = s.unlockedSeals && s.unlockedSeals[d.id];
-                item.lbl.innerText = unsealed ? "封印柱✓" : "封印柱";
-              } else if (d.isProjectSite) {
-                const built = Boolean(s.projectsBuilt && s.projectsBuilt[d.projectId]);
-                const shortProj = (d.name || "工程").replace("巴爾的受損", "").replace("極地防風", "");
-                if (!built) {
-                  item.lbl.innerText = "🔨" + shortProj;
-                } else if (d.isClimbLadder) {
-                  item.lbl.innerText = "木梯";
-                } else if (d.projectId === "proj_z4_shelter") {
-                  item.lbl.innerText = "防風屋";
-                } else if (d.projectId === "proj_camp_forge") {
-                  item.lbl.innerText = "鍛造爐";
-                }
+            if (d.isHeroBed) {
+              item.lbl.style.display = "block";
+              item.lbl.className = "dom-label bed-lbl";
+              item.lbl.innerText = "睡袋";
+            } else if (d.isHeroDesk) {
+              item.lbl.style.display = "block";
+              item.lbl.className = "dom-label portal-lbl";
+              item.lbl.innerText = "書桌";
+            } else if (d.isCookPot) {
+              item.lbl.innerText = "料理鍋";
+            } else if (d.isFishingSpot) {
+              item.lbl.innerText = "釣魚點";
+            } else if (d.isBrazier && item.lbl.style.display !== "none") {
+              item.lbl.innerText = "火盆";
+            } else if (d.isSealPillar) {
+              const unsealed = s.unlockedSeals && s.unlockedSeals[d.id];
+              item.lbl.innerText = unsealed ? "封印柱✓" : "封印柱";
+            } else if (d.isProjectSite) {
+              const built = Boolean(s.projectsBuilt && s.projectsBuilt[d.projectId]);
+              const shortProj = (d.name || "工程").replace("巴爾的受損", "").replace("極地防風", "");
+              if (!built) {
+                item.lbl.innerText = "🔨" + shortProj;
+              } else if (d.isClimbLadder) {
+                item.lbl.innerText = "木梯";
+              } else if (d.projectId === "proj_z4_shelter") {
+                item.lbl.innerText = "防風屋";
+              } else if (d.projectId === "proj_camp_forge") {
+                item.lbl.innerText = "鍛造爐";
               }
-            });
+            }
+          });
 
-            Object.keys(this.domPool.npcs || {}).forEach(function(npcId) {
-              const item = Ren.domPool.npcs[npcId];
-              if (!item || !item.lbl || !item.data) return;
-              const npc = item.data;
-              const shortName = npc.name.split("・")[1] || npc.name;
-              const marker = window.Aetheria.Data.getNpcMarkerState ? window.Aetheria.Data.getNpcMarkerState(s, npc.id) : null;
+          Object.keys(this.domPool.npcs || {}).forEach(function(npcId) {
+            const item = Ren.domPool.npcs[npcId];
+            if (!item || !item.lbl || !item.data) return;
+            const npc = item.data;
+            const shortName = npc.name.split("・")[1] || npc.name;
+            const marker = window.Aetheria.Data.getNpcMarkerState ? window.Aetheria.Data.getNpcMarkerState(s, npc.id) : null;
 
-              if (marker === "ready") {
-                item.lbl.className = "dom-label quest-ready-lbl";
-                item.lbl.innerText = "✓ " + shortName;
-              } else if (marker === "avail") {
-                item.lbl.className = "dom-label quest-avail-lbl";
-                item.lbl.innerText = "! " + shortName;
-              } else if (marker === "active") {
-                item.lbl.className = "dom-label quest-active-lbl";
-                item.lbl.innerText = "⏳ " + shortName;
-              } else {
-                item.lbl.className = "dom-label";
-                item.lbl.innerText = shortName;
-              }
-            });
+            if (marker === "ready") {
+              item.lbl.className = "dom-label quest-ready-lbl";
+              item.lbl.innerText = "✓ " + shortName;
+            } else if (marker === "avail") {
+              item.lbl.className = "dom-label quest-avail-lbl";
+              item.lbl.innerText = "! " + shortName;
+            } else if (marker === "active") {
+              item.lbl.className = "dom-label quest-active-lbl";
+              item.lbl.innerText = "⏳ " + shortName;
+            } else {
+              item.lbl.className = "dom-label";
+              item.lbl.innerText = shortName;
+            }
+          });
 
-            Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
-              const item = Ren.domPool.monsters[mId];
-              if (!item || !item.lbl || !item.data || item.data.alive === false) return;
-              const m = item.data;
-              const effLv = isNight ? (m.lv + 3) : m.lv;
-              const shortMonName = (m.name || "").replace(/^翠風|^河畔|^岩窟|^流沙|^深海|^霜語|^紅蓮/, "");
+          Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
+            const item = Ren.domPool.monsters[mId];
+            if (!item || !item.lbl || !item.data || item.data.alive === false) return;
+            const m = item.data;
+            const effLv = isNight ? (m.lv + 3) : m.lv;
+            const shortMonName = (m.name || "").replace(/^翠風|^河畔|^岩窟|^流沙|^深海|^霜語|^紅蓮/, "");
 
-              if (m.aggro) {
-                item.lbl.className = "dom-label aggro-lbl";
-                item.lbl.innerText = "!" + shortMonName + " Lv." + effLv;
-              } else if (m.reqSeals && m.reqSeals.length > 0) {
-                const allUnsealed = m.reqSeals.every(function(sid) { return Boolean(s.unlockedSeals && s.unlockedSeals[sid]); });
-                item.lbl.className = "dom-label " + (allUnsealed ? "portal-lbl" : "lock-lbl");
-                item.lbl.innerText = shortMonName + (allUnsealed ? "" : "[封印]");
-              } else if (isNight) {
-                item.lbl.className = "dom-label night-fiend-lbl";
-                item.lbl.innerText = "🌙" + shortMonName + " Lv." + effLv;
-              } else {
-                item.lbl.className = "dom-label";
-                item.lbl.innerText = (m.isShiny ? "★" : "") + shortMonName + " Lv." + effLv;
-              }
-            });
-          } catch (e) {}
-        };
-      }
+            if (m.aggro) {
+              item.lbl.className = "dom-label aggro-lbl";
+              item.lbl.innerText = "!" + shortMonName + " Lv." + effLv;
+            } else if (m.reqSeals && m.reqSeals.length > 0) {
+              const allUnsealed = m.reqSeals.every(function(sid) { return Boolean(s.unlockedSeals && s.unlockedSeals[sid]); });
+              item.lbl.className = "dom-label " + (allUnsealed ? "portal-lbl" : "lock-lbl");
+              item.lbl.innerText = shortMonName + (allUnsealed ? "" : "[封印]");
+            } else if (isNight) {
+              item.lbl.className = "dom-label night-fiend-lbl";
+              item.lbl.innerText = "🌙" + shortMonName + " Lv." + effLv;
+            } else {
+              item.lbl.className = "dom-label";
+              item.lbl.innerText = (m.isShiny ? "★" : "") + shortMonName + " Lv." + effLv;
+            }
+          });
+        } catch (e) {}
+      };
     }
 
     if (Bat && Bat.startBattle) {
@@ -1575,14 +1520,13 @@ window.Aetheria = window.Aetheria || {};
           lvEl.innerHTML = S.iconHtml("icon_sword") + "Lv." + s.lv;
         }
 
-        // ★ 頂部日夜徽章：顯示「D1 ☀08:00」（若有火把則附加 🔥步數）
         const timeEl = document.getElementById("hud-time");
         if (timeEl && window.Aetheria.State.getTimePhase) {
           const phase = window.Aetheria.State.getTimePhase();
           const clockStr = formatWorldClock24H(s.worldClock);
           const pIcon = (phase.id === "night") ? "🌙" : (phase.id === "dusk") ? "🌇" : (phase.id === "dawn") ? "🌅" : "☀";
-          const torchTag = (s.torchTicks && s.torchTicks > 0) ? (" 🔥" + s.torchTicks) : "";
-          timeEl.innerText = "D" + (s.dayCount || 1) + " " + pIcon + clockStr + torchTag;
+          const torchTag = (s.torchTicks && s.torchTicks > 0) ? ("🔥" + s.torchTicks) : "";
+          timeEl.innerText = "D" + (s.dayCount || 1) + pIcon + clockStr + torchTag;
 
           if (!timeEl._boundTimeClick) {
             timeEl._boundTimeClick = true;
@@ -1595,11 +1539,6 @@ window.Aetheria = window.Aetheria || {};
               );
             };
           }
-        }
-
-        if (window.Aetheria.Renderer && window.Aetheria.Renderer.updateHeartsDOM) {
-          window.Aetheria.Renderer.lastHeartsState = "";
-          window.Aetheria.Renderer.updateHeartsDOM(s, S);
         }
       };
 
@@ -1614,7 +1553,7 @@ window.Aetheria = window.Aetheria || {};
           zoneBadge.className = "na-badge danger-safe";
           zoneBadge.innerText = shortZ;
         } else {
-          zoneBadge.innerText = shortZ + " Lv." + (mapObj.recLv || 1);
+          zoneBadge.innerText = shortZ + "(" + (mapObj.recLv || 1) + ")";
         }
       };
     }
@@ -1645,7 +1584,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Survival v8.0 module init error:", err);
+      console.error("Survival v8.8 module init error:", err);
     }
   }
 
