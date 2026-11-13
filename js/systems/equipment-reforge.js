@@ -1,18 +1,18 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 鐵匠金幣詞條洗煉與營地領地升級模組 (equipment-reforge.js - v7.6)
- * 模組化獨立擴充檔：
- *   1. 為工坊新增【✨洗煉/領地】分頁，讓玩家消耗戰鬥與航海賺取的金幣（不影響任務素材採集）
- *   2. 支援武器與防具隨機洗煉 4 大稀有度（普通/稀有/史詩/傳說）共 12 種強大戰鬥與求生詞條
- *   3. 支援消耗金幣升級營地三大設施：【豪華行軍睡袋】、【秘銀料理鍋】與【鍍金順風船帆】
+ * Project J：艾瑟瑞亞的破曉 — 隨身工坊、高階金幣洗煉機率與領地升級模組 (equipment-reforge.js - v7.7)
+ * 修改重點：
+ *   1. 【隨身工坊】：解除營地區域限制，在任何地圖點擊【工坊】均可直接鍛造、升級工具、加工與洗煉
+ *   2. 【提高金幣消耗】：洗煉費用提升至 320G~800G/次；營地領地升級費用提升至 500G~3500G
+ *   3. 【調降稀有至傳說機率】：普通 72% ｜ 稀有 18% ｜ 史詩 8% ｜ 傳說 2%
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
   // ================= 1. 注入詞條稀有度色彩與洗煉介面 CSS =================
   function injectReforgeStyles() {
-    if (document.getElementById("reforge-v76-styles")) return;
+    if (document.getElementById("reforge-v77-styles")) return;
     const style = document.createElement("style");
-    style.id = "reforge-v76-styles";
+    style.id = "reforge-v77-styles";
     style.textContent = `
       .affix-tag {
         display: inline-block;
@@ -47,33 +47,45 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 定義武器與防具洗煉詞條庫 =================
+  // ================= 2. 定義武器與防具洗煉詞條庫（普通72% / 稀有18% / 史詩8% / 傳說2%） =================
   const WEAPON_AFFIXES = [
-    { id: "w_sharp",   name: "鋒利之", tier: 1, tierName: "普通", weight: 30, atkMult: 1.10, desc: "基礎攻擊力 +10%" },
-    { id: "w_vital",   name: "生機之", tier: 2, tierName: "稀有", weight: 24, atkMult: 1.12, healOnHit: 18, desc: "攻擊力 +12%，每次答對恢復 +18 HP" },
-    { id: "w_night",   name: "夜獵之", tier: 3, tierName: "史詩", weight: 18, atkMult: 1.18, nightBonus: 1.30, desc: "攻擊力 +18%，黑夜戰鬥傷害額外 +30%" },
-    { id: "w_gale",    name: "疾風之", tier: 3, tierName: "史詩", weight: 15, atkMult: 1.15, extraBp: 1, desc: "攻擊力 +15%，每次答對額外充能 +1 顆 BP" },
-    { id: "w_breaker", name: "破曉之", tier: 4, tierName: "傳說", weight: 8,  atkMult: 1.25, extraBreak: 1, desc: "【傳說】攻擊力 +25%，每次答對額外削盾 +1！" },
-    { id: "w_vamp",    name: "龍魂之", tier: 4, tierName: "傳說", weight: 5,  atkMult: 1.28, healOnHit: 35, desc: "【傳說】攻擊力 +28%，每次答對恢復 +35 HP！" }
+    // 普通 (Tier 1) — 總權重 72%
+    { id: "w_sharp1",  name: "磨石之", tier: 1, tierName: "普通", weight: 28,  atkMult: 1.05, desc: "基礎攻擊力 +5%" },
+    { id: "w_sharp2",  name: "鋒利之", tier: 1, tierName: "普通", weight: 24,  atkMult: 1.08, desc: "基礎攻擊力 +8%" },
+    { id: "w_sharp3",  name: "精鋼之", tier: 1, tierName: "普通", weight: 20,  atkMult: 1.10, desc: "基礎攻擊力 +10%" },
+    // 稀有 (Tier 2) — 總權重 18%
+    { id: "w_vital",   name: "生機之", tier: 2, tierName: "稀有", weight: 18,  atkMult: 1.12, healOnHit: 16, desc: "攻擊力 +12%，每次答對恢復 +16 HP" },
+    // 史詩 (Tier 3) — 總權重 8%
+    { id: "w_night",   name: "夜獵之", tier: 3, tierName: "史詩", weight: 4.5, atkMult: 1.16, nightBonus: 1.25, desc: "攻擊力 +16%，黑夜戰鬥傷害額外 +25%" },
+    { id: "w_gale",    name: "疾風之", tier: 3, tierName: "史詩", weight: 3.5, atkMult: 1.15, extraBp: 1, desc: "攻擊力 +15%，每次答對額外充能 +1 顆 BP" },
+    // 傳說 (Tier 4) — 總權重 2%
+    { id: "w_breaker", name: "破曉之", tier: 4, tierName: "傳說", weight: 1.2, atkMult: 1.25, extraBreak: 1, desc: "【傳說】攻擊力 +25%，每次答對額外削盾 +1！" },
+    { id: "w_vamp",    name: "龍魂之", tier: 4, tierName: "傳說", weight: 0.8, atkMult: 1.28, healOnHit: 35, desc: "【傳說】攻擊力 +28%，每次答對恢復 +35 HP！" }
   ];
 
   const ARMOR_AFFIXES = [
-    { id: "a_sturdy",  name: "堅固之", tier: 1, tierName: "普通", weight: 30, defMult: 1.12, hpFlat: 30,  desc: "防禦力 +12%，最大生命 +30" },
-    { id: "a_satiety", name: "飽食之", tier: 2, tierName: "稀有", weight: 24, defMult: 1.12, saveHunger: true, desc: "防禦力 +12%，野外移動與採集有 50% 機率不耗飽食度" },
-    { id: "a_scholar", name: "博學之", tier: 3, tierName: "史詩", weight: 18, defMult: 1.18, expGoldBonus: 0.25, desc: "防禦力 +18%，戰鬥經驗與金幣獎勵 +25%" },
-    { id: "a_thorn",   name: "荊棘之", tier: 3, tierName: "史詩", weight: 15, defMult: 1.20, reflectRatio: 0.45, desc: "防禦力 +20%，受擊時自動反彈敵人 45% 攻擊傷害" },
-    { id: "a_immort",  name: "不朽之", tier: 4, tierName: "傳說", weight: 8,  defMult: 1.28, hpFlat: 130, desc: "【傳說】防禦力 +28%，最大生命 +130！" },
-    { id: "a_aegis",   name: "聖佑之", tier: 4, tierName: "傳說", weight: 5,  defMult: 1.25, hpFlat: 90, saveHunger: true, desc: "【傳說】防禦+25%、HP+90，且飽食消耗減半！" }
+    // 普通 (Tier 1) — 總權重 72%
+    { id: "a_sturdy1", name: "粗布之", tier: 1, tierName: "普通", weight: 28,  defMult: 1.05, hpFlat: 15,  desc: "防禦力 +5%，最大生命 +15" },
+    { id: "a_sturdy2", name: "堅固之", tier: 1, tierName: "普通", weight: 24,  defMult: 1.08, hpFlat: 25,  desc: "防禦力 +8%，最大生命 +25" },
+    { id: "a_sturdy3", name: "厚甲之", tier: 1, tierName: "普通", weight: 20,  defMult: 1.10, hpFlat: 35,  desc: "防禦力 +10%，最大生命 +35" },
+    // 稀有 (Tier 2) — 總權重 18%
+    { id: "a_satiety", name: "飽食之", tier: 2, tierName: "稀有", weight: 18,  defMult: 1.12, saveHunger: true, desc: "防禦力 +12%，野外移動與採集有 50% 機率不耗飽食度" },
+    // 史詩 (Tier 3) — 總權重 8%
+    { id: "a_scholar", name: "博學之", tier: 3, tierName: "史詩", weight: 4.5, defMult: 1.16, expGoldBonus: 0.20, desc: "防禦力 +16%，戰鬥經驗與金幣獎勵 +20%" },
+    { id: "a_thorn",   name: "荊棘之", tier: 3, tierName: "史詩", weight: 3.5, defMult: 1.18, reflectRatio: 0.40, desc: "防禦力 +18%，受擊時自動反彈敵人 40% 攻擊傷害" },
+    // 傳說 (Tier 4) — 總權重 2%
+    { id: "a_immort",  name: "不朽之", tier: 4, tierName: "傳說", weight: 1.2, defMult: 1.28, hpFlat: 130, desc: "【傳說】防禦力 +28%，最大生命 +130！" },
+    { id: "a_aegis",   name: "聖佑之", tier: 4, tierName: "傳說", weight: 0.8, defMult: 1.25, hpFlat: 90, saveHunger: true, desc: "【傳說】防禦+25%、HP+90，且飽食消耗減半！" }
   ];
 
-  // 營地領地升級項目
+  // 營地領地升級項目（提高金幣門檻）
   const CAMP_UPGRADES = {
     bedLv: {
       id: "bedLv",
       name: "豪華羽絨行軍睡袋",
       icon: "sleeping_bag",
       maxLv: 3,
-      costs: { 1: 120, 2: 280, 3: 550 },
+      costs: { 1: 500, 2: 1200, 3: 2500 },
       descs: {
         0: "尚未升級（睡醒獲得 3 場晨間活力）。",
         1: "Lv.1 保暖絨墊：睡醒獲得 4 場【晨間活力】，並自動獲贈【微光菇乾 x1】！",
@@ -86,7 +98,7 @@ window.Aetheria = window.Aetheria || {};
       name: "秘銀高壓料理鍋",
       icon: "icon_potion",
       maxLv: 3,
-      costs: { 1: 150, 2: 320, 3: 600 },
+      costs: { 1: 600, 2: 1400, 3: 2800 },
       descs: {
         0: "尚未升級（營地料理效果持續 3 場戰鬥）。",
         1: "Lv.1 厚底銅鍋：營地料理效果延長至 4 場戰鬥！",
@@ -99,7 +111,7 @@ window.Aetheria = window.Aetheria || {};
       name: "鍍金順風船帆與打撈網",
       icon: "ship_galleon",
       maxLv: 3,
-      costs: { 1: 180, 2: 380, 3: 700 },
+      costs: { 1: 800, 2: 1800, 3: 3500 },
       descs: {
         0: "尚未升級（標準海上航行速度與打撈收穫）。",
         1: "Lv.1 順風副帆：海上開船速度 +12%，打撈漂流桶金幣 +25 G！",
@@ -109,28 +121,39 @@ window.Aetheria = window.Aetheria || {};
     }
   };
 
+  // 嚴格按照 72% / 18% / 8% / 2% 獨立權重抽取（若抽中同階同詞條則於同階內輪換，絕不灌水高階機率）
   function rollWeightedAffix(pool, currentId) {
-    const candidates = pool.filter(function(a) { return a.id !== currentId; });
-    const list = candidates.length > 0 ? candidates : pool;
     let totalW = 0;
-    list.forEach(function(a) { totalW += a.weight; });
+    pool.forEach(function(a) { totalW += a.weight; });
     let r = Math.random() * totalW;
-    for (let i = 0; i < list.length; i++) {
-      r -= list[i].weight;
-      if (r <= 0) return list[i];
+    let picked = pool[0];
+    for (let i = 0; i < pool.length; i++) {
+      r -= pool[i].weight;
+      if (r <= 0) {
+        picked = pool[i];
+        break;
+      }
     }
-    return list[0];
+    if (picked.id === currentId) {
+      const sameTierOthers = pool.filter(function(a) { return a.tier === picked.tier && a.id !== currentId; });
+      if (sameTierOthers.length > 0) {
+        picked = sameTierOthers[Math.floor(Math.random() * sameTierOthers.length)];
+      }
+    }
+    return picked;
   }
 
   function getWeaponAffixObj(s, wId) {
     if (!s || !s.weaponAffixes || !wId) return null;
-    const afId = s.weaponAffixes[wId];
+    let afId = s.weaponAffixes[wId];
+    if (afId === "w_sharp") afId = "w_sharp3"; // 兼容舊存檔
     return WEAPON_AFFIXES.find(function(a) { return a.id === afId; }) || null;
   }
 
   function getArmorAffixObj(s, aId) {
     if (!s || !s.armorAffixes || !aId) return null;
-    const afId = s.armorAffixes[aId];
+    let afId = s.armorAffixes[aId];
+    if (afId === "a_sturdy") afId = "a_sturdy3"; // 兼容舊存檔
     return ARMOR_AFFIXES.find(function(a) { return a.id === afId; }) || null;
   }
 
@@ -140,7 +163,7 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       if (s.gold < goldCost) {
         window.Aetheria.Audio.sfxWrong();
-        window.Aetheria.UI.showToast("金幣不足！洗煉需要 " + goldCost + " G。");
+        window.Aetheria.UI.showToast("金幣不足！洗煉此武器需要 " + goldCost + " G。");
         return;
       }
       if (!s.weaponAffixes) s.weaponAffixes = {};
@@ -157,14 +180,14 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.updateAllHud();
 
       const wObj = window.Aetheria.Data.WEAPONS[wId] || { name: "武器" };
-      window.Aetheria.UI.showToast("✨ 洗煉成功！獲得【" + picked.name + wObj.name + "】(" + picked.desc + ")！");
+      window.Aetheria.UI.showToast("✨ 洗煉結果：獲得[" + picked.tierName + "]【" + picked.name + wObj.name + "】(" + picked.desc + ")！");
     },
 
     reRollArmor: function(aId, goldCost) {
       const s = window.Aetheria.State.data;
       if (s.gold < goldCost) {
         window.Aetheria.Audio.sfxWrong();
-        window.Aetheria.UI.showToast("金幣不足！洗煉需要 " + goldCost + " G。");
+        window.Aetheria.UI.showToast("金幣不足！洗煉此防具需要 " + goldCost + " G。");
         return;
       }
       if (!s.armorAffixes) s.armorAffixes = {};
@@ -182,7 +205,7 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.updateAllHud();
 
       const aObj = window.Aetheria.Data.ARMORS[aId] || { name: "防具" };
-      window.Aetheria.UI.showToast("✨ 洗煉成功！獲得【" + picked.name + aObj.name + "】(" + picked.desc + ")！");
+      window.Aetheria.UI.showToast("✨ 洗煉結果：獲得[" + picked.tierName + "]【" + picked.name + aObj.name + "】(" + picked.desc + ")！");
     },
 
     upgradeCampFacility: function(upKey) {
@@ -195,7 +218,7 @@ window.Aetheria = window.Aetheria || {};
       if (curLv >= def.maxLv) return;
 
       const nextLv = curLv + 1;
-      const cost = def.costs[nextLv] || 200;
+      const cost = def.costs[nextLv] || 500;
 
       if (s.gold < cost) {
         window.Aetheria.Audio.sfxWrong();
@@ -222,18 +245,18 @@ window.Aetheria = window.Aetheria || {};
       const intro = document.createElement("div");
       intro.className = "sys-card-scroll";
       intro.innerHTML =
-        '<b>✨ 巴爾的黃金詞條重鑄爐 & 營地建設 (持有金幣：' + s.gold + ' G)</b>' +
-        '<div style="font-size:12px; color:#5c3824; margin-top:2px;">' +
-          '消耗金幣為當前裝備的<b>武器與防具</b>隨機刷出稀有詞條（普通 ➔ 稀有 ➔ 史詩 ➔ 傳說），或升級營地設施！' +
+        '<b>✨ 巴爾的黃金詞條重鑄爐 & 領地升級 (持有金幣：' + s.gold + ' G)</b>' +
+        '<div style="font-size:11.5px; color:#5c3824; margin-top:2px;">' +
+          '洗煉機率：<b style="color:#2d6a4f;">普通 72%</b> ｜ <b style="color:#1d5eb8;">稀有 18%</b> ｜ <b style="color:#7209b7;">史詩 8%</b> ｜ <b style="color:#d97706;">傳說 2%</b>' +
         '</div>';
       body.appendChild(intro);
 
-      // 1. 當前裝備武器洗煉卡
+      // 1. 當前裝備武器洗煉卡（費用：200 + 階級 * 120）
       const eqWId = s.equippedWeapon;
       const wObj = eqWId ? window.Aetheria.Data.WEAPONS[eqWId] : null;
       if (wObj) {
         const wAf = getWeaponAffixObj(s, eqWId);
-        const wCost = 60 + (wObj.tier || 1) * 20;
+        const wCost = 200 + (wObj.tier || 1) * 120;
         const canPayW = s.gold >= wCost;
 
         const wCard = document.createElement("div");
@@ -249,12 +272,12 @@ window.Aetheria = window.Aetheria || {};
         body.appendChild(wCard);
       }
 
-      // 2. 當前穿戴防具洗煉卡
+      // 2. 當前穿戴防具洗煉卡（費用：200 + 階級 * 120）
       const eqAId = s.equippedArmor || "a_cloth";
       const aObj = window.Aetheria.Data.ARMORS[eqAId];
       if (aObj) {
         const aAf = getArmorAffixObj(s, eqAId);
-        const aCost = 60 + (aObj.tier || 1) * 25;
+        const aCost = 200 + (aObj.tier || 1) * 120;
         const canPayA = s.gold >= aCost;
 
         const aCard = document.createElement("div");
@@ -300,15 +323,14 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Reforge = ReforgeManager;
 
-  // ================= 4. 掛載詞條戰鬥加成、飽食度減免與領地升級效果 =================
+  // ================= 4. 掛載隨身工坊、詞條戰鬥加成與領地升級效果 =================
   function hookSystemsForReforge() {
-    const St  = window.Aetheria.State;
-    const UI  = window.Aetheria.UI;
-    const Bat = window.Aetheria.Battle;
+    const St   = window.Aetheria.State;
+    const UI   = window.Aetheria.UI;
+    const Bat  = window.Aetheria.Battle;
     const Surv = window.Aetheria.Survival;
 
     if (St) {
-      // 1. 武器攻擊力詞條加成
       const origAtk = St.getTotalAtk.bind(St);
       St.getTotalAtk = function() {
         let atk = origAtk();
@@ -320,7 +342,6 @@ window.Aetheria = window.Aetheria || {};
         return atk;
       };
 
-      // 2. 防具防禦力詞條加成
       const origDef = St.getTotalDef.bind(St);
       St.getTotalDef = function() {
         let def = origDef();
@@ -332,7 +353,6 @@ window.Aetheria = window.Aetheria || {};
         return def;
       };
 
-      // 3. 防具最大生命值詞條加成
       const origMaxHp = St.recalcMaxHp.bind(St);
       St.recalcMaxHp = function() {
         origMaxHp();
@@ -344,7 +364,6 @@ window.Aetheria = window.Aetheria || {};
         }
       };
 
-      // 4. 武器額外削盾詞條加成
       const origBreak = St.getBonusShieldBreak.bind(St);
       St.getBonusShieldBreak = function() {
         let b = origBreak();
@@ -354,7 +373,6 @@ window.Aetheria = window.Aetheria || {};
         return b;
       };
 
-      // 5. 防具【飽食之 / 聖佑之】詞條：50% 機率免消耗飽食度
       const origHunger = St.consumeHunger.bind(St);
       St.consumeHunger = function(amount) {
         const s = this.data;
@@ -365,7 +383,6 @@ window.Aetheria = window.Aetheria || {};
         return origHunger(amount);
       };
 
-      // 6. 防具【博學之】詞條：經驗與金幣額外 +25%
       const origRewards = St.gainRewards.bind(St);
       St.gainRewards = function(expGain, goldGain, guildPtsGain) {
         const s = this.data;
@@ -378,7 +395,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 7. 戰鬥中觸發詞條效果（答對回血、額外 BP、夜獵增傷、荊棘反彈）
     if (Bat) {
       const origResolve = Bat.resolveTurn.bind(Bat);
       Bat.resolveTurn = function(isCorrect, correctText, qObj) {
@@ -394,7 +410,7 @@ window.Aetheria = window.Aetheria || {};
             s.bp = Math.min(s.maxBp, (s.bp || 0) + wAf.extraBp);
           }
           if (wAf.nightBonus && window.Aetheria.State.getTimePhase().isNight) {
-            const nightExtra = Math.round(window.Aetheria.State.getTotalAtk() * 0.30);
+            const nightExtra = Math.round(window.Aetheria.State.getTotalAtk() * 0.25);
             e.hp = Math.max(1, e.hp - nightExtra);
           }
         }
@@ -415,19 +431,58 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 8. 掛載工坊第 6 分頁【✨洗煉】、以及領地升級對料理鍋和睡袋的強化
+    // ★ 修改 1：讓【工坊】與所有鍛造/加工功能在任何地圖均可直接使用（無須回營地）
     if (UI) {
+      function runWithPortableForge(fn, args) {
+        const s = window.Aetheria.State && window.Aetheria.State.data;
+        if (!s) return fn.apply(UI, args);
+        const realZone = s.currentZone;
+        const hadForge = Boolean(s.projectsBuilt && s.projectsBuilt.proj_camp_forge);
+        if (!s.projectsBuilt) s.projectsBuilt = {};
+
+        // 執行工坊函式期間暫時視為位於營地且熔爐已開啟
+        s.currentZone = "camp_hub";
+        s.projectsBuilt.proj_camp_forge = true;
+        try {
+          return fn.apply(UI, args);
+        } finally {
+          s.currentZone = realZone;
+          if (!hadForge) {
+            delete s.projectsBuilt.proj_camp_forge;
+          }
+        }
+      }
+
+      // 包裝工坊內所有合成、鍛造、升級工具方法，確保在野外點擊製造時 100% 暢通
+      [
+        "craftWorkshopItem",
+        "craftToolUpgrade",
+        "upgradeTool",
+        "craftWeapon",
+        "craftArmor",
+        "craftRelic",
+        "buyPotion",
+        "buyShopItem"
+      ].forEach(function(methodName) {
+        if (typeof UI[methodName] === "function") {
+          const origFn = UI[methodName].bind(UI);
+          UI[methodName] = function() {
+            return runWithPortableForge(origFn, arguments);
+          };
+        }
+      });
+
       const origOpenForge = UI.openForgeModal.bind(UI);
       UI.openForgeModal = function(activeTab) {
-        origOpenForge(activeTab);
+        runWithPortableForge(origOpenForge, [activeTab]);
 
         const body = document.getElementById("modal-body");
         if (!body) return;
         const tabBar = body.querySelector(".tab-bar-5");
-        if (tabBar) {
+        if (tabBar && !tabBar.querySelector(".btn-reforge-tab")) {
           tabBar.style.gridTemplateColumns = "repeat(3, 1fr)";
           const refBtn = document.createElement("button");
-          refBtn.className = "na-btn" + (activeTab === "reforge" ? " highlight" : "");
+          refBtn.className = "na-btn btn-reforge-tab" + (activeTab === "reforge" ? " highlight" : "");
           refBtn.style.fontSize = "12px";
           refBtn.innerText = "✨洗煉/領地";
           refBtn.onclick = function() { UI.openForgeModal("reforge"); };
@@ -442,7 +497,6 @@ window.Aetheria = window.Aetheria || {};
         }
       };
 
-      // 秘銀高壓料理鍋升級加成
       const origCook = UI.cookCampMeal.bind(UI);
       UI.cookCampMeal = function(mealId) {
         origCook(mealId);
@@ -473,7 +527,6 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // 豪華睡袋升級加成
     if (Surv && Surv.playSleepToMorning) {
       const origSleep = Surv.playSleepToMorning.bind(Surv);
       Surv.playSleepToMorning = function() {
@@ -502,7 +555,7 @@ window.Aetheria = window.Aetheria || {};
       injectReforgeStyles();
       hookSystemsForReforge();
     } catch (err) {
-      console.error("Equipment Reforge v7.6 init error:", err);
+      console.error("Equipment Reforge v7.7 init error:", err);
     }
   }
 
