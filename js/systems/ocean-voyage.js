@@ -1510,7 +1510,9 @@ window.Aetheria = window.Aetheria || {};
 
         const s = window.Aetheria.State.data;
         const inOcean = (s.currentZone === "ocean_sea");
-        const speedFactor = inOcean ? 0.90 : 0.76;
+        const sailLv = (s.campUpgrades && s.campUpgrades.sailLv) || 0;
+        // 陸地保持 1.0 倍（完整保留 survival-daynight.js 的 1.42x 高速移動），海上則按順風船帆等級加速！
+        const speedFactor = inOcean ? (1.0 + sailLv * 0.10) : 1.0;
 
         const savedDX = this.moveDX;
         const savedDY = this.moveDY;
