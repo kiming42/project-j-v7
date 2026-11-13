@@ -1,9 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 進階三石推箱子迷宮、永久鎖定與唯一寶箱模組 (dungeon-puzzles.js - v8.2)
- * Code Check 修正：
- *   1. 修正第4區雪原 (zone4_snow) 左上角障礙石柱座標為 (-64, -64)，確保第3顆滑冰石右側推位暢通
- *   2. 將荒島推石密室移至 (740, 310) 並保護所有 chest 寶箱，徹底避免誤刪荒島中央的「炸彈裂縫秘寶箱」
- *   3. 防止日夜時段切換 (_refreshToken 更新) 時把玩家推到一半的巨石重置回原位
+ * Project J：艾瑟瑞亞的破曉 — 進階三石推箱子迷宮、永久鎖定與唯一寶箱模組 (dungeon-puzzles.js - v8.8)
+ * Cross-Check 修正：
+ *   1. 【修復十字鍵頂推失靈】：解決底層 v6.7 因 solid:true 提前阻擋主角而無法觸發十字鍵頂推的問題
+ *   2. 【未開秘門保護】：在秘密通道鐵門尚未開啟前，即使靠近寶箱亦禁止隔牆開啟
+ *   3. 完整包含 3 石 Sokoban 迷宮陣、解開後永久鎖定 (s.solvedPuzzles) 與唯一秘寶箱 (s.claimedPuzzleChests)
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -192,7 +192,6 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // 清理推石陣周圍隨機樹石，但嚴格保護所有寶箱 (type === "chest")
   function clearAreaAroundPuzzle(mapObj, cx, cy, radius) {
     if (mapObj.trees) {
       mapObj.trees = mapObj.trees.filter(function(t) {
@@ -232,7 +231,6 @@ window.Aetheria = window.Aetheria || {};
     const isAlreadySolved = Boolean(s.solvedPuzzles[pGroupId]);
     const isChestClaimed = Boolean(s.claimedPuzzleChests[pGroupId]);
 
-    // 若地圖上已有推石機關（例如日夜切換觸發的資源補充），保留推石當前進度並補回機關秘寶箱即可
     const alreadyHasBoulders = mapObj.decos.some(function(d) { return d.isPushBoulder && d.puzzleGroupId === pGroupId; });
     if (alreadyHasBoulders) {
       const hasChest = mapObj.nodes.some(function(n) { return n.isPuzzleVaultChest && n.puzzleGroupId === pGroupId; });
@@ -337,6 +335,7 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
+    // ★ Cross-Check 修正：未鎖定時將 solid 設為 false，交由本模組直接攔截碰撞並轉化為推動，避免底層 v6.7 吃掉移動向量！
     (config.boulders || []).forEach(function(b, idx) {
       const targetPlate = platesList[idx] || b;
       const initX = cx + (isAlreadySolved ? targetPlate.dx : b.dx);
@@ -351,7 +350,7 @@ window.Aetheria = window.Aetheria || {};
         sprite: isAlreadySolved ? "push_boulder_lit" : "push_boulder",
         w: 28,
         h: 28,
-        solid: true,
+        solid: isAlreadySolved,
         isPuzzleElement: true,
         isPushBoulder: true,
         onPlate: isAlreadySolved,
@@ -425,7 +424,6 @@ window.Aetheria = window.Aetheria || {};
       buildPuzzleRoomInMap(mapObj, ZONE_PUZZLE_CONFIGS[mapObj.id]);
     } else if (ISLAND_PUZZLE_ZONES.indexOf(mapObj.id) !== -1) {
       mapObj._puzzleInjectedToken = tokenKey;
-      // 荒島推石密室設於 (740, 310)，避開 (520, 310) 的炸彈裂縫密室與 (960, 310) 的首領
       buildPuzzleRoomInMap(mapObj, {
         cx: 740,
         cy: 310,
@@ -574,6 +572,7 @@ window.Aetheria = window.Aetheria || {};
         s.solvedPuzzles[groupId] = true;
         boulders.forEach(function(b) {
           b.locked = true;
+          b.solid = true;
           b.onPlate = true;
           b.sprite = "push_boulder_lit";
         });
@@ -645,12 +644,16 @@ window.Aetheria = window.Aetheria || {};
         const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
         if (!mapObj || !mapObj.decos) return;
 
+        // 以主角嘗試移動的方向向量偵測是否頂推巨石（不受底層 solid 影響）
+        const nextCheckX = s.heroX !== prevX ? s.heroX : (prevX + (this.moveDX || 0) * 3);
+        const nextCheckY = s.heroY !== prevY ? s.heroY : (prevY + (this.moveDY || 0) * 3);
+
         for (let i = 0; i < mapObj.decos.length; i++) {
           const d = mapObj.decos[i];
           if (!d || d.cleared) continue;
 
           if ((d.isSecretGate && !d.gateOpened) || d.isPuzzleWall) {
-            if (Math.hypot(s.heroX - d.x, s.heroY - d.y) < 23) {
+            if (Math.hypot(nextCheckX - d.x, nextCheckY - d.y) < 23) {
               s.heroX = prevX;
               s.heroY = prevY;
               if (d.isSecretGate) {
@@ -660,7 +663,7 @@ window.Aetheria = window.Aetheria || {};
             }
           }
 
-          if (d.isPushBoulder && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 24) {
+          if (d.isPushBoulder && Math.hypot(nextCheckX - d.x, nextCheckY - d.y) < 25) {
             s.heroX = prevX;
             s.heroY = prevY;
 
@@ -668,14 +671,17 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            const dx = d.x - prevX;
-            const dy = d.y - prevY;
             let pushDirX = 0;
             let pushDirY = 0;
-            if (Math.abs(dx) >= Math.abs(dy)) {
-              pushDirX = dx >= 0 ? 1 : -1;
+            if (Math.abs(this.moveDX || 0) > Math.abs(this.moveDY || 0)) {
+              pushDirX = (this.moveDX > 0) ? 1 : -1;
+            } else if (Math.abs(this.moveDY || 0) > 0) {
+              pushDirY = (this.moveDY > 0) ? 1 : -1;
             } else {
-              pushDirY = dy >= 0 ? 1 : -1;
+              const dx = d.x - prevX;
+              const dy = d.y - prevY;
+              if (Math.abs(dx) >= Math.abs(dy)) pushDirX = dx >= 0 ? 1 : -1;
+              else pushDirY = dy >= 0 ? 1 : -1;
             }
 
             PuzzleManager.tryPushBoulder(mapObj, d, pushDirX, pushDirY);
@@ -741,6 +747,13 @@ window.Aetheria = window.Aetheria || {};
         if (node && node.isPuzzleVaultChest) {
           const s = window.Aetheria.State.data;
           if (!s.claimedPuzzleChests) s.claimedPuzzleChests = {};
+
+          // ★ Cross-Check 修正：必須先解開推石秘門才可開啟機關秘寶箱（防止隔牆開啟）
+          if (!PuzzleManager.isGroupSolved(node.puzzleGroupId)) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("🔒 密室鐵門尚未解鎖！請先將 3 顆符文巨石推上感應石板！");
+            return;
+          }
 
           if (node.opened || s.claimedPuzzleChests[node.puzzleGroupId]) {
             node.opened = true;
@@ -853,7 +866,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Dungeon Puzzles v8.2 init error:", err);
+      console.error("Dungeon Puzzles v8.8 init error:", err);
     }
   }
 
