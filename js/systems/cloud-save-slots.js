@@ -1,9 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 左上角玩家名稱+血量、新遊戲強制命名與雲端三槽位模組 (cloud-save-slots.js - v8.6)
- * 核心修正：
- *   1. 【新遊戲必彈輸入名稱】：攔截首頁與系統所有「新遊戲/重置/開新槽位」入口，並將命名視窗置頂 (z-index:99999)，支援選槽位+輸入名字
- *   2. 【左上角血量框加入玩家名字】：在左上角 #hud-hearts-box 血量數字上方顯示金色玩家名稱，切換槽位或改名時即時更新
- *   3. 保留極簡首頁（右上角音效開關 🔊/🔇）、窄螢幕頂部 HUD 防出界與跨設備雲端通行碼同步
+ * Project J：艾瑟瑞亞的破曉 — 左上角玩家名稱+血量、新遊戲強制命名與雲端三槽位模組 (cloud-save-slots.js - v8.8)
+ * Cross-Check 修正：
+ *   1. 【音訊靜音完全同步】：雙向同步 Audio.muted 與 Audio.isMuted，點擊首頁音效鈕即時停止/恢復 BGM
+ *   2. 【補齊 v6.7 預設存檔欄位】：開新槽位時完整包含 petLevels、towerFloor、currentWeather 等所有底層欄位
+ *   3. 保留左上角玩家名稱+血量框、新遊戲置頂命名視窗、極簡首頁與跨設備雲端通行碼同步
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -15,13 +15,11 @@ window.Aetheria = window.Aetheria || {};
   const AUDIO_MUTE_KEY    = "AETHERIA_AUDIO_MUTE_V8";
   const LEGACY_SAVE_KEYS  = ["AETHERIA_SAVE_V7", "AETHERIA_SAVE_V6", "AETHERIA_SAVE_V5"];
 
-  // ================= 1. 注入左上角名字+血量框、極簡首頁與置頂命名視窗 CSS =================
   function injectSaveSlotsStyles() {
-    if (document.getElementById("save-slots-v86-styles")) return;
+    if (document.getElementById("save-slots-v88-styles")) return;
     const style = document.createElement("style");
-    style.id = "save-slots-v86-styles";
+    style.id = "save-slots-v88-styles";
     style.textContent = `
-      /* 左上角：玩家名字 + 精準血量數字 + 動態血條 (#hud-hearts-box) */
       #hud-hearts-box {
         position: absolute !important;
         top: 4px !important;
@@ -84,7 +82,6 @@ window.Aetheria = window.Aetheria || {};
         transition: width 0.25s ease, background-color 0.25s ease !important;
       }
 
-      /* 窄螢幕手機頂部 HUD 緊湊防出界 */
       #hud-overlay {
         top: 4px !important;
         left: 76px !important;
@@ -120,7 +117,6 @@ window.Aetheria = window.Aetheria || {};
         pointer-events: auto !important;
       }
 
-      /* 首頁 (#title-screen) 極簡化：右上角獨立音效鈕 + 單一底部入口 */
       #title-mute-corner-btn {
         position: absolute;
         top: 14px;
@@ -152,7 +148,6 @@ window.Aetheria = window.Aetheria || {};
         max-width: 300px;
       }
 
-      /* 存檔槽位與雲端同步樣式 */
       .slot-card {
         background: #181316;
         border: 2px solid #594950;
@@ -199,7 +194,6 @@ window.Aetheria = window.Aetheria || {};
         letter-spacing: 1px;
       }
 
-      /* 玩家自訂名稱彈出視窗（z-index: 99999 確保高於首頁與任何過場層） */
       #hero-name-modal {
         position: fixed !important;
         inset: 0 !important;
@@ -265,7 +259,27 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 2. 玩家名稱管理與視窗互動 =================
+  function isAudioCurrentlyMuted() {
+    const Aud = window.Aetheria.Audio;
+    if (!Aud) return localStorage.getItem(AUDIO_MUTE_KEY) === "1";
+    return Boolean(Aud.muted || Aud.isMuted);
+  }
+
+  function setAudioMuteState(muteBool) {
+    const Aud = window.Aetheria.Audio;
+    localStorage.setItem(AUDIO_MUTE_KEY, muteBool ? "1" : "0");
+    if (!Aud) return;
+    Aud.muted = Boolean(muteBool);
+    Aud.isMuted = Boolean(muteBool);
+    if (muteBool && typeof Aud.stopBgm === "function") {
+      Aud.stopBgm();
+    } else if (!muteBool && typeof Aud.playBgm === "function") {
+      const s = window.Aetheria.State && window.Aetheria.State.data;
+      const m = s && window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone || "camp_hub");
+      Aud.playBgm((m && m.bgm) || "forest");
+    }
+  }
+
   function getHeroName(s) {
     s = s || (window.Aetheria.State && window.Aetheria.State.data) || {};
     return (s.heroName && String(s.heroName).trim()) ? String(s.heroName).trim() : "Justin";
@@ -292,14 +306,9 @@ window.Aetheria = window.Aetheria || {};
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
     let chosenSlot = options.targetSlot || getActiveSlotNum();
 
-    if (titleEl) {
-      titleEl.innerText = options.title || "✨ 冒險者登錄";
-    }
-    if (subEl) {
-      subEl.innerText = options.subtitle || "請輸入主角的專屬名稱（最多 10 字）：";
-    }
+    if (titleEl) titleEl.innerText = options.title || "✨ 冒險者登錄";
+    if (subEl) subEl.innerText = options.subtitle || "請輸入主角的專屬名稱（最多 10 字）：";
 
-    // 若是「開新遊戲」模式，提供 3 個槽位按鈕讓玩家直覺選擇存在哪一格
     function renderSlotPickerBtns() {
       if (!slotWrap || !slotBtns) return;
       if (!options.allowPickSlot) {
@@ -355,7 +364,6 @@ window.Aetheria = window.Aetheria || {};
     }, 80);
   }
 
-  // ================= 3. 存檔槽位讀寫與無縫遷移核心邏輯 =================
   function getActiveSlotNum() {
     const raw = parseInt(localStorage.getItem(ACTIVE_SLOT_KEY) || "1", 10);
     return (raw >= 1 && raw <= 3) ? raw : 1;
@@ -460,9 +468,13 @@ window.Aetheria = window.Aetheria || {};
 
     if (window.Aetheria.Data && window.Aetheria.Data.Maps) {
       const m = window.Aetheria.Data.Maps.getMap(St.data.currentZone || "camp_hub");
-      if (m && window.Aetheria.Audio && window.Aetheria.Audio.playBgm) {
+      if (m && window.Aetheria.Audio && window.Aetheria.Audio.playBgm && !isAudioCurrentlyMuted()) {
         window.Aetheria.Audio.playBgm(m.bgm || "forest");
       }
+    }
+
+    if (window.Aetheria.Weather && window.Aetheria.Weather.updateWeatherVisualFX) {
+      window.Aetheria.Weather.updateWeatherVisualFX();
     }
 
     if (window.Aetheria.Renderer) {
@@ -476,9 +488,14 @@ window.Aetheria = window.Aetheria || {};
     updateTitleScreenSlotBadge();
   }
 
+  // ★ Cross-Check 修正：補齊 v6.7 與 v7.0~v8.8 的所有初始存檔欄位
   function createFreshDefaultState(customHeroName) {
     const cur = (window.Aetheria.State && window.Aetheria.State.data) || {};
-    return {
+    const base = (window.Aetheria.State && typeof window.Aetheria.State.getDefaultState === "function")
+      ? window.Aetheria.State.getDefaultState()
+      : {};
+
+    return Object.assign(base, {
       heroName: customHeroName || "Justin",
       hasCustomName: true,
       lv: 1,
@@ -494,6 +511,9 @@ window.Aetheria = window.Aetheria || {};
       worldClock: 60,
       hunger: 100,
       torchTicks: 0,
+      wellRestedBattles: 0,
+      activeMeal: null,
+      currentWeather: "clear",
       currentZone: "camp_hub",
       heroX: 310,
       heroY: 235,
@@ -510,12 +530,17 @@ window.Aetheria = window.Aetheria || {};
       activePet: "pet_slime",
       subPet: null,
       unlockedPets: ["pet_slime"],
+      petLevels: { pet_slime: 1 },
       tools: { axe: 0, pickaxe: 0, rod: 0, hook: 0, pouch: 0 },
       inventory: { branch: 0, flint: 0, clay: 0, rationHerb: 2, potionHeal: 1 },
       projectsBuilt: {},
       projectContributions: {},
       shipContributions: {},
       boatTier: 0,
+      voyageFloor: 1,
+      maxDungeonDepth: 1,
+      towerFloor: 1,
+      maxTowerFloor: 1,
       unlockedSeals: {},
       clearedBosses: {},
       solvedPuzzles: {},
@@ -525,6 +550,7 @@ window.Aetheria = window.Aetheria || {};
       campUpgrades: { bedLv: 0, potLv: 0, sailLv: 0 },
       mainQuestIndex: 0,
       questProgress: {},
+      completedSideQuests: {},
       wrongBook: [],
       questionMastery: {},
       maxStreak: 0,
@@ -532,10 +558,9 @@ window.Aetheria = window.Aetheria || {};
       activeLessons: cur.activeLessons || {},
       lessonSelectMode: cur.lessonSelectMode || "multi",
       _savedAt: Date.now()
-    };
+    });
   }
 
-  // ================= 4. 雲端同步、新遊戲強制命名與槽位管理員 =================
   function sanitizePasscode(raw) {
     return String(raw || "")
       .trim()
@@ -583,7 +608,6 @@ window.Aetheria = window.Aetheria || {};
       });
     },
 
-    // 開啟新遊戲並彈出命名視窗（支援直接選擇槽位 1 / 2 / 3）
     startNewGameWithCustomName: function(targetSlotOpt) {
       let defaultSlot = targetSlotOpt;
       if (!defaultSlot) {
@@ -674,18 +698,11 @@ window.Aetheria = window.Aetheria || {};
     },
 
     toggleSoundMute: function() {
-      const Aud = window.Aetheria.Audio;
-      if (!Aud) return;
-      if (Aud.toggleMute) {
-        Aud.toggleMute();
-      } else {
-        Aud.muted = !Aud.muted;
-      }
-      const isMuted = Boolean(Aud.muted);
-      localStorage.setItem(AUDIO_MUTE_KEY, isMuted ? "1" : "0");
+      const nextMute = !isAudioCurrentlyMuted();
+      setAudioMuteState(nextMute);
       updateTitleScreenSlotBadge();
       if (window.Aetheria.UI) {
-        window.Aetheria.UI.showToast(isMuted ? "🔇 音效已設為【靜音】" : "🔊 音效已【開啟】");
+        window.Aetheria.UI.showToast(nextMute ? "🔇 音效已設為【靜音】" : "🔊 音效已【開啟】");
       }
     },
 
@@ -695,7 +712,7 @@ window.Aetheria = window.Aetheria || {};
         writeSlotData(curSlot, window.Aetheria.State.data);
       }
       return {
-        version: "8.6",
+        version: "8.8",
         exportedAt: Date.now(),
         activeSlot: curSlot,
         slots: {
@@ -927,10 +944,9 @@ window.Aetheria = window.Aetheria || {};
       const savedCode = localStorage.getItem(CLOUD_CODE_KEY) || "";
       const autoCloudOn = localStorage.getItem(AUTO_CLOUD_KEY) === "1";
 
-      // 0. 當前玩家名稱與開新局快捷列
       const heroBar = document.createElement("div");
       heroBar.className = "sys-card-scroll";
-      const isMuted = Boolean(window.Aetheria.Audio && window.Aetheria.Audio.muted);
+      const isMuted = isAudioCurrentlyMuted();
       heroBar.innerHTML =
         '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">' +
           '<div>' +
@@ -947,7 +963,6 @@ window.Aetheria = window.Aetheria || {};
         '</div>';
       body.appendChild(heroBar);
 
-      // 1. ☁️ 跨裝置雲端同步中心
       const cloudDiv = document.createElement("div");
       cloudDiv.className = "cloud-box";
       cloudDiv.innerHTML =
@@ -967,7 +982,6 @@ window.Aetheria = window.Aetheria || {};
         '</div>';
       body.appendChild(cloudDiv);
 
-      // 2. 💾 三大獨立存檔槽位 (Slot 1 / 2 / 3)
       const slotHeader = document.createElement("div");
       slotHeader.style.cssText = "color:var(--na-gold); font-weight:900; margin:6px 0 4px; font-size:13px;";
       slotHeader.innerText = "【💾 獨立存檔槽位管理（開新槽位可自訂名稱）】";
@@ -1037,7 +1051,6 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.SaveSlots = SaveSlotsManager;
 
-  // ================= 5. 極簡化首頁 (#title-screen) 並攔截首頁原有的「新遊戲」按鈕 =================
   function updateTitleScreenSlotBadge() {
     const titleScreen = document.getElementById("title-screen");
     if (!titleScreen) return;
@@ -1045,9 +1058,8 @@ window.Aetheria = window.Aetheria || {};
     const curSlot = getActiveSlotNum();
     const sData = readSlotData(curSlot) || (window.Aetheria.State && window.Aetheria.State.data) || { lv: 1 };
     const pName = getHeroName(sData);
-    const isMuted = Boolean(window.Aetheria.Audio && window.Aetheria.Audio.muted);
+    const isMuted = isAudioCurrentlyMuted();
 
-    // 1. 右上角獨立音效按鈕
     let muteBtn = document.getElementById("title-mute-corner-btn");
     if (!muteBtn) {
       muteBtn = document.createElement("button");
@@ -1060,7 +1072,6 @@ window.Aetheria = window.Aetheria || {};
     }
     muteBtn.innerHTML = isMuted ? "🔇" : "🔊";
 
-    // 2. 底部單一顆「槽位 / 雲端」管理鈕
     let bar = document.getElementById("title-cloud-bar");
     if (!bar) {
       bar = document.createElement("div");
@@ -1073,7 +1084,6 @@ window.Aetheria = window.Aetheria || {};
         '💾 槽位 ' + curSlot + '：' + pName + ' (Lv.' + (sData.lv || 1) + ') ｜ 換槽・雲端' +
       '</button>';
 
-    // 3. ★ 攔截首頁上原本的「新遊戲 / 重新開始 / 初次開始」按鈕，確保點擊時 100% 彈出輸入玩家名稱視窗！
     if (!titleScreen._hookedNewGameCapture) {
       titleScreen._hookedNewGameCapture = true;
       titleScreen.addEventListener("click", function(ev) {
@@ -1099,7 +1109,6 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
 
-        // 若是全新未命名的 Lv.1 存檔點擊「開始冒險」，也自動彈出輸入名稱視窗
         const curS = (window.Aetheria.State && window.Aetheria.State.data) || {};
         if (!curS.hasCustomName && (curS.lv || 1) === 1 && (curS.exp || 0) === 0 && (curS.mainQuestIndex || 0) === 0) {
           ev.stopPropagation();
@@ -1110,17 +1119,15 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 6. 掛載左上角「玩家名字+血量框」、NPC 對話替換與存檔系統 =================
   function hookSystemsForSaveSlots() {
     const St   = window.Aetheria.State;
     const UI   = window.Aetheria.UI;
     const Ren  = window.Aetheria.Renderer;
     const Data = window.Aetheria.Data;
     const Surv = window.Aetheria.Survival;
-    const Aud  = window.Aetheria.Audio;
 
-    if (Aud && localStorage.getItem(AUDIO_MUTE_KEY) === "1") {
-      Aud.muted = true;
+    if (localStorage.getItem(AUDIO_MUTE_KEY) === "1") {
+      setAudioMuteState(true);
     }
 
     if (St) {
@@ -1139,7 +1146,6 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // ★ 修正 2：在左上角血量框 (#hud-hearts-box) 頂部加入金色【玩家名字】
     if (Ren) {
       Ren.updateHeartsDOM = function(s, Sprites) {
         if (!s) return;
@@ -1200,7 +1206,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (UI) {
-      // 攔截 UI 層任何新遊戲方法
       ["startNewGame", "newGame", "onNewGame"].forEach(function(fnName) {
         if (typeof UI[fnName] === "function") {
           UI[fnName] = function() {
@@ -1302,7 +1307,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Cloud Save Slots v8.6 init error:", err);
+      console.error("Cloud Save Slots v8.8 init error:", err);
     }
   }
 
