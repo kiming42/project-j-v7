@@ -1,10 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 高密度魔物群、主角高速移動與激戰生態模組 (survival-daynight.js - v7.8)
- * 核心修正：
- *   1. 【強制高密度魔物生成】：放寬地形檢測，白晝每區強制額外生成 6~8 隻魔物，黑夜暴增 10~14 隻夜行狂暴魔物！
- *   2. 【主角移動速度大幅提升】：直接提供 1.42x 移動速度加成，抵銷先前減速，操控爽快敏捷！
- *   3. 【取消從容走位・高壓迫感追擊】：魔物索敵視野擴大至 115~140px，追擊速度大幅提高至 1.95~2.45，緊咬主角不放！
- *   4. 保留防重疊隨機素材分佈、全屏自適應、標籤簡化與主角帳篷睡袋日出動畫
+ * Project J：艾瑟瑞亞的破曉 — 左上角精準血量、減慢日夜流逝與高密度生態模組 (survival-daynight.js - v7.9)
+ * 核心升級：
+ *   1. 【左上角精準血量 HUD】：直接內建「♥ 120/120 實時數字 + 動態三色迷你血條」，點擊可快速飲用生命藥水
+ *   2. 【減慢時間流逝速度】：日夜流轉速度減慢約 3 倍 (0.32x)，且在曙光營地與帳篷內不消耗日夜時間
+ *   3. 保留 v7.8 高密度魔物群、主角 1.42x 高速移動、高壓迫感追擊 AI、隨機防重疊素材與主角睡袋日出動畫
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -57,15 +56,72 @@ window.Aetheria = window.Aetheria || {};
     setTimeout(fitAppToScreen, 100);
   }
 
-  // ================= 1. 注入介面優化 CSS =================
+  // ================= 1. 注入介面優化 CSS（含左上角精準血量框） =================
   function injectSurvivalStylesAndDOM() {
     if (!document.getElementById("survival-v71-styles")) {
       const style = document.createElement("style");
       style.id = "survival-v71-styles";
       style.textContent = `
+        /* 左上角精準數字血量膠囊 (#hud-hearts-box 升級版) */
+        #hud-hearts-box {
+          position: absolute !important;
+          top: 4px !important;
+          left: 5px !important;
+          z-index: 25 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: center !important;
+          background: rgba(20, 16, 19, 0.92) !important;
+          border: 2px solid #f5b700 !important;
+          border-radius: 6px !important;
+          padding: 2px 6px 3px !important;
+          min-width: 78px !important;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.75) !important;
+          pointer-events: auto !important;
+          cursor: pointer !important;
+        }
+        #hud-hearts-box.hp-low-pulse {
+          border-color: #ff595e !important;
+          animation: hpDangerPulse 0.9s infinite ease-in-out !important;
+        }
+        @keyframes hpDangerPulse {
+          0%, 100% { box-shadow: 0 0 4px rgba(255, 89, 94, 0.6); transform: scale(1); }
+          50% { box-shadow: 0 0 12px rgba(255, 89, 94, 1); transform: scale(1.04); }
+        }
+        .hud-hp-top-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px;
+          font-size: 11px;
+          font-weight: 900;
+          color: #ffffff;
+          line-height: 1.1;
+          text-shadow: 1px 1px 0 #000;
+        }
+        .hud-hp-top-row img {
+          width: 12px !important;
+          height: 12px !important;
+          image-rendering: pixelated;
+        }
+        .hud-hp-mini-track {
+          width: 100%;
+          height: 5px;
+          background: #2b2129;
+          border: 1px solid #000;
+          border-radius: 3px;
+          margin-top: 2px;
+          overflow: hidden;
+        }
+        .hud-hp-mini-fill {
+          height: 100%;
+          transition: width 0.25s ease, background-color 0.25s ease;
+        }
+
+        /* 頂部 HUD 緊湊單行化（預留左方 90px 給精準血量框） */
         #hud-overlay {
           top: 5px !important;
-          left: 56px !important;
+          left: 90px !important;
           right: 5px !important;
           display: flex !important;
           flex-wrap: nowrap !important;
@@ -294,7 +350,7 @@ window.Aetheria = window.Aetheria || {};
       .replace("無盡試煉之塔", "試煉塔");
   }
 
-  // ================= 3. v7.8 核心：高密度魔物群與隨機素材生態池 =================
+  // ================= 3. 高密度魔物群與隨機素材生態池 =================
   const ZONE_ECOLOGY_POOLS = {
     camp_hub: {
       nodeCount: 7,
@@ -309,8 +365,8 @@ window.Aetheria = window.Aetheria || {};
     },
     zone1_forest: {
       nodeCount: 14,
-      extraDayMons: 7,    // 白晝額外 +7 隻（連同原本共約 11 隻）
-      extraNightMons: 12, // 黑夜額外 +12 隻（連同原本共約 16 隻！）
+      extraDayMons: 7,
+      extraNightMons: 12,
       monNames: ["迷霧竹葉妖", "森林狂暴菇精", "暗林枯木妖", "翠風野林怪", "荊棘襲擊者"],
       monTypes: ["bamboo", "skull", "bamboo"],
       pool: [
@@ -410,7 +466,6 @@ window.Aetheria = window.Aetheria || {};
     return min + Math.floor(Math.random() * (max - min + 1));
   }
 
-  // 防重疊座標搜尋器（支援 120 次重試與合理間距，確保魔物與素材 100% 足額生成！）
   function findNonOverlappingSpot(mapObj, existingList, options) {
     options = options || {};
     const W = mapObj.width || 640;
@@ -500,7 +555,6 @@ window.Aetheria = window.Aetheria || {};
     const isNight = Boolean(phase.isNight);
     const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
 
-    // (A) 隨機生成該區素材（保留固定傳奇秘寶箱 chest）
     const chests = (mapObj.nodes || []).filter(function(n) { return n.type === "chest"; });
     const activeNodes = onlyReplenishNodes
       ? (mapObj.nodes || []).filter(function(n) { return !n.opened; })
@@ -554,7 +608,6 @@ window.Aetheria = window.Aetheria || {};
 
     mapObj.nodes = activeNodes;
 
-    // (B) 大幅增加魔物數量（白晝 +6~8 隻，黑夜 +10~14 隻！）
     if (!onlyReplenishNodes && (eco.extraDayMons > 0 || eco.extraNightMons > 0)) {
       const baseMons = (mapObj.monsters || []).filter(function(m) { return !m.isDynamicSpawn; });
       baseMons.forEach(function(m) { m.alive = true; });
@@ -569,7 +622,6 @@ window.Aetheria = window.Aetheria || {};
           minSpacing: 38
         });
 
-        // 保底生成機制：即使地圖樹木極密集，也會確保足額生成所有怪物！
         if (!monSpot) {
           const fallbackMaxX = (mapObj.hasRiver && mIdx % 2 === 0) ? ((mapObj.riverX || 1030) - 55) : (mapObj.width - 70);
           monSpot = {
@@ -616,7 +668,6 @@ window.Aetheria = window.Aetheria || {};
     if (!mapObj || !ZONE_ECOLOGY_POOLS[mapObj.id]) return;
 
     if (newPhaseId === "night" || newPhaseId === "dawn") {
-      // 入夜或破曉時直接完整重刷該區魔物群與素材，黑夜魔物數量立即暴增！
       populateDynamicZoneEcology(mapObj, false);
     } else {
       populateDynamicZoneEcology(mapObj, true);
@@ -1058,7 +1109,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.Survival = SurvivalDayNight;
 
-  // ================= 7. 掛載主角高速移動 (1.42x) 與高壓迫感狂暴魔物追擊 AI =================
+  // ================= 7. 掛載減慢時間流逝 (0.32x)、左上角精準血量條、主角高速移動與激戰 AI =================
   function hookSystemsForSurvivalV71() {
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
@@ -1076,11 +1127,22 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
+      // ★ 修正 1：大幅減慢時間流逝速度（約減慢 3 倍至 0.32x），且在營地與帳篷內不流逝日夜時間！
       if (St.advanceTime) {
+        let timeAccumulator = 0;
         const origAdvance = St.advanceTime.bind(St);
         St.advanceTime = function(ticks) {
+          const s = this.data;
+          if (s && (s.currentZone === "camp_hub" || s.currentZone === "tent_guild" || s.currentZone === "tent_forge" || s.currentZone === "tent_hero")) {
+            return; // 在營地及室內帳篷整理物資時，時間不會流逝
+          }
+          timeAccumulator += (ticks || 1) * 0.32;
+          const wholeTicks = Math.floor(timeAccumulator);
+          if (wholeTicks < 1) return;
+          timeAccumulator -= wholeTicks;
+
           const oldPhase = this.getTimePhase().id;
-          origAdvance(ticks);
+          origAdvance(wholeTicks);
           const newPhase = this.getTimePhase().id;
           if (oldPhase !== newPhase) {
             triggerTimePhaseEcologyShift(newPhase);
@@ -1090,7 +1152,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Exp) {
-      // 1. 大幅提升主角移動速度 (+42% 倍率加成，抵銷任何減速，操作極速流暢！)
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const savedDX = this.moveDX;
@@ -1104,7 +1165,6 @@ window.Aetheria = window.Aetheria || {};
         this.moveDY = savedDY;
       };
 
-      // 2. 高壓迫感、激進追擊的魔物 AI（取消從容走位，大範圍索敵 + 高速圍剿！）
       Exp.updateMonstersAI = function(mapObj, s) {
         if (!mapObj || !mapObj.monsters || mapObj.monsters.length === 0) return;
         if (window.Aetheria.Battle && window.Aetheria.Battle.active) return;
@@ -1121,7 +1181,6 @@ window.Aetheria = window.Aetheria || {};
 
           const distToHero = Math.hypot(s.heroX - m.x, s.heroY - m.y);
 
-          // 觸發戰鬥碰撞距離 (22px)
           if (distToHero < 22) {
             this.stopMove();
 
@@ -1149,13 +1208,11 @@ window.Aetheria = window.Aetheria || {};
             return;
           }
 
-          // 大範圍敏銳索敵：白晝 115px，黑夜狂暴高達 140px！且追擊半徑擴大至 260px，緊咬不放！
           const distFromHome = Math.hypot(m.x - (m.homeX || m.x), m.y - (m.homeY || m.y));
           const aggroRadius = m.isBoss ? 85 : (isNight ? 140 : 115);
 
           if (distToHero < aggroRadius && (m.isBoss || distFromHome < 260)) {
             m.aggro = true;
-            // 高速追擊：白晝 1.95，黑夜狂暴 2.45！
             const chaseSpeed = m.isBoss ? 1.25 : (isNight ? 2.45 : 1.95);
             const dx = (s.heroX - m.x) / (distToHero || 1);
             const dy = (s.heroY - m.y) / (distToHero || 1);
@@ -1246,129 +1303,179 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    if (Ren && Ren.renderWorld) {
-      const origRenderWorld = Ren.renderWorld.bind(Ren);
-      Ren.renderWorld = function() {
-        origRenderWorld();
-        try {
-          const s = window.Aetheria.State.data;
-          const isNight = window.Aetheria.State.getTimePhase().isNight;
-          const dnEl = document.getElementById("daynight-overlay");
-          if (dnEl && s && s.currentZone === "tent_hero") {
-            dnEl.className = "dn-day";
-          }
+    if (Ren) {
+      // ★ 修正 4：左上角 #hud-hearts-box 升級為「♥ 120/120 實時數字 + 動態三色迷你血條」
+      Ren.updateHeartsDOM = function(s, Sprites) {
+        if (!s) return;
+        const curHp = Math.max(0, Math.round(s.hp || 0));
+        const maxHp = Math.max(1, Math.round(s.maxHp || 100));
+        const stateKey = curHp + "/" + maxHp;
+        if (this.lastHeartsState === stateKey) return;
+        this.lastHeartsState = stateKey;
 
-          Object.keys(this.domPool.portals || {}).forEach(function(pId) {
-            const item = Ren.domPool.portals[pId];
-            if (!item || !item.lbl || !item.data) return;
-            const p = item.data;
-            const shortPName = simplifyPortalName(p.name);
-            const bottomCls = p.labelBottom ? " lbl-bottom" : "";
+        const box = document.getElementById("hud-hearts-box");
+        if (!box) return;
 
-            if (p.linkedNpcId && window.Aetheria.Data.getNpcMarkerState) {
-              const marker = window.Aetheria.Data.getNpcMarkerState(s, p.linkedNpcId);
-              if (marker === "ready") {
-                item.lbl.className = "dom-label quest-ready-lbl" + bottomCls;
-                item.lbl.innerText = "✓ " + shortPName;
-              } else if (marker === "avail") {
-                item.lbl.className = "dom-label quest-avail-lbl" + bottomCls;
-                item.lbl.innerText = "! " + shortPName;
-              } else if (marker === "active") {
-                item.lbl.className = "dom-label quest-active-lbl" + bottomCls;
-                item.lbl.innerText = "⏳ " + shortPName;
+        const pct = Math.max(0, Math.min(100, Math.round((curHp / maxHp) * 100)));
+        const barColor = (pct >= 60) ? "#5ac54f" : (pct >= 30) ? "#f5b700" : "#ff595e";
+        const heartUrl = (Sprites && Sprites.getDataURL) ? Sprites.getDataURL("heart") : "";
+
+        if (pct < 30) box.classList.add("hp-low-pulse");
+        else box.classList.remove("hp-low-pulse");
+
+        box.title = "點擊可快速飲用生命藥水";
+        box.innerHTML =
+          '<div class="hud-hp-top-row">' +
+            (heartUrl ? '<img src="' + heartUrl + '" alt="HP">' : '<span style="color:#ff595e;">♥</span>') +
+            '<span>' + curHp + '/' + maxHp + '</span>' +
+          '</div>' +
+          '<div class="hud-hp-mini-track">' +
+            '<div class="hud-hp-mini-fill" style="width:' + pct + '%; background:' + barColor + ';"></div>' +
+          '</div>';
+
+        if (!box._boundQuickHeal) {
+          box._boundQuickHeal = true;
+          box.onclick = function() {
+            const st = window.Aetheria.State.data;
+            if (st.hp >= st.maxHp) {
+              window.Aetheria.UI.showToast("❤️ 當前生命值已滿 (" + st.hp + "/" + st.maxHp + ")！");
+              return;
+            }
+            if ((st.inventory.potionHeal || 0) > 0) {
+              window.Aetheria.Battle.useHealPotion();
+              Ren.lastHeartsState = "";
+              Ren.updateHeartsDOM(st, window.Aetheria.Data.Sprites);
+            } else {
+              window.Aetheria.UI.showToast("❤️ 當前生命值：" + st.hp + "/" + st.maxHp + "（可按右下角「口糧」進食或回營地睡覺恢復）");
+            }
+          };
+        }
+      };
+
+      if (Ren.renderWorld) {
+        const origRenderWorld = Ren.renderWorld.bind(Ren);
+        Ren.renderWorld = function() {
+          origRenderWorld();
+          try {
+            const s = window.Aetheria.State.data;
+            const isNight = window.Aetheria.State.getTimePhase().isNight;
+            const dnEl = document.getElementById("daynight-overlay");
+            if (dnEl && s && s.currentZone === "tent_hero") {
+              dnEl.className = "dn-day";
+            }
+
+            Object.keys(this.domPool.portals || {}).forEach(function(pId) {
+              const item = Ren.domPool.portals[pId];
+              if (!item || !item.lbl || !item.data) return;
+              const p = item.data;
+              const shortPName = simplifyPortalName(p.name);
+              const bottomCls = p.labelBottom ? " lbl-bottom" : "";
+
+              if (p.linkedNpcId && window.Aetheria.Data.getNpcMarkerState) {
+                const marker = window.Aetheria.Data.getNpcMarkerState(s, p.linkedNpcId);
+                if (marker === "ready") {
+                  item.lbl.className = "dom-label quest-ready-lbl" + bottomCls;
+                  item.lbl.innerText = "✓ " + shortPName;
+                } else if (marker === "avail") {
+                  item.lbl.className = "dom-label quest-avail-lbl" + bottomCls;
+                  item.lbl.innerText = "! " + shortPName;
+                } else if (marker === "active") {
+                  item.lbl.className = "dom-label quest-active-lbl" + bottomCls;
+                  item.lbl.innerText = "⏳ " + shortPName;
+                } else {
+                  item.lbl.className = "dom-label portal-lbl" + bottomCls;
+                  item.lbl.innerText = shortPName;
+                }
               } else {
                 item.lbl.className = "dom-label portal-lbl" + bottomCls;
                 item.lbl.innerText = shortPName;
               }
-            } else {
-              item.lbl.className = "dom-label portal-lbl" + bottomCls;
-              item.lbl.innerText = shortPName;
-            }
-          });
+            });
 
-          Object.keys(this.domPool.decos || {}).forEach(function(k) {
-            const item = Ren.domPool.decos[k];
-            if (!item || !item.lbl || !item.data) return;
-            const d = item.data;
+            Object.keys(this.domPool.decos || {}).forEach(function(k) {
+              const item = Ren.domPool.decos[k];
+              if (!item || !item.lbl || !item.data) return;
+              const d = item.data;
 
-            if (d.isHeroBed) {
-              item.lbl.style.display = "block";
-              item.lbl.className = "dom-label bed-lbl";
-              item.lbl.innerText = "睡袋";
-            } else if (d.isHeroDesk) {
-              item.lbl.style.display = "block";
-              item.lbl.className = "dom-label portal-lbl";
-              item.lbl.innerText = "書桌";
-            } else if (d.isCookPot) {
-              item.lbl.innerText = "料理鍋";
-            } else if (d.isFishingSpot) {
-              item.lbl.innerText = "釣魚點";
-            } else if (d.isBrazier && item.lbl.style.display !== "none") {
-              item.lbl.innerText = "火盆";
-            } else if (d.isSealPillar) {
-              const unsealed = s.unlockedSeals && s.unlockedSeals[d.id];
-              item.lbl.innerText = unsealed ? "封印柱✓" : "封印柱";
-            } else if (d.isProjectSite) {
-              const built = Boolean(s.projectsBuilt && s.projectsBuilt[d.projectId]);
-              const shortProj = (d.name || "工程").replace("巴爾的受損", "").replace("極地防風", "");
-              if (!built) {
-                item.lbl.innerText = "🔨" + shortProj;
-              } else if (d.isClimbLadder) {
-                item.lbl.innerText = "木梯";
-              } else if (d.projectId === "proj_z4_shelter") {
-                item.lbl.innerText = "防風屋";
-              } else if (d.projectId === "proj_camp_forge") {
-                item.lbl.innerText = "鍛造爐";
+              if (d.isHeroBed) {
+                item.lbl.style.display = "block";
+                item.lbl.className = "dom-label bed-lbl";
+                item.lbl.innerText = "睡袋";
+              } else if (d.isHeroDesk) {
+                item.lbl.style.display = "block";
+                item.lbl.className = "dom-label portal-lbl";
+                item.lbl.innerText = "書桌";
+              } else if (d.isCookPot) {
+                item.lbl.innerText = "料理鍋";
+              } else if (d.isFishingSpot) {
+                item.lbl.innerText = "釣魚點";
+              } else if (d.isBrazier && item.lbl.style.display !== "none") {
+                item.lbl.innerText = "火盆";
+              } else if (d.isSealPillar) {
+                const unsealed = s.unlockedSeals && s.unlockedSeals[d.id];
+                item.lbl.innerText = unsealed ? "封印柱✓" : "封印柱";
+              } else if (d.isProjectSite) {
+                const built = Boolean(s.projectsBuilt && s.projectsBuilt[d.projectId]);
+                const shortProj = (d.name || "工程").replace("巴爾的受損", "").replace("極地防風", "");
+                if (!built) {
+                  item.lbl.innerText = "🔨" + shortProj;
+                } else if (d.isClimbLadder) {
+                  item.lbl.innerText = "木梯";
+                } else if (d.projectId === "proj_z4_shelter") {
+                  item.lbl.innerText = "防風屋";
+                } else if (d.projectId === "proj_camp_forge") {
+                  item.lbl.innerText = "鍛造爐";
+                }
               }
-            }
-          });
+            });
 
-          Object.keys(this.domPool.npcs || {}).forEach(function(npcId) {
-            const item = Ren.domPool.npcs[npcId];
-            if (!item || !item.lbl || !item.data) return;
-            const npc = item.data;
-            const shortName = npc.name.split("・")[1] || npc.name;
-            const marker = window.Aetheria.Data.getNpcMarkerState ? window.Aetheria.Data.getNpcMarkerState(s, npc.id) : null;
+            Object.keys(this.domPool.npcs || {}).forEach(function(npcId) {
+              const item = Ren.domPool.npcs[npcId];
+              if (!item || !item.lbl || !item.data) return;
+              const npc = item.data;
+              const shortName = npc.name.split("・")[1] || npc.name;
+              const marker = window.Aetheria.Data.getNpcMarkerState ? window.Aetheria.Data.getNpcMarkerState(s, npc.id) : null;
 
-            if (marker === "ready") {
-              item.lbl.className = "dom-label quest-ready-lbl";
-              item.lbl.innerText = "✓ " + shortName;
-            } else if (marker === "avail") {
-              item.lbl.className = "dom-label quest-avail-lbl";
-              item.lbl.innerText = "! " + shortName;
-            } else if (marker === "active") {
-              item.lbl.className = "dom-label quest-active-lbl";
-              item.lbl.innerText = "⏳ " + shortName;
-            } else {
-              item.lbl.className = "dom-label";
-              item.lbl.innerText = shortName;
-            }
-          });
+              if (marker === "ready") {
+                item.lbl.className = "dom-label quest-ready-lbl";
+                item.lbl.innerText = "✓ " + shortName;
+              } else if (marker === "avail") {
+                item.lbl.className = "dom-label quest-avail-lbl";
+                item.lbl.innerText = "! " + shortName;
+              } else if (marker === "active") {
+                item.lbl.className = "dom-label quest-active-lbl";
+                item.lbl.innerText = "⏳ " + shortName;
+              } else {
+                item.lbl.className = "dom-label";
+                item.lbl.innerText = shortName;
+              }
+            });
 
-          Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
-            const item = Ren.domPool.monsters[mId];
-            if (!item || !item.lbl || !item.data || item.data.alive === false) return;
-            const m = item.data;
-            const effLv = isNight ? (m.lv + 3) : m.lv;
-            const shortMonName = (m.name || "").replace(/^翠風|^河畔|^岩窟|^流沙|^深海|^霜語|^紅蓮/, "");
+            Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
+              const item = Ren.domPool.monsters[mId];
+              if (!item || !item.lbl || !item.data || item.data.alive === false) return;
+              const m = item.data;
+              const effLv = isNight ? (m.lv + 3) : m.lv;
+              const shortMonName = (m.name || "").replace(/^翠風|^河畔|^岩窟|^流沙|^深海|^霜語|^紅蓮/, "");
 
-            if (m.aggro) {
-              item.lbl.className = "dom-label aggro-lbl";
-              item.lbl.innerText = "!" + shortMonName + " Lv." + effLv;
-            } else if (m.reqSeals && m.reqSeals.length > 0) {
-              const allUnsealed = m.reqSeals.every(function(sid) { return Boolean(s.unlockedSeals && s.unlockedSeals[sid]); });
-              item.lbl.className = "dom-label " + (allUnsealed ? "portal-lbl" : "lock-lbl");
-              item.lbl.innerText = shortMonName + (allUnsealed ? "" : "[封印]");
-            } else if (isNight) {
-              item.lbl.className = "dom-label night-fiend-lbl";
-              item.lbl.innerText = "🌙" + shortMonName + " Lv." + effLv;
-            } else {
-              item.lbl.className = "dom-label";
-              item.lbl.innerText = (m.isShiny ? "★" : "") + shortMonName + " Lv." + effLv;
-            }
-          });
-        } catch (e) {}
-      };
+              if (m.aggro) {
+                item.lbl.className = "dom-label aggro-lbl";
+                item.lbl.innerText = "!" + shortMonName + " Lv." + effLv;
+              } else if (m.reqSeals && m.reqSeals.length > 0) {
+                const allUnsealed = m.reqSeals.every(function(sid) { return Boolean(s.unlockedSeals && s.unlockedSeals[sid]); });
+                item.lbl.className = "dom-label " + (allUnsealed ? "portal-lbl" : "lock-lbl");
+                item.lbl.innerText = shortMonName + (allUnsealed ? "" : "[封印]");
+              } else if (isNight) {
+                item.lbl.className = "dom-label night-fiend-lbl";
+                item.lbl.innerText = "🌙" + shortMonName + " Lv." + effLv;
+              } else {
+                item.lbl.className = "dom-label";
+                item.lbl.innerText = (m.isShiny ? "★" : "") + shortMonName + " Lv." + effLv;
+              }
+            });
+          } catch (e) {}
+        };
+      }
     }
 
     if (Bat && Bat.startBattle) {
@@ -1435,6 +1542,10 @@ window.Aetheria = window.Aetheria || {};
         if (lvEl && S) {
           lvEl.innerHTML = S.iconHtml("icon_sword") + "Lv." + s.lv;
         }
+        if (window.Aetheria.Renderer && window.Aetheria.Renderer.updateHeartsDOM) {
+          window.Aetheria.Renderer.lastHeartsState = "";
+          window.Aetheria.Renderer.updateHeartsDOM(s, S);
+        }
       };
 
       const origUpdateZone = UI.updateHudZoneDynamic.bind(UI);
@@ -1479,7 +1590,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.Renderer.renderWorld();
       }
     } catch (err) {
-      console.error("Survival v7.8 module init error:", err);
+      console.error("Survival v7.9 module init error:", err);
     }
   }
 
