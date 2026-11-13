@@ -1139,4 +1139,178 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // ★ 修正 2：在左上角血量框 (#hud-hearts-box
+    // ★ 修正 2：在左上角血量框 (#hud-hearts-box) 頂部加入金色【玩家名字】
+    if (Ren) {
+      Ren.updateHeartsDOM = function(s, Sprites) {
+        if (!s) return;
+        const curHp = Math.max(0, Math.round(s.hp || 0));
+        const maxHp = Math.max(1, Math.round(s.maxHp || 100));
+        const pName = getHeroName(s);
+        const stateKey = pName + "|" + curHp + "/" + maxHp;
+        if (this.lastHeartsState === stateKey) return;
+        this.lastHeartsState = stateKey;
+
+        const box = document.getElementById("hud-hearts-box");
+        if (!box) return;
+
+        const pct = Math.max(0, Math.min(100, Math.round((curHp / maxHp) * 100)));
+        const barColor = (pct >= 60) ? "#5ac54f" : (pct >= 30) ? "#f5b700" : "#ff595e";
+        const heartUrl = (Sprites && Sprites.getDataURL) ? Sprites.getDataURL("heart") : "";
+
+        if (pct < 30) box.classList.add("hp-low-pulse");
+        else box.classList.remove("hp-low-pulse");
+
+        box.title = "點擊可快速飲用生命藥水";
+        box.innerHTML =
+          '<div class="hud-hero-name-row">' + pName + '</div>' +
+          '<div class="hud-hp-top-row">' +
+            (heartUrl ? '<img src="' + heartUrl + '" alt="HP">' : '<span style="color:#ff595e;">♥</span>') +
+            '<span>' + curHp + '/' + maxHp + '</span>' +
+          '</div>' +
+          '<div class="hud-hp-mini-track">' +
+            '<div class="hud-hp-mini-fill" style="width:' + pct + '%; background:' + barColor + ';"></div>' +
+          '</div>';
+
+        if (!box._boundQuickHeal) {
+          box._boundQuickHeal = true;
+          box.onclick = function() {
+            const st = window.Aetheria.State.data;
+            if (st.hp >= st.maxHp) {
+              window.Aetheria.UI.showToast("👤 " + getHeroName(st) + "｜❤️ 生命值已滿 (" + st.hp + "/" + st.maxHp + ")！");
+              return;
+            }
+            if ((st.inventory.potionHeal || 0) > 0) {
+              window.Aetheria.Battle.useHealPotion();
+              Ren.lastHeartsState = "";
+              Ren.updateHeartsDOM(st, window.Aetheria.Data.Sprites);
+            } else {
+              window.Aetheria.UI.showToast("👤 " + getHeroName(st) + "｜❤️ 生命值：" + st.hp + "/" + st.maxHp + "（可按右下角「口糧」進食恢復）");
+            }
+          };
+        }
+      };
+    }
+
+    if (Data && Data.getNpcDynamicGreeting) {
+      const origGreet = Data.getNpcDynamicGreeting.bind(Data);
+      Data.getNpcDynamicGreeting = function(s, npcId) {
+        const raw = origGreet(s, npcId);
+        return replaceHeroNameInText(raw, s);
+      };
+    }
+
+    if (UI) {
+      // 攔截 UI 層任何新遊戲方法
+      ["startNewGame", "newGame", "onNewGame"].forEach(function(fnName) {
+        if (typeof UI[fnName] === "function") {
+          UI[fnName] = function() {
+            SaveSlotsManager.startNewGameWithCustomName();
+          };
+        }
+      });
+
+      if (UI.updateAllHud) {
+        const origUpdateHud = UI.updateAllHud.bind(UI);
+        UI.updateAllHud = function() {
+          origUpdateHud();
+          const s = window.Aetheria.State.data;
+
+          const hungerEl = document.getElementById("hud-hunger");
+          if (hungerEl) {
+            const hVal = (s.hunger !== undefined) ? s.hunger : 100;
+            const mealMark = (s.activeMeal && s.activeMeal.battlesLeft > 0) ? "🍲" : "";
+            hungerEl.innerText = "🍖" + hVal + "%" + mealMark;
+          }
+
+          const timeEl = document.getElementById("hud-time");
+          if (timeEl && timeEl.innerText) {
+            timeEl.innerText = timeEl.innerText.replace(/^D(\d+)\s+/, "D$1");
+          }
+
+          const overlay = document.getElementById("hud-overlay");
+          if (overlay && overlay.lastElementChild && overlay.lastElementChild.id !== "hud-zone") {
+            overlay.lastElementChild.id = "hud-fullscreen-btn";
+          }
+
+          if (window.Aetheria.Renderer && window.Aetheria.Renderer.updateHeartsDOM) {
+            window.Aetheria.Renderer.updateHeartsDOM(s, window.Aetheria.Data.Sprites);
+          }
+        };
+      }
+
+      if (UI.updateHudZoneDynamic) {
+        const origZone = UI.updateHudZoneDynamic.bind(UI);
+        UI.updateHudZoneDynamic = function(mapObj, s) {
+          origZone(mapObj, s);
+          const zoneBadge = document.getElementById("hud-zone");
+          if (zoneBadge && zoneBadge.innerText) {
+            zoneBadge.innerText = zoneBadge.innerText.replace(/\s*Lv\.(\d+)/, "($1)");
+          }
+        };
+      }
+
+      if (UI.openSettingsModal) {
+        const origOpenSettings = UI.openSettingsModal.bind(UI);
+        UI.openSettingsModal = function(tab, previewUnitKey) {
+          origOpenSettings(tab, previewUnitKey);
+          if (tab === "system") {
+            const body = document.getElementById("modal-body");
+            if (body && body.children.length > 1) {
+              while (body.children.length > 1) {
+                body.removeChild(body.lastChild);
+              }
+              SaveSlotsManager.renderSlotsAndCloudPanel(body);
+            }
+          }
+        };
+      }
+
+      if (UI.initTitleScreen) {
+        const origInitTitle = UI.initTitleScreen.bind(UI);
+        UI.initTitleScreen = function() {
+          origInitTitle();
+          updateTitleScreenSlotBadge();
+        };
+      }
+    }
+
+    if (Surv && Surv.playSleepToMorning) {
+      const origSleep = Surv.playSleepToMorning.bind(Surv);
+      Surv.playSleepToMorning = function() {
+        origSleep();
+        setTimeout(function() {
+          const autoOn = localStorage.getItem(AUTO_CLOUD_KEY) === "1";
+          const hasCode = Boolean(localStorage.getItem(CLOUD_CODE_KEY));
+          if (autoOn && hasCode) {
+            SaveSlotsManager.uploadToCloud(true);
+          }
+        }, 2800);
+      };
+    }
+  }
+
+  function initCloudSaveSlotsModule() {
+    try {
+      injectSaveSlotsStyles();
+      ensureInitialSlotMigration();
+      hookSystemsForSaveSlots();
+      updateTitleScreenSlotBadge();
+      if (window.Aetheria.Renderer) {
+        window.Aetheria.Renderer.lastHeartsState = "";
+      }
+      if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) {
+        window.Aetheria.UI.updateAllHud();
+      }
+    } catch (err) {
+      console.error("Cloud Save Slots v8.6 init error:", err);
+    }
+  }
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    setTimeout(initCloudSaveSlotsModule, 150);
+  } else {
+    window.addEventListener("load", function() {
+      setTimeout(initCloudSaveSlotsModule, 150);
+    });
+  }
+})();
