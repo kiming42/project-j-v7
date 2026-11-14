@@ -1,81 +1,68 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 正統 Survival RPG 深度重製模組 (survival-highlands-workshop.js - v10.3)
- * v10.3 新增重點（營地靈草種植農圃 ＆ 海濱自動捕魚竹籠）：
- *   1. 【🌱 營地靈草種植農圃 (Lv.1~Lv.3)】：設於營地左下草藥師梅姑旁 (x:135, y:295)，睡醒或每戰 3 場自動產出微光菇、藤蔓、亞麻、太陽花、仙人掌與極地冰蓮
- *   2. 【🧺 海濱自動捕魚竹籠 (Lv.1~Lv.3)】：設於營地南岸阿海旁淺灘 (x:345, y:404)，自動捕獲鮮魚、黏土、深海珊瑚、甲殼、岩鹽與風乾肉脯
- *   3. 完整包含 v10.2 的探險鐵鏟挖寶(✖)、地底古老遺跡(crypt_*)、💡領悟配方系統、2100x1320 大地圖、高低差懸崖山洞與 6 區環境求生裝
+ * Project J：艾瑟瑞亞的破曉 — Kenney 自然像素地貌與正宗 Survival RPG 模組 (survival-highlands-workshop.js - v11.0)
+ * 【Part 1 / 2：Kenney CC0 16x16 自然地貌 Canvas 引擎、永久唯一挖寶與正宗求生數據庫】
+ * 核心重製：
+ *   1. 【挖寶點永久唯一】：所有「✖」挖寶點使用固定 ID 並寫入存檔 s.dugSpots，全遊戲只限挖一次，絕不重覆刷新！
+ *   2. 【Kenney CC0 自然像素 Tilemap】：廢除生硬 CSS 長方框，改用 16x16 像素 Canvas 繪製蜿蜒小徑、不規則岩石懸崖、水岸浪花與草木細節
+ *   3. 【正宗 Survival RPG 玩法】：加入「🔥隨地搭建野外營火」、「實體敲擊採集粒子回饋」、「口渴/體力求生循環」與四大專業工作台
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入高低差懸崖、營地農圃/魚籠、地底遺跡與格仔工坊 CSS =================
-  function injectHighlandsAndWorkshopStyles() {
-    if (document.getElementById("highlands-wk-v103-styles")) return;
+  // ================= 1. 注入 Kenney 像素地貌 Canvas、採集震動粒子與求生 UI 樣式 =================
+  function injectSurvivalRpgStyles() {
+    if (document.getElementById("srpg-kenney-v110-styles")) return;
     const style = document.createElement("style");
-    style.id = "highlands-wk-v103-styles";
+    style.id = "srpg-kenney-v110-styles";
     style.textContent = `
-      /* ================= A. L型高低差黃土高台與深啡色垂直懸崖壁 ================= */
-      .srpg-plateau-top {
+      /* Kenney 16x16 像素地貌底圖 Canvas（取代原本生硬的 CSS 泥土塊與方框） */
+      .kenney-terrain-canvas {
         position: absolute;
-        background-color: #c6a664;
-        background-image:
-          radial-gradient(#b08d4c 15%, transparent 16%),
-          radial-gradient(#d8bc7d 15%, transparent 16%);
-        background-size: 16px 16px;
-        background-position: 0 0, 8px 8px;
-        border-top: 5px solid #6e3b1e;
-        border-left: 5px solid #6e3b1e;
-        border-right: 5px solid #6e3b1e;
-        border-radius: 10px 10px 0 0;
+        left: 0;
+        top: 0;
         pointer-events: none;
-        z-index: 2;
+        z-index: 1;
+        image-rendering: pixelated;
       }
-      .srpg-cliff-wall {
-        position: absolute;
-        background:
-          repeating-linear-gradient(
-            90deg,
-            #7a4424 0px,
-            #7a4424 14px,
-            #5c3118 14px,
-            #5c3118 18px,
-            #8c5230 18px,
-            #8c5230 28px
-          );
-        border-top: 4px solid #472411;
-        border-bottom: 5px solid #2b1508;
-        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.55);
-        pointer-events: none;
-        z-index: 3;
+      /* 隱藏舊版生硬的橢圓泥塊，交由 Kenney Canvas 自然繪製 */
+      #world-terrain-layer .dom-dirt-blob {
+        opacity: 0 !important;
       }
-      .srpg-cliff-side-wall {
-        position: absolute;
-        background:
-          repeating-linear-gradient(
-            180deg,
-            #6e3b1e 0px,
-            #6e3b1e 12px,
-            #4f2913 12px,
-            #4f2913 16px
-          );
-        border-left: 3px solid #3b1d0b;
-        border-right: 3px solid #3b1d0b;
-        pointer-events: none;
-        z-index: 3;
-      }
-      .srpg-cave-arch {
-        position: absolute;
-        width: 56px;
-        height: 46px;
-        background: radial-gradient(circle at 50% 65%, #090608 45%, #241418 85%, #472411 100%);
-        border: 4px solid #472411;
-        border-bottom: none;
-        border-radius: 28px 28px 0 0;
-        box-shadow: inset 0 6px 12px #000000;
-        pointer-events: none;
-        z-index: 4;
+      #world-terrain-layer .dom-dirt-blob.ocean-atoll {
+        opacity: 1 !important;
       }
 
+      /* 懸崖山洞自然石拱門 */
+      .kenney-cave-entrance {
+        position: absolute;
+        width: 48px;
+        height: 40px;
+        pointer-events: none;
+        z-index: 3;
+        image-rendering: pixelated;
+      }
+
+      /* 採集敲擊時的搖晃與像素碎屑粒子 */
+      @keyframes srpgHitShake {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        25% { transform: translate(-3px, 1px) scale(0.92); }
+        50% { transform: translate(3px, -2px) scale(1.06); }
+        75% { transform: translate(-2px, 0px) scale(0.96); }
+      }
+      .srpg-node-hit {
+        animation: srpgHitShake 0.22s ease-in-out !important;
+      }
+      .srpg-particle {
+        position: absolute;
+        width: 5px;
+        height: 5px;
+        border: 1px solid #141013;
+        pointer-events: none;
+        z-index: 45;
+        transition: transform 0.42s ease-out, opacity 0.42s ease-out;
+      }
+
+      /* 右上角環境危機與野外營火庇護橫幅 */
       #srpg-hazard-banner {
         position: absolute;
         top: 28px;
@@ -98,47 +85,64 @@ window.Aetheria = window.Aetheria || {};
       }
       #srpg-hazard-banner.hazard-safe {
         display: block;
-        background: rgba(20, 54, 42, 0.88);
+        background: rgba(20, 54, 42, 0.90);
         color: #5ac54f;
         border: 1.5px solid #5ac54f;
       }
 
+      /* 左下角快速搭建「🔥野外營火」浮動小按鈕（僅在野外探索時顯示） */
+      #srpg-field-campfire-btn {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        z-index: 26;
+        background: linear-gradient(180deg, #7f2b1d 0%, #4a150b 100%);
+        color: #ffd166;
+        border: 2px solid #f5b700;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 900;
+        cursor: pointer;
+        pointer-events: auto;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.8);
+      }
+      #srpg-field-campfire-btn:active {
+        transform: translateY(2px);
+      }
+
       .dom-label.ladder-spot-lbl {
-        background: linear-gradient(90deg, #5c3824 0%, #8f563b 100%);
-        color: #ffd166;
-        border: 1.5px solid #f5b700;
-        box-shadow: 0 0 6px rgba(245, 183, 0, 0.85);
-        font-weight: 900;
-      }
-      .dom-label.crypt-door-lbl {
-        background: linear-gradient(90deg, #2d1442 0%, #4a154b 100%);
-        color: #ffd166;
-        border: 1.5px solid #e0aaff;
-        box-shadow: 0 0 7px rgba(224, 170, 255, 0.85);
-        font-weight: 900;
-      }
-      .dom-label.dig-spot-lbl {
         background: #4a2c11;
         color: #ffd166;
         border: 1.5px solid #f5b700;
         font-weight: 900;
       }
+      .dom-label.crypt-door-lbl {
+        background: #2d1442;
+        color: #ffd166;
+        border: 1.5px solid #e0aaff;
+        font-weight: 900;
+      }
+      .dom-label.dig-spot-lbl {
+        background: #3d2314;
+        color: #ffd166;
+        border: 1.5px solid #f5b700;
+        font-weight: 900;
+      }
       .dom-label.farm-ready-lbl {
-        background: linear-gradient(90deg, #1e3a2f 0%, #2d6a4f 100%);
+        background: #1e3a2f;
         color: #fff3b0;
         border: 1.5px solid #5ac54f;
-        box-shadow: 0 0 7px rgba(90, 197, 79, 0.85);
         font-weight: 900;
         animation: bobQuest 0.9s infinite ease-in-out;
       }
       .dom-label.elite-mon-lbl {
-        background: linear-gradient(90deg, #6a040f 0%, #3c096c 100%);
+        background: #6a040f;
         color: #ffd166;
         border: 1.5px solid #ff758f;
-        box-shadow: 0 0 6px rgba(255, 89, 94, 0.8);
       }
 
-      /* ================= B. 格仔分類工坊 UI ================= */
+      /* 正宗 Survival RPG 格仔工作台 UI */
       #panel-modal #modal-body {
         overflow-y: auto !important;
         padding-bottom: 42px !important;
@@ -300,14 +304,262 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
 
     const upper = document.getElementById("upper-screen");
-    if (upper && !document.getElementById("srpg-hazard-banner")) {
-      const banner = document.createElement("div");
-      banner.id = "srpg-hazard-banner";
-      upper.appendChild(banner);
+    if (upper) {
+      if (!document.getElementById("srpg-hazard-banner")) {
+        const banner = document.createElement("div");
+        banner.id = "srpg-hazard-banner";
+        upper.appendChild(banner);
+      }
+      if (!document.getElementById("srpg-field-campfire-btn")) {
+        const fireBtn = document.createElement("button");
+        fireBtn.id = "srpg-field-campfire-btn";
+        fireBtn.innerHTML = "🔥 紮營生火";
+        fireBtn.onclick = function(ev) {
+          ev.stopPropagation();
+          if (window.Aetheria.HighlandsWorkshop) {
+            window.Aetheria.HighlandsWorkshop.buildOrOpenFieldCampfire();
+          }
+        };
+        upper.appendChild(fireBtn);
+      }
     }
   }
 
-  // ================= 2. 註冊《Survival RPG》像素圖示（新增農圃與捕魚竹籠圖示） =================
+  // ================= 2. Kenney (CC0 Public Domain) 16x16 自然像素圖塊與物件渲染器 =================
+  const KENNEY_PALETTES = {
+    forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e" },
+    cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d" },
+    canyon:  { bg1: "#c79452", bg2: "#ba8745", bg3: "#d4a260", path: "#e0b97d", pathEdge: "#ad7b3b", cliffTop: "#deb878", rock1: "#8f4b26", rock2: "#703819", rockHi: "#ab5e34", rockDark: "#45200b" },
+    coast:   { bg1: "#599140", bg2: "#4d8036", bg3: "#68a34d", path: "#e6c88c", pathEdge: "#c4a366", cliffTop: "#d9bc82", rock1: "#755233", rock2: "#593d24", rockHi: "#8f6743", rockDark: "#362312" },
+    snow:    { bg1: "#dce8f2", bg2: "#c9d9e8", bg3: "#edf4fa", path: "#9eb3c7", pathEdge: "#7e96ad", cliffTop: "#ffffff", rock1: "#5a718a", rock2: "#43566b", rockHi: "#7b93ad", rockDark: "#293645" },
+    volcano: { bg1: "#3b2321", bg2: "#301b19", bg3: "#4a2c29", path: "#633933", pathEdge: "#472723", cliffTop: "#73423b", rock1: "#52241d", rock2: "#381712", rockHi: "#8c382b", rockDark: "#1f0b08" },
+    sky:     { bg1: "#487a6b", bg2: "#3d6b5d", bg3: "#568f7e", path: "#e8dfc5", pathEdge: "#c4b89b", cliffTop: "#f5eedc", rock1: "#6e7885", rock2: "#525b66", rockHi: "#8e99a8", rockDark: "#333940" }
+  };
+
+  // 固定種子的偽隨機數（確保每次繪製同一張地圖時，草叢、碎石、小徑與懸崖紋理 100% 穩定自然）
+  function seededHash(x, y, seed) {
+    let h = (x * 374761393 + y * 668265263 + (seed || 0) * 1442695041) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
+  // 判斷某個 16x16 圖塊是否屬於「自然蜿蜒小徑」
+  function isNaturalPathTile(px, py, mapObj) {
+    const blobs = mapObj.dirtBlobs || [];
+    const wave = Math.sin(px * 0.025) * 14 + Math.cos(py * 0.025) * 14;
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      if (b.cx !== undefined && b.cy !== undefined) {
+        const rx = (b.rx || 80) + wave;
+        const ry = (b.ry || 60) + wave * 0.7;
+        const dx = (px - b.cx) / Math.max(20, rx);
+        const dy = (py - b.cy) / Math.max(20, ry);
+        if (dx * dx + dy * dy <= 1.0) return true;
+      } else if (b.x !== undefined && b.y !== undefined) {
+        if (px >= b.x && px <= b.x + (b.w || 100) && py >= b.y && py <= b.y + (b.h || 80)) return true;
+      }
+    }
+    return false;
+  }
+
+  // 判斷某個座標是否位於「不規則自然曲線高台」內部
+  function isNaturalPlateauTile(px, py, hasHighland) {
+    if (!hasHighland) return false;
+    const curveTop = Math.sin(px * 0.03) * 8;
+    const curveBottom = Math.sin(px * 0.04) * 6;
+    const inTopWing = (px >= 388 && px <= 902 && py >= 798 + curveTop && py <= 918 + curveBottom);
+    const inRightWing = (px >= 708 && px <= 902 && py >= 912 && py <= 1058 + curveBottom);
+    return inTopWing || inRightWing;
+  }
+
+  // ★ 核心渲染：在 `<canvas>` 上用 Kenney CC0 16x16 像素風格繪製整張自然地圖！
+  function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
+    if (!mapObj || !terrainLayer || mapObj.id === "ocean_sea") return;
+    const oldCanvas = terrainLayer.querySelector(".kenney-terrain-canvas");
+    if (oldCanvas) oldCanvas.remove();
+
+    const W = mapObj.width || 1200;
+    const H = mapObj.height || 680;
+    const canvas = document.createElement("canvas");
+    canvas.className = "kenney-terrain-canvas";
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+
+    const ctx = canvas.getContext("2d");
+    const pal = KENNEY_PALETTES[mapObj.theme] || KENNEY_PALETTES.forest;
+    const hasHighland = Boolean(HIGHLAND_ZONES[mapObj.id]);
+    const cols = Math.ceil(W / 16);
+    const rows = Math.ceil(H / 16);
+
+    // 1. 鋪設 Kenney 16x16 多層次草地/荒原基底 + 碎石與小草叢細節
+    for (let ty = 0; ty < rows; ty++) {
+      for (let tx = 0; tx < cols; tx++) {
+        const px = tx * 16;
+        const py = ty * 16;
+        const r = seededHash(tx, ty, 11);
+
+        ctx.fillStyle = (r < 0.45) ? pal.bg1 : (r < 0.80) ? pal.bg2 : pal.bg3;
+        ctx.fillRect(px, py, 16, 16);
+
+        // 繪製 Kenney 風格像素小草葉與鹅卵石細節
+        if (r > 0.72) {
+          ctx.fillStyle = pal.bg3;
+          ctx.fillRect(px + 4, py + 6, 2, 4);
+          ctx.fillRect(px + 7, py + 5, 2, 5);
+          ctx.fillRect(px + 10, py + 7, 2, 3);
+        } else if (r < 0.08) {
+          ctx.fillStyle = pal.pathEdge;
+          ctx.fillRect(px + 6, py + 9, 4, 3);
+          ctx.fillStyle = pal.path;
+          ctx.fillRect(px + 7, py + 9, 2, 2);
+        }
+      }
+    }
+
+    // 2. 繪製自然蜿蜒的 Kenney 像素泥土小徑（帶深色碎石邊框 Autotile）
+    for (let ty = 0; ty < rows; ty++) {
+      for (let tx = 0; tx < cols; tx++) {
+        const px = tx * 16 + 8;
+        const py = ty * 16 + 8;
+        if (!isNaturalPathTile(px, py, mapObj)) continue;
+
+        const x0 = tx * 16;
+        const y0 = ty * 16;
+        ctx.fillStyle = pal.path;
+        ctx.fillRect(x0, y0, 16, 16);
+
+        // 檢查上下左右是否為草地，若是則畫上 Kenney 像素鋸齒邊緣
+        const nUp    = !isNaturalPathTile(px, py - 16, mapObj);
+        const nDown  = !isNaturalPathTile(px, py + 16, mapObj);
+        const nLeft  = !isNaturalPathTile(px - 16, py, mapObj);
+        const nRight = !isNaturalPathTile(px + 16, py, mapObj);
+
+        ctx.fillStyle = pal.pathEdge;
+        if (nUp)    ctx.fillRect(x0, y0, 16, 3);
+        if (nDown)  ctx.fillRect(x0, y0 + 13, 16, 3);
+        if (nLeft)  ctx.fillRect(x0, y0, 3, 16);
+        if (nRight) ctx.fillRect(x0 + 13, y0, 3, 16);
+
+        const r = seededHash(tx, ty, 37);
+        if (r < 0.25) {
+          ctx.fillStyle = pal.pathEdge;
+          ctx.fillRect(x0 + 5, y0 + 6, 3, 2);
+          ctx.fillRect(x0 + 10, y0 + 11, 2, 2);
+        }
+      }
+    }
+
+    // 3. 若有高低差懸崖：繪製 Kenney 風格「不規則岩石高台 + 垂直立體岩層懸崖 + 底部陰影」
+    if (hasHighland) {
+      for (let ty = 48; ty < rows; ty++) {
+        for (let tx = 22; tx < cols; tx++) {
+          const px = tx * 16 + 8;
+          const py = ty * 16 + 8;
+          if (!isNaturalPlateauTile(px, py, true)) continue;
+
+          const x0 = tx * 16;
+          const y0 = ty * 16;
+
+          // 高台頂部黃土岩面
+          ctx.fillStyle = pal.cliffTop;
+          ctx.fillRect(x0, y0, 16, 16);
+
+          const r = seededHash(tx, ty, 73);
+          if (r < 0.28) {
+            ctx.fillStyle = pal.pathEdge;
+            ctx.fillRect(x0 + 4, y0 + 5, 4, 2);
+            ctx.fillRect(x0 + 9, y0 + 10, 3, 2);
+          }
+
+          // 高台四周岩邊框
+          const pUp    = isNaturalPlateauTile(px, py - 16, true);
+          const pDown  = isNaturalPlateauTile(px, py + 16, true);
+          const pLeft  = isNaturalPlateauTile(px - 16, py, true);
+          const pRight = isNaturalPlateauTile(px + 16, py, true);
+
+          ctx.fillStyle = pal.rockDark;
+          if (!pUp)    ctx.fillRect(x0, y0, 16, 3);
+          if (!pLeft)  ctx.fillRect(x0, y0, 3, 16);
+          if (!pRight) ctx.fillRect(x0 + 13, y0, 3, 16);
+
+          // ★ 若下方不是高台，向下延伸繪製 3 格高 (48px) 的 Kenney 垂直立體岩石懸崖壁！
+          if (!pDown) {
+            ctx.fillStyle = pal.rockDark;
+            ctx.fillRect(x0, y0 + 13, 16, 3);
+
+            const wallHeightTiles = 3;
+            for (let wy = 1; wy <= wallHeightTiles; wy++) {
+              const wy0 = y0 + wy * 16;
+              ctx.fillStyle = (wy % 2 === 1) ? pal.rock1 : pal.rock2;
+              ctx.fillRect(x0, wy0, 16, 16);
+
+              // 垂直岩縫與高光石塊紋理
+              ctx.fillStyle = pal.rockHi;
+              ctx.fillRect(x0 + 2, wy0 + 2, 5, 6);
+              ctx.fillRect(x0 + 9, wy0 + 6, 5, 6);
+
+              ctx.fillStyle = pal.rockDark;
+              ctx.fillRect(x0, wy0, 2, 16);
+              ctx.fillRect(x0 + 7, wy0 + 2, 2, 12);
+              if (wy === wallHeightTiles) {
+                ctx.fillRect(x0, wy0 + 13, 16, 3);
+                // 懸崖底部落地半透明自然陰影
+                ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+                ctx.fillRect(x0, wy0 + 16, 16, 8);
+              }
+            }
+          }
+        }
+      }
+
+      // 繪製懸崖中央的 Kenney 像素岩石山洞口 (x: 472, y: 922)
+      const cx = 472;
+      const cy = 920;
+      ctx.fillStyle = pal.rockDark;
+      ctx.fillRect(cx - 4, cy - 4, 56, 48);
+      ctx.fillStyle = pal.rock2;
+      ctx.fillRect(cx, cy, 48, 44);
+      ctx.fillStyle = "#09060a";
+      ctx.fillRect(cx + 6, cy + 8, 36, 36);
+      ctx.fillStyle = "#1c131f";
+      ctx.fillRect(cx + 10, cy + 4, 28, 6);
+    }
+
+    terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
+  }
+
+  // 採集敲擊時的粒子噴發回饋
+  function spawnHarvestParticles(nodeX, nodeY, colorHex) {
+    const entityLayer = document.getElementById("world-entity-layer");
+    if (!entityLayer) return;
+
+    for (let i = 0; i < 6; i++) {
+      const p = document.createElement("div");
+      p.className = "srpg-particle";
+      p.style.left = nodeX + "px";
+      p.style.top = (nodeY - 8) + "px";
+      p.style.background = colorHex || "#ffd166";
+      entityLayer.appendChild(p);
+
+      const angle = (Math.PI * 2 * i) / 6 + (Math.random() * 0.5 - 0.25);
+      const dist = 14 + Math.random() * 16;
+      const dx = Math.cos(angle) * dist;
+      const dy = Math.sin(angle) * dist - 6;
+
+      requestAnimationFrame(function() {
+        p.style.transform = "translate(" + dx.toFixed(1) + "px, " + dy.toFixed(1) + "px)";
+        p.style.opacity = "0";
+      });
+
+      setTimeout(function() {
+        if (p.parentNode) p.parentNode.removeChild(p);
+      }, 430);
+    }
+  }
+
+  // ================= 3. 註冊 Kenney CC0 風格像素圖示 =================
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -330,7 +582,6 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    // 🌱 營地靈草種植農圃 (空地 vs 茂盛可收成)
     const herbFarmEmptyUrl = buildGridDataUrl([
       "................",
       ".KKKKKKKKKKKKKK.",
@@ -369,7 +620,6 @@ window.Aetheria = window.Aetheria || {};
       "................"
     ], { K: "#141013", L: "#d9a066", D: "#5c3824", G: "#5ac54f", Y: "#ffd166", R: "#ff595e" });
 
-    // 🧺 海濱自動捕魚竹籠 (空籠 vs 滿載鮮魚可收成)
     const fishTrapEmptyUrl = buildGridDataUrl([
       "................",
       "....KKKKKKKK....",
@@ -377,7 +627,7 @@ window.Aetheria = window.Aetheria || {};
       ".KLLDDLLLLDDLLK.",
       ".KLDDLLLLLLDDLK.",
       "KLLDLLKKKKLLDLLK",
-      "KLDDLKOOOOokDDLK",
+      "KLDDLKOOOOOKDDLK",
       "KLLDLKOOOOOKLDLK",
       "KLDDLLKKKKLLDDLK",
       ".KLLDDLLLLDDLLK.",
@@ -836,7 +1086,7 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 營地【🌱靈草種植農圃】與【🧺海濱捕魚竹籠】三階定義 =================
+  // ================= 4. 營地自動化設施、環境危機與《Survival RPG》素材/配方定義 =================
   const CAMP_AUTOMATION_DEFS = {
     farm: {
       id: "farm",
@@ -907,7 +1157,6 @@ window.Aetheria = window.Aetheria || {};
     }
   };
 
-  // ================= 4. 六大區域環境危機定義 =================
   const ZONE_HAZARD_RULES = {
     zone1_forest: {
       zoneId: "zone1_forest",
@@ -917,7 +1166,7 @@ window.Aetheria = window.Aetheria || {};
       minX: 660,
       hpDrain: 5,
       hungerDrain: 1,
-      warnMsg: "☠️ 踏入深林【劇毒瘴氣區】！請先在西側安全區採集毒囊與樹皮，於工坊合成【清毒草藥香囊】免疫！"
+      warnMsg: "☠️ 踏入深林【劇毒瘴氣區】！可在腳下【🔥紮營生火】暫避，或於工坊合成【清毒草藥香囊】永久免疫！"
     },
     cave1_mushroom: {
       zoneId: "cave1_mushroom",
@@ -928,7 +1177,7 @@ window.Aetheria = window.Aetheria || {};
       hpDrain: 6,
       hungerDrain: 2,
       allowTorchBypass: true,
-      warnMsg: "🌑 洞窟深處【暗黑孢子侵蝕】！請點燃火把或在工坊合成【永明石英提燈】永久免疫！"
+      warnMsg: "🌑 洞窟深處【暗黑孢子侵蝕】！可點燃火把、【🔥紮營生火】或合成【永明石英提燈】永久免疫！"
     },
     zone2_canyon: {
       zoneId: "zone2_canyon",
@@ -960,7 +1209,7 @@ window.Aetheria = window.Aetheria || {};
       hpDrain: 11,
       hungerDrain: 3,
       slowFactor: 0.75,
-      warnMsg: "❄️ 暴風雪【極寒凍傷】！請先在西側收集極地厚獸毛，於工坊縫製【極地厚毛防寒斗篷】永久禦寒！"
+      warnMsg: "❄️ 暴風雪【極寒凍傷】！可【🔥紮營生火】取暖，或於工坊縫製【極地厚毛防寒斗篷】永久禦寒！"
     },
     zone5_volcano: {
       zoneId: "zone5_volcano",
@@ -989,7 +1238,15 @@ window.Aetheria = window.Aetheria || {};
     return (s.inventory[gearKey] || 0) > 0;
   }
 
-  // ================= 5. 定義《Survival RPG》素材、6大工具與 33 項遞進式配方 =================
+  function isNearFieldCampfire(mapObj, s) {
+    if (!mapObj || !mapObj.decos || !s) return false;
+    return mapObj.decos.some(function(d) {
+      return d && (d.isFieldCampfire || d.isIslandFire) && Math.hypot((s.heroX || 0) - d.x, (s.heroY || 0) - d.y) < 110;
+    });
+  }
+
+  // ===== Part 1 結束位置（請緊接在此行下方貼上 Part 2 代碼） =====
+  // ================= 5. 定義《Survival RPG》素材、6大工具與四大求生工作台配方 =================
   const NEW_SRPG_MATERIALS = {
     cryptKey:        { id: "cryptKey",        name: "遠古遺跡鑰匙",     tier: 2, desc: "【尋寶挖掘/工坊鍛造】用探險鐵鏟挖掘地面「✖」藏寶記號獲得，可解鎖各區的【🔒遠古地底遺跡】！" },
     ancientGem:      { id: "ancientGem",      name: "遠古秘寶晶石",     tier: 3, desc: "【地底遺跡/挖寶秘寶】蘊含遠古神力的璀璨晶石，可於工坊提煉永久提升攻防血量的遠古秘藥！" },
@@ -998,7 +1255,7 @@ window.Aetheria = window.Aetheria || {};
     elixirDef:       { id: "elixirDef",       name: "遠古鐵壁靈液",     tier: 3, desc: "【永久屬性秘藥】點擊「✨使用強化」飲用後，主角永久防禦力 +5！" },
     venomSac:        { id: "venomSac",        name: "毒囊孢子",         tier: 1, desc: "【1區森林特產】採集自迷霧森林西側或毒菇妖掉落，可用於提煉抗瘴氣香囊。" },
     treeBark:        { id: "treeBark",        name: "堅韌樹皮",         tier: 1, desc: "【1區森林特產】剝自古老神木的厚樹皮，是製作清毒香囊與繩索的材料。" },
-    coal:            { id: "coal",            name: "黑曜木炭",         tier: 1, desc: "【洞窟/高台礦產】由枯枝窯燒或於岩壁山洞開採，是冶煉精鋼錠與黑火藥的核心燃料。" },
+    coal:            { id: "coal",            name: "黑曜木炭",         tier: 1, desc: "【營火悶燒/山洞礦產】由枯枝於營火悶燒或於岩壁山洞開採，是冶煉精鋼錠與黑火藥的核心燃料。" },
     quartz:          { id: "quartz",          name: "透明石英砂",       tier: 2, desc: "【高台晶礦】採集自懸崖高台與山洞，可用於燒製永明石英提燈、護目鏡片與藥瓶。" },
     cactusFruit:     { id: "cactusFruit",     name: "多汁仙人掌",       tier: 2, desc: "【2區峽谷特產】富含清甜汁液的荒漠植物，可製作防沙護目水壺與解渴口糧。" },
     rockSalt:        { id: "rockSalt",        name: "結晶岩鹽",         tier: 1, desc: "【高台/海岸礦產】採集自懸崖高台，可醃製長效保存的岩鹽風乾肉脯。" },
@@ -1006,8 +1263,8 @@ window.Aetheria = window.Aetheria || {};
     rawHide:         { id: "rawHide",         name: "荒野獸皮",         tier: 1, desc: "【狩獵戰利品】討伐野外魔物掉落，可加工為堅韌的鞣製硬皮革。" },
     thickPelt:       { id: "thickPelt",       name: "極地厚獸毛",       tier: 3, desc: "【4區雪原特產】極寒霜狼與雪原採集的厚重毛皮，是縫製防寒斗篷的核心材料。" },
     sulfur:          { id: "sulfur",          name: "火山硫磺晶",       tier: 3, desc: "【5區火山特產】採集自火山口的高純度硫磺，可打造隔熱護心鏡與重型炸彈。" },
-    curedLeather:    { id: "curedLeather",    name: "鞣製硬皮革",       tier: 2, desc: "【進階強化材】以獸皮與松脂鞣製而成，點擊「✨使用強化」可永久提升防禦力 +3、最大HP +12！" },
-    steelIngot:      { id: "steelIngot",      name: "百煉精鋼錠",       tier: 2, desc: "【高階強化材】以藍晶鐵礦與黑曜木炭高溫鍛打而成，點擊「✨使用強化」可永久提升攻擊力 +4！" },
+    curedLeather:    { id: "curedLeather",    name: "鞣製硬皮革",       tier: 2, desc: "【製革工作台】以獸皮與松脂鞣製而成，點擊「✨使用強化」可永久提升防禦力 +3、最大HP +12！" },
+    steelIngot:      { id: "steelIngot",      name: "百煉精鋼錠",       tier: 2, desc: "【高溫熔爐】以藍晶鐵礦與黑曜木炭高溫鍛打而成，點擊「✨使用強化」可永久提升攻擊力 +4！" },
     ropeLadder:      { id: "ropeLadder",      name: "攀岩繩梯",         tier: 1, desc: "【高低差開路工具】由麻繩與原木編織而成，可架設在各區南側懸崖壁上攀爬至高台礦區！" },
     rationJerky:     { id: "rationJerky",     name: "風乾肉脯",         tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚與獸肉，食用立即恢復 +80% 飽食度與 +90 HP！" },
     gear_gasMask:    { id: "gear_gasMask",    name: "清毒草藥香囊",     tier: 2, desc: "【1區森林求生裝】佩戴後永久免疫翠風森林深處的「劇毒瘴氣」，並提升最大生命 +25！" },
@@ -1047,8 +1304,8 @@ window.Aetheria = window.Aetheria || {};
       name: "探險鐵鏟",
       iconKey: "icon_shovel",
       tiers: {
-        0: { name: "尚未持有鐵鏟", desc: "製作鐵鏟後，可挖掘各區地面上的「✖ 藏寶記號」獲取地底遺跡鑰匙與秘寶！" },
-        1: { name: "Lv.1 精鐵探險鏟", cost: { wood: 2, iron: 1 }, gold: 0, desc: "【★尋寶必備】可挖掘全大陸地面「✖」藏寶點，挖出【遠古遺跡鑰匙】與【遠古秘寶晶石】！" },
+        0: { name: "尚未持有鐵鏟", desc: "製作鐵鏟後，可挖掘各區地面上的唯一「✖ 藏寶記號」獲取地底遺跡鑰匙與秘寶！" },
+        1: { name: "Lv.1 精鐵探險鏟", cost: { wood: 2, iron: 1 }, gold: 0, desc: "【★尋寶必備】可挖掘全大陸地面唯一「✖」藏寶點，挖出【遠古遺跡鑰匙】與【遠古秘寶晶石】！" },
         2: { name: "Lv.2 秘銀尋寶鏟", cost: { plank: 2, mithril: 1, steelIngot: 1 }, gold: 120, desc: "挖掘「✖」藏寶點時金幣收穫加倍，且必定額外挖出流沙秘銀或石英砂！" },
         3: { name: "Lv.3 星隕考古神鏟", cost: { obsidian: 1, starIron: 1, quartz: 2 }, gold: 260, desc: "傳奇考古神鏟！挖掘「✖」藏寶點必定獲得雙倍【遠古秘寶晶石】！" }
       }
@@ -1095,7 +1352,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "ropeLadder",
       toCount: 1,
       cost: { rope: 1, wood: 2 },
-      desc: "【★高低差開路必備】架設於各區南側的深啡色懸崖壁上，即可爬上黃土高台採集稀有礦脈！"
+      desc: "【★高低差開路必備】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！"
     },
     {
       id: "wk_crypt_key",
@@ -1231,7 +1488,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "coal",
       toCount: 2,
       cost: { branch: 3 },
-      desc: "【基礎冶煉】將 3 根散落枯枝悶燒成 2 塊高熱能黑曜木炭，用於冶煉精鋼錠。"
+      desc: "【營火/熔爐冶煉】將 3 根散落枯枝悶燒成 2 塊高熱能黑曜木炭，用於冶煉精鋼錠。"
     },
     {
       id: "wk_steel_ingot",
@@ -1253,7 +1510,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "curedLeather",
       toCount: 1,
       cost: { rawHide: 2, resin: 1 },
-      desc: "【皮革加工】將荒野獸皮與松脂鞣製成硬皮革（點擊「✨使用強化」永久提升防禦 +3 / 最大生命 +12！）。"
+      desc: "【紡織製革】將荒野獸皮與松脂鞣製成硬皮革（點擊「✨使用強化」永久提升防禦 +3 / 最大生命 +12！）。"
     },
     {
       id: "wk_bark_rope",
@@ -1264,7 +1521,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "rope",
       toCount: 1,
       cost: { treeBark: 2 },
-      desc: "【森林製繩】將 2 塊堅韌樹皮搓成強韌麻繩索，方便快速合成攀岩繩梯。"
+      desc: "【紡織製繩】將 2 塊堅韌樹皮搓成強韌麻繩索，方便快速合成攀岩繩梯。"
     },
     {
       id: "wk_plank",
@@ -1274,7 +1531,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "plank",
       toCount: 1,
       cost: { wood: 2 },
-      desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋、建農圃與升級大帆船。"
+      desc: "【木工建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋、建農圃與升級大帆船。"
     },
     {
       id: "wk_rope",
@@ -1284,7 +1541,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "rope",
       toCount: 1,
       cost: { vine: 2 },
-      desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】、【捕魚籠】與吊橋的必備材料。"
+      desc: "【紡織建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】、【捕魚籠】與吊橋的必備材料。"
     },
     {
       id: "wk_rope_hemp",
@@ -1479,7 +1736,7 @@ window.Aetheria = window.Aetheria || {};
       title: "3.【高台開拓】編織攀岩繩梯",
       giver: "老獵人・雷恩",
       zone: "1.翠風迷霧森林",
-      desc: "在工坊合成【攀岩繩梯 x1】(麻繩x1+原木x2)，並前往第1區森林南側懸崖架設繩梯爬上黃土高台。",
+      desc: "在工坊合成【攀岩繩梯 x1】(麻繩x1+原木x2)，並前往第1區森林南側懸崖架設繩梯爬上岩石高台。",
       rewardExp: 140,
       rewardGold: 160,
       check: function(s) {
@@ -1498,15 +1755,16 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_01c_dig",
-      title: "5.【地底尋寶】挖掘「✖」藏寶記號",
+      title: "5.【地底尋寶】挖掘唯一「✖」藏寶點",
       giver: "行商・奇奇",
       zone: "各區野外草地與高台",
-      desc: "持探險鐵鏟走到野外地面的「✖ 藏寶點」按 A 鍵挖掘，找尋埋藏的【遠古遺跡鑰匙】與【遠古秘寶晶石】。",
+      desc: "持探險鐵鏟走到野外地面的唯一「✖ 藏寶點」按 A 鍵挖掘，找尋埋藏的【遠古遺跡鑰匙】與【遠古秘寶晶石】。",
       rewardExp: 200,
       rewardGold: 240,
       check: function(s) {
         return Boolean(
           s.dugTreasureOnce ||
+          (s.dugSpots && Object.keys(s.dugSpots).length > 0) ||
           (s.inventory && (s.inventory.cryptKey > 0 || s.inventory.ancientGem > 0)) ||
           (s.unlockedCrypts && Object.keys(s.unlockedCrypts).length > 0)
         );
@@ -1527,7 +1785,7 @@ window.Aetheria = window.Aetheria || {};
       title: "7.【岩壁秘境】開採高台石英與木炭",
       giver: "矮人鐵匠・巴爾",
       zone: "各區南側懸崖山洞",
-      desc: "進入懸崖壁上的黑色山洞或爬上黃土高台，開採獲得【透明石英砂 x1】與【黑曜木炭 x1】。",
+      desc: "進入懸崖壁上的黑色山洞或爬上岩石高台，開採獲得【透明石英砂 x1】與【黑曜木炭 x1】。",
       rewardExp: 160,
       rewardGold: 180,
       check: function(s) {
@@ -1721,6 +1979,7 @@ window.Aetheria = window.Aetheria || {};
     if (s) {
       if (!s.tools) s.tools = { axe: 0, pickaxe: 0, shovel: 0, rod: 0, hook: 0, pouch: 0 };
       if (s.tools.shovel === undefined) s.tools.shovel = 0;
+      if (!s.dugSpots) s.dugSpots = {};
 
       if (Array.isArray(s.unlockedWeapons)) {
         s.unlockedWeapons = s.unlockedWeapons.filter(function(id) {
@@ -1776,7 +2035,6 @@ window.Aetheria = window.Aetheria || {};
       return !d.isCampHerbFarm && !d.isCampFishTrap;
     });
 
-    // 1. 🌱 靈草種植農圃：置於草藥師梅姑 (x:65, y:290) 右側空地 (x:135, y:295)
     campMap.decos.push({
       id: "deco_camp_herb_farm",
       x: 135,
@@ -1788,7 +2046,6 @@ window.Aetheria = window.Aetheria || {};
       isCampHerbFarm: true
     });
 
-    // 2. 🧺 海濱自動捕魚竹籠：置於南岸老漁夫阿海與木棧橋之間的淺海面 (x:345, y:404)
     campMap.decos.push({
       id: "deco_camp_fish_trap",
       x: 345,
@@ -1948,6 +2205,7 @@ window.Aetheria = window.Aetheria || {};
     const cfg = HIGHLAND_ZONES[parentZoneId] || HIGHLAND_ZONES.zone1_forest;
     const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
     const parentMap = (window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(parentZoneId)) || { recLv: 3, name: "野外" };
+    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
 
     const nodes = [];
     const orePositions = [
@@ -1973,17 +2231,22 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    nodes.push({
-      id: "grotto_dig_" + parentZoneId + "_" + Date.now(),
-      x: 240,
-      y: 205,
-      type: "crystal",
-      giveKey: "cryptKey",
-      isBuriedSpot: true,
-      reqToolLv: 0,
-      name: "✖藏寶點",
-      opened: false
-    });
+    // ★ 修正1：山洞內的「✖ 藏寶點」採用固定唯一 ID，若已挖過 (s.dugSpots[digId]) 則永久不再出現！
+    const grottoDigId = "dig_perm_grotto_" + parentZoneId;
+    const alreadyDug = Boolean(s.dugSpots && s.dugSpots[grottoDigId]);
+    if (!alreadyDug) {
+      nodes.push({
+        id: grottoDigId,
+        x: 240,
+        y: 205,
+        type: "crystal",
+        giveKey: "cryptKey",
+        isBuriedSpot: true,
+        reqToolLv: 0,
+        name: "✖藏寶點",
+        opened: false
+      });
+    }
 
     return {
       id: "grotto_" + parentZoneId,
@@ -2108,7 +2371,7 @@ window.Aetheria = window.Aetheria || {};
       ],
       nodes: nodes,
       npcs: [],
-      monsters: [],
+      monsters: monsters,
       portals: [
         {
           id: "p_exit_crypt_" + parentZoneId,
@@ -2352,6 +2615,7 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
+    // ★ 修正1：全大陸「✖ 藏寶挖掘點」採用固定唯一 ID (dig_perm_<zoneId>_<idx>)，一旦在 s.dugSpots 標記為已挖，永久不再生成！
     const buriedSpotsCoords = [
       { x: 265,  y: 625, reqHighland: false },
       { x: 585,  y: 1045,reqHighland: false },
@@ -2359,8 +2623,12 @@ window.Aetheria = window.Aetheria || {};
       { x: 1260, y: 485, reqHighland: false }
     ];
     buriedSpotsCoords.forEach(function(bpt, idx) {
+      const permDigId = "dig_perm_" + mapObj.id + "_" + idx;
+      if (s.dugSpots && s.dugSpots[permDigId]) {
+        return; // 已挖掘過，永久略過！
+      }
       mapObj.nodes.push({
-        id: "buried_x_" + mapObj.id + "_" + idx + "_" + token,
+        id: permDigId,
         x: bpt.x,
         y: bpt.y,
         type: "crystal",
@@ -2478,7 +2746,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 10. 格仔工坊與營地農圃/魚籠管理系統 =================
+  // ================= 10. 正宗《Survival RPG》野外生火紮營、營地農耕與四大工作台系統 =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -2494,7 +2762,187 @@ window.Aetheria = window.Aetheria || {};
       });
     },
 
-    // ★ 打開【🌱營地靈草農圃 / 🧺海濱自動捕魚竹籠】管理與一鍵收成介面
+    // ★ 正宗《Survival RPG》核心玩法：在野外隨時消耗「枯枝x2 + 燧石x1」搭建【🔥野外求生營火】！
+    buildOrOpenFieldCampfire: function() {
+      const s = window.Aetheria.State.data;
+      const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
+      if (!mapObj) return;
+
+      const nonWildZones = ["camp_hub", "tent_guild", "tent_forge", "tent_hero", "ocean_sea"];
+      if (nonWildZones.indexOf(s.currentZone) !== -1) {
+        window.Aetheria.UI.showToast("🏕️ 你目前位於安全營地或海上，無須搭建野外求生營火！");
+        return;
+      }
+
+      // 若身邊 95px 內已有營火，直接打開野外營火求生面板
+      const existingFire = (mapObj.decos || []).find(function(d) {
+        return d && (d.isFieldCampfire || d.isIslandFire) && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 95;
+      });
+
+      if (existingFire) {
+        window.Aetheria.Audio.sfxTalkBlip();
+        this.openFieldCampfireModal();
+        return;
+      }
+
+      // 否則消耗「散落枯枝 x2 + 尖銳燧石 x1」（若無燧石可用原木 x1 鑽木取火）在腳下生起營火！
+      const haveBranch = (s.inventory && s.inventory.branch) || 0;
+      const haveFlint  = (s.inventory && s.inventory.flint) || 0;
+      const haveWood   = (s.inventory && s.inventory.wood) || 0;
+
+      if (haveBranch >= 2 && haveFlint >= 1) {
+        s.inventory.branch -= 2;
+        s.inventory.flint -= 1;
+      } else if (haveWood >= 1 && haveBranch >= 1) {
+        s.inventory.wood -= 1;
+        s.inventory.branch -= 1;
+      } else {
+        window.Aetheria.Audio.sfxWrong();
+        window.Aetheria.UI.showToast("🔥 野外紮營生火需要【散落枯枝 x2 + 燧石 x1】（或 原木x1 + 枯枝x1）！");
+        return;
+      }
+
+      mapObj.decos = mapObj.decos || [];
+      mapObj.decos.push({
+        id: "field_campfire_" + Date.now(),
+        x: s.heroX + (s.facing === "left" ? -28 : 28),
+        y: s.heroY + 6,
+        sprite: "campfire",
+        w: 28,
+        h: 28,
+        solid: true,
+        isFieldCampfire: true,
+        name: "🔥求生營火"
+      });
+
+      // 生火當下立即驅散周圍寒氣/瘴氣並恢復 +45 HP、+20% 飽食度
+      window.Aetheria.State.restoreHunger(20, 45);
+      s.torchTicks = Math.max(s.torchTicks || 0, 100);
+      window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
+
+      if (window.Aetheria.Renderer) {
+        window.Aetheria.Renderer.builtZoneKey = null;
+        window.Aetheria.Renderer.renderWorld();
+      }
+      window.Aetheria.UI.updateAllHud();
+      window.Aetheria.UI.showToast("🔥 已在腳下生起【野外求生營火】！周圍 110 步內免疫環境扣血，點擊營火可進行野炊！");
+    },
+
+    openFieldCampfireModal: function() {
+      const s = window.Aetheria.State.data;
+      const S = window.Aetheria.Data.Sprites;
+      const inv = s.inventory || {};
+
+      window.Aetheria.UI.setActivePanel("panel-modal");
+      document.getElementById("modal-title").innerHTML =
+        S.iconHtml("campfire") + "野外求生營火 (❤️ " + s.hp + "/" + s.maxHp + " ｜ 🍖 " + (s.hunger || 0) + "%)";
+
+      const body = document.getElementById("modal-body");
+      body.innerHTML = "";
+
+      const shelterCard = document.createElement("div");
+      shelterCard.className = "sys-card-scroll";
+      shelterCard.innerHTML =
+        '<b>🔥 營火庇護圈生效中（周圍免疫毒瘴、暗黑與嚴寒）</b>' +
+        '<div style="font-size:11.5px; color:#5c3824; margin-top:2px;">' +
+          '在野外營火旁可添柴取暖回血、悶燒黑木炭，或將剛釣起的鮮魚與微光菇即場烤成熱騰騰的求生口糧！' +
+        '</div>';
+      body.appendChild(shelterCard);
+
+      const actions = [
+        {
+          title: "🔥 添柴烤火取暖 (+70 HP、+25% 飽食度、120步火光)",
+          costText: "散落枯枝 x1 (持有 " + (inv.branch || 0) + ")",
+          canDo: (inv.branch || 0) >= 1,
+          fn: "Aetheria.HighlandsWorkshop.campFireAction('warm')"
+        },
+        {
+          title: "🍖 營火炭烤【鮮魚乾 x2】(+60%飽食/+60HP)",
+          costText: "銀鱗鮮魚 x1 (持有 " + (inv.fish || 0) + ")",
+          canDo: (inv.fish || 0) >= 1,
+          fn: "Aetheria.HighlandsWorkshop.campFireAction('roast_fish')"
+        },
+        {
+          title: "🍄 營火烘烤【微光菇乾 x2】(+35%飽食/+25HP)",
+          costText: "紅傘微光菇 x1 (持有 " + (inv.herb || 0) + ")",
+          canDo: (inv.herb || 0) >= 1,
+          fn: "Aetheria.HighlandsWorkshop.campFireAction('roast_herb')"
+        },
+        {
+          title: "🥩 岩鹽煙燻【風乾肉脯 x2】(+80%飽食/+90HP)",
+          costText: "鮮魚 x1 + 結晶岩鹽 x1 (魚:" + (inv.fish || 0) + " / 鹽:" + (inv.rockSalt || 0) + ")",
+          canDo: (inv.fish || 0) >= 1 && (inv.rockSalt || 0) >= 1,
+          fn: "Aetheria.HighlandsWorkshop.campFireAction('smoke_jerky')"
+        },
+        {
+          title: "⚫ 營火悶燒【黑曜木炭 x2】(冶煉精鋼必備)",
+          costText: "散落枯枝 x2 (持有 " + (inv.branch || 0) + ")",
+          canDo: (inv.branch || 0) >= 2,
+          fn: "Aetheria.HighlandsWorkshop.campFireAction('burn_coal')"
+        }
+      ];
+
+      actions.forEach(function(act) {
+        const row = document.createElement("div");
+        row.className = "sys-card";
+        row.innerHTML =
+          '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+            '<div>' +
+              '<b style="color:#ffd166; font-size:12.5px;">' + act.title + '</b>' +
+              '<div style="font-size:11px; color:#cbd5e1; margin-top:2px;">需消耗：' + act.costText + '</div>' +
+            '</div>' +
+            '<button class="na-btn ' + (act.canDo ? 'highlight' : '') + '" style="padding:6px 12px; white-space:nowrap;" onclick="' + act.fn + '">執行</button>' +
+          '</div>';
+        body.appendChild(row);
+      });
+    },
+
+    campFireAction: function(actType) {
+      const s = window.Aetheria.State.data;
+      const inv = s.inventory;
+
+      if (actType === "warm") {
+        if ((inv.branch || 0) < 1) { window.Aetheria.UI.showToast("枯枝不足！"); return; }
+        inv.branch--;
+        s.torchTicks = Math.max(s.torchTicks || 0, 120);
+        window.Aetheria.State.restoreHunger(25, 70);
+        window.Aetheria.Audio.sfxLevelUp();
+        window.Aetheria.UI.showToast("🔥 營火溫暖全身！恢復 +70 HP、+25% 飽食度與 120 步火光！");
+      } else if (actType === "roast_fish") {
+        if ((inv.fish || 0) < 1) { window.Aetheria.UI.showToast("銀鱗鮮魚不足！"); return; }
+        inv.fish--;
+        inv.rationFish = (inv.rationFish || 0) + 2;
+        window.Aetheria.Audio.sfxGather();
+        window.Aetheria.UI.showToast("🍖 營火炭烤成功：獲得【炭烤鮮魚乾 x2】！");
+      } else if (actType === "roast_herb") {
+        if ((inv.herb || 0) < 1) { window.Aetheria.UI.showToast("紅傘微光菇不足！"); return; }
+        inv.herb--;
+        inv.rationHerb = (inv.rationHerb || 0) + 2;
+        window.Aetheria.Audio.sfxGather();
+        window.Aetheria.UI.showToast("🍄 營火烘烤成功：獲得【烘烤微光菇乾 x2】！");
+      } else if (actType === "smoke_jerky") {
+        if ((inv.fish || 0) < 1 || (inv.rockSalt || 0) < 1) { window.Aetheria.UI.showToast("鮮魚或結晶岩鹽不足！"); return; }
+        inv.fish--;
+        inv.rockSalt--;
+        inv.rationJerky = (inv.rationJerky || 0) + 2;
+        s.craftedJerkyOnce = true;
+        window.Aetheria.Audio.sfxLevelUp();
+        window.Aetheria.UI.showToast("🥩 煙燻成功：獲得頂級口糧【岩鹽風乾肉脯 x2】！");
+      } else if (actType === "burn_coal") {
+        if ((inv.branch || 0) < 2) { window.Aetheria.UI.showToast("需要散落枯枝 x2！"); return; }
+        inv.branch -= 2;
+        inv.coal = (inv.coal || 0) + 2;
+        window.Aetheria.Audio.sfxGather();
+        window.Aetheria.UI.showToast("⚫ 營火悶燒成功：獲得【黑曜木炭 x2】！");
+      }
+
+      window.Aetheria.State.save();
+      window.Aetheria.UI.updateAllHud();
+      checkAndNotifyQuestCompletion();
+      this.openFieldCampfireModal();
+    },
+
     openCampAutomationModal: function(typeKey) {
       const def = CAMP_AUTOMATION_DEFS[typeKey];
       if (!def) return;
@@ -2513,14 +2961,13 @@ window.Aetheria = window.Aetheria || {};
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
 
-      // 1. 當前狀態與一鍵收成卡
       const statusCard = document.createElement("div");
       statusCard.className = "sys-card-scroll";
       if (curLv === 0) {
         statusCard.innerHTML =
           '<b>🌱 尚未建造【' + def.name + '】</b>' +
           '<div style="font-size:12px; color:#5c3824; margin-top:3px;">' +
-            '建造後，每當你在睡袋睡覺過夜、或在野外每完成 3 場戰鬥返回營地時，即可在此<b>免費一鍵收成大量草藥與鮮魚食材</b>，徹底告別重覆採集！' +
+            '建造後，每當你在睡袋睡覺過夜、或在野外每完成 3 場戰鬥返回營地時，即可在此<b>免費一鍵收成大量草藥與鮮魚食材</b>！' +
           '</div>';
       } else {
         statusCard.innerHTML =
@@ -2536,7 +2983,6 @@ window.Aetheria = window.Aetheria || {};
       }
       body.appendChild(statusCard);
 
-      // 2. 建造或升級下一階卡
       if (nextTier) {
         const canUp = this.canAffordRecipe(s, nextTier.cost, nextTier.gold || 0);
         let chipsHtml = "";
@@ -2602,7 +3048,6 @@ window.Aetheria = window.Aetheria || {};
       }
 
       s[def.stateLvKey] = curLv + 1;
-      // 建造或升級完成當下，立即贈送一次成熟收成！
       s[def.readyKey] = true;
 
       window.Aetheria.Audio.sfxLevelUp();
@@ -2927,8 +3372,8 @@ window.Aetheria = window.Aetheria || {};
 
     buildMainTabBarHtml: function(activeTab) {
       const tabs = [
-        { id: "workshop", label: "🔨加工" },
-        { id: "tools",    label: "⛏️工具" },
+        { id: "workshop", label: "🔨求生台" },
+        { id: "tools",    label: "⛏️工具(6)" },
         { id: "weapons",  label: "⚔️武器" },
         { id: "armors",   label: "🛡️防具" },
         { id: "reforge",  label: "✨洗煉" }
@@ -2956,7 +3401,7 @@ window.Aetheria = window.Aetheria || {};
 
       UI.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML =
-        S.iconHtml("icon_forge") + "巴爾隨身工坊與鍛造台 (💰 " + (s.gold || 0) + " G)";
+        S.iconHtml("icon_forge") + "Survival RPG 隨身求生工作台 (💰 " + (s.gold || 0) + " G)";
 
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
@@ -3162,9 +3607,9 @@ window.Aetheria = window.Aetheria || {};
         subFilters = [
           { id: "all",      label: "💡已領悟(" + discoveredCount + ")" },
           { id: "can",      label: "✅可製作" },
-          { id: "gear",     label: "🛡️求生/開路" },
-          { id: "smelt",    label: "🔥冶煉/建材" },
-          { id: "survival", label: "🍖口糧/秘藥" },
+          { id: "gear",     label: "🛡️求生裝/開路" },
+          { id: "smelt",    label: "🔥冶煉/紡織" },
+          { id: "survival", label: "⚗️野炊/秘藥" },
           { id: "locked",   label: "🔒未領悟(" + undiscoveredCount + ")" }
         ];
       } else if (tab === "weapons") {
@@ -3352,7 +3797,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 11. 掛載營地農圃/魚籠、鐵鏟挖寶 ✖、地底遺跡開鎖、領悟配方與戰鬥系統 =================
+  // ================= 11. 掛載 Kenney 自然像素地圖渲染、唯一挖寶 ✖、野外營火與戰鬥系統 =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -3401,7 +3846,6 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      // ★ 每次睡覺到天亮時，營地的【🌱靈草種植農圃】與【🧺海濱捕魚竹籠】自動成熟可收成！
       if (St.sleepUntilMorning) {
         const origSleep = St.sleepUntilMorning.bind(St);
         St.sleepUntilMorning = function() {
@@ -3469,11 +3913,15 @@ window.Aetheria = window.Aetheria || {};
         const prevX = s.heroX;
         const prevY = s.heroY;
         const prevZone = s.currentZone;
+        const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
 
         const hzRule = ZONE_HAZARD_RULES[s.currentZone];
         const inHazardArea = Boolean(hzRule && s.heroX >= hzRule.minX);
+        // ★ 站在【🔥野外求生營火】周圍 110px 內亦視為獲得庇護，免疫環境危機！
+        const nearFire = isNearFieldCampfire(mapObj, s);
         const isProtected = Boolean(
           hzRule && (
+            nearFire ||
             hasSurvivalGear(s, hzRule.gearKey) ||
             (hzRule.allowTorchBypass && s.torchTicks > 0) ||
             (s.currentZone === "zone4_snow" && s.projectsBuilt && s.projectsBuilt.proj_z4_shelter)
@@ -3564,7 +4012,7 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      // ★ A 鍵互動：營地農圃/捕魚籠、地底遺跡開鎖與懸崖繩梯攀爬
+      // ★ A 鍵互動：野外求生營火、營地農圃/捕魚籠、地底遺跡開鎖與懸崖繩梯攀爬
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
@@ -3573,7 +4021,12 @@ window.Aetheria = window.Aetheria || {};
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
 
-            // 1. 🌱 營地靈草種植農圃
+            if (d && d.isFieldCampfire && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
+              window.Aetheria.Audio.sfxTalkBlip();
+              WorkshopUIManager.openFieldCampfireModal();
+              return;
+            }
+
             if (d && d.isCampHerbFarm && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
               if ((s.campFarmLv || 0) > 0 && s.campFarmReady) {
                 WorkshopUIManager.harvestCampAutomation("farm", false);
@@ -3584,7 +4037,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 2. 🧺 海濱自動捕魚竹籠
             if (d && d.isCampFishTrap && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 52) {
               if ((s.campTrapLv || 0) > 0 && s.campTrapReady) {
                 WorkshopUIManager.harvestCampAutomation("trap", false);
@@ -3595,7 +4047,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 3. 🗝️ 遠古地底遺跡石門
             if (d && d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
               if (!s.unlockedCrypts) s.unlockedCrypts = {};
               const zId = d.zoneId || mapObj.id;
@@ -3637,7 +4088,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 4. 🧗 懸崖攀岩繩梯
             if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
               if (!s.riggedCliffs) s.riggedCliffs = {};
               const isRigged = Boolean(s.riggedCliffs[mapObj.id]);
@@ -3645,7 +4095,7 @@ window.Aetheria = window.Aetheria || {};
               if (!isRigged) {
                 if ((s.inventory.ropeLadder || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
-                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🛡️求生/開路】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
+                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🛡️求生裝/開路】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
                   return;
                 }
                 s.inventory.ropeLadder--;
@@ -3683,7 +4133,7 @@ window.Aetheria = window.Aetheria || {};
                 }
                 s.petX = s.heroX - 20;
                 s.petY = s.heroY;
-                window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【黃土高台礦區】！");
+                window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【岩石高台礦區】！");
               }
               window.Aetheria.State.save();
               window.Aetheria.UI.updateAllHud();
@@ -3701,6 +4151,10 @@ window.Aetheria = window.Aetheria || {};
           if (mapObj.decos) {
             for (let i = 0; i < mapObj.decos.length; i++) {
               const d = mapObj.decos[i];
+              if (d && d.isFieldCampfire && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
+                hintEl.innerText = "野外營火";
+                return;
+              }
               if (d && d.isCampHerbFarm && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
                 hintEl.innerText = ((s.campFarmLv || 0) === 0) ? "建造農圃" : (s.campFarmReady ? "收成靈草" : "管理農圃");
                 return;
@@ -3734,6 +4188,7 @@ window.Aetheria = window.Aetheria || {};
         origHint(mapObj, s);
       };
 
+      // ★ 修正1 & 3：採集粒子震動特效 + 挖寶點永久只限挖一次 (s.dugSpots[node.id] = true)
       const origHarvest = Exp.harvestNode.bind(Exp);
       Exp.harvestNode = function(node) {
         const s = window.Aetheria.State.data;
@@ -3743,7 +4198,29 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
 
+        // 觸發《Survival RPG》實體敲擊搖晃與像素碎屑粒子特效
+        if (node) {
+          const pColor = (node.type === "wood") ? "#5ac54f" : (node.isBuriedSpot ? "#d9a066" : "#8ce0ff");
+          spawnHarvestParticles(node.x, node.y, pColor);
+          if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
+            const domItem = window.Aetheria.Renderer.domPool.nodes[node.id];
+            if (domItem && domItem.el) {
+              domItem.el.classList.remove("srpg-node-hit");
+              void domItem.el.offsetWidth;
+              domItem.el.classList.add("srpg-node-hit");
+            }
+          }
+        }
+
+        // 1. ✖ 永久唯一藏寶挖掘點檢定
         if (node && node.isBuriedSpot) {
+          if (!s.dugSpots) s.dugSpots = {};
+          if (node.opened || s.dugSpots[node.id]) {
+            node.opened = true;
+            window.Aetheria.UI.showToast("此藏寶點已經挖掘過了！");
+            return;
+          }
+
           const shovelLv = (s.tools && s.tools.shovel) || 0;
           if (shovelLv < 1) {
             window.Aetheria.Audio.sfxWrong();
@@ -3751,29 +4228,37 @@ window.Aetheria = window.Aetheria || {};
             return;
           }
 
+          // ★ 永久記錄此挖寶點 ID 為已挖掘，並立即從地圖與 DOM 移除，全遊戲絕不重覆刷新！
           node.opened = true;
+          s.dugSpots[node.id] = true;
           s.dugTreasureOnce = true;
+
+          if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
+            const domNode = window.Aetheria.Renderer.domPool.nodes[node.id];
+            if (domNode && domNode.el) domNode.el.style.display = "none";
+          }
+
           window.Aetheria.Audio.sfxLevelUp();
 
           const zId = (s.currentZone || "").replace("grotto_", "");
           const cryptAlreadyOpen = Boolean(s.unlockedCrypts && s.unlockedCrypts[zId]);
           const hasKeyInBag = ((s.inventory && s.inventory.cryptKey) || 0) > 0;
-          const goldGain = (55 + (s.lv || 1) * 5) * (shovelLv >= 2 ? 2 : 1);
+          const goldGain = (65 + (s.lv || 1) * 6) * (shovelLv >= 2 ? 2 : 1);
           s.gold = (s.gold || 0) + goldGain;
 
           if (!cryptAlreadyOpen && !hasKeyInBag) {
             s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
             s.inventory.ancientGem = (s.inventory.ancientGem || 0) + 1;
-            window.Aetheria.UI.showToast("🥄 鐵鏟挖寶大發現！挖出【🗝️遠古遺跡鑰匙 +1、🔮遠古秘寶晶石 +1】與 " + goldGain + " G！");
+            window.Aetheria.UI.showToast("🥄 挖開唯一藏寶點！獲得【🗝️遠古遺跡鑰匙 +1、🔮遠古秘寶晶石 +1】與 " + goldGain + " G！");
           } else {
             const gemCnt = (shovelLv >= 3) ? 2 : 1;
             s.inventory.ancientGem = (s.inventory.ancientGem || 0) + gemCnt;
-            s.inventory.quartz = (s.inventory.quartz || 0) + 1;
-            if (Math.random() < 0.45) {
+            s.inventory.quartz = (s.inventory.quartz || 0) + 2;
+            if (Math.random() < 0.50) {
               s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
-              window.Aetheria.UI.showToast("🥄 鐵鏟挖寶收穫：獲【🔮遠古秘寶晶石 +" + gemCnt + "、🗝️遺跡鑰匙 +1、石英砂 +1】與 " + goldGain + " G！");
+              window.Aetheria.UI.showToast("🥄 挖開唯一藏寶點：獲【🔮遠古秘寶晶石 +" + gemCnt + "、🗝️遺跡鑰匙 +1、石英砂 +2】與 " + goldGain + " G！");
             } else {
-              window.Aetheria.UI.showToast("🥄 鐵鏟挖寶收穫：獲【🔮遠古秘寶晶石 +" + gemCnt + "、透明石英砂 +1】與 " + goldGain + " G！");
+              window.Aetheria.UI.showToast("🥄 挖開唯一藏寶點：獲【🔮遠古秘寶晶石 +" + gemCnt + "、透明石英砂 +2】與 " + goldGain + " G！");
             }
           }
 
@@ -3783,6 +4268,7 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
 
+        // 2. 🏆 地底遺跡聖物石棺檢定
         if (node && node.isCryptVaultChest) {
           const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
           const guardianAlive = curMap && (curMap.monsters || []).some(function(m) {
@@ -3893,7 +4379,6 @@ window.Aetheria = window.Aetheria || {};
           if (isCombat) {
             const s = window.Aetheria.State.data;
 
-            // ★ 每完成 3 場野外戰鬥，營地的【🌱靈草農圃】與【🧺捕魚竹籠】亦會自動成熟可收成！
             s._automationBattleTicks = ((s._automationBattleTicks || 0) + 1);
             if (s._automationBattleTicks >= 3) {
               s._automationBattleTicks = 0;
@@ -3939,42 +4424,13 @@ window.Aetheria = window.Aetheria || {};
         const S = window.Aetheria.Data.Sprites;
         if (!terrainLayer || !mapObj) return;
 
-        if (HIGHLAND_ZONES[mapObj.id]) {
-          const platTop = document.createElement("div");
-          platTop.className = "srpg-plateau-top";
-          platTop.style.cssText = "left:390px; top:800px; width:515px; height:122px;";
-          terrainLayer.appendChild(platTop);
-
-          const platRight = document.createElement("div");
-          platRight.className = "srpg-plateau-top";
-          platRight.style.cssText = "left:710px; top:914px; width:195px; height:148px; border-top:none; border-radius:0;";
-          terrainLayer.appendChild(platRight);
-
-          const cliffMain = document.createElement("div");
-          cliffMain.className = "srpg-cliff-wall";
-          cliffMain.style.cssText = "left:390px; top:918px; width:324px; height:46px;";
-          terrainLayer.appendChild(cliffMain);
-
-          const cliffStepSide = document.createElement("div");
-          cliffStepSide.className = "srpg-cliff-side-wall";
-          cliffStepSide.style.cssText = "left:704px; top:918px; width:14px; height:144px;";
-          terrainLayer.appendChild(cliffStepSide);
-
-          const cliffRightBottom = document.createElement("div");
-          cliffRightBottom.className = "srpg-cliff-wall";
-          cliffRightBottom.style.cssText = "left:710px; top:1058px; width:195px; height:44px;";
-          terrainLayer.appendChild(cliffRightBottom);
-
-          const caveArch = document.createElement("div");
-          caveArch.className = "srpg-cave-arch";
-          caveArch.style.cssText = "left:468px; top:920px;";
-          terrainLayer.appendChild(caveArch);
-        }
+        // ★ 修正2：調用 Kenney CC0 16x16 自然像素地貌 Canvas 繪製蜿蜒小徑與不規則岩石懸崖（不再使用生硬 CSS 方框！）
+        renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer);
 
         Object.keys(this.domPool.decos || {}).forEach(function(k) {
           const item = Ren.domPool.decos[k];
           if (!item || !item.data || !item.el) return;
-          if ((item.data.isCliffLadderSpot || item.data.isCryptEntrance || item.data.isCampHerbFarm || item.data.isCampFishTrap) && !item.lbl) {
+          if ((item.data.isCliffLadderSpot || item.data.isCryptEntrance || item.data.isCampHerbFarm || item.data.isCampFishTrap || item.data.isFieldCampfire) && !item.lbl) {
             const lbl = document.createElement("div");
             lbl.className = "dom-label";
             item.el.appendChild(lbl);
@@ -4006,18 +4462,28 @@ window.Aetheria = window.Aetheria || {};
           const S = window.Aetheria.Data.Sprites;
           const rigged = Boolean(s && s.riggedCliffs && s.riggedCliffs[s.currentZone]);
           const cryptOpen = Boolean(s && s.unlockedCrypts && s.unlockedCrypts[s.currentZone]);
+          const mapObj = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
+
+          // 控制右下角「🔥 紮營生火」浮動小按鈕（僅在野外地圖顯示）
+          const fireBtn = document.getElementById("srpg-field-campfire-btn");
+          if (fireBtn) {
+            const isIndoorOrCamp = ["camp_hub", "tent_guild", "tent_forge", "tent_hero", "ocean_sea"].indexOf(s.currentZone) !== -1;
+            fireBtn.style.display = isIndoorOrCamp ? "none" : "block";
+          }
 
           const banner = document.getElementById("srpg-hazard-banner");
           const hzRule = ZONE_HAZARD_RULES[s.currentZone];
           if (banner) {
             if (hzRule && s.heroX >= hzRule.minX) {
-              const prot = hasSurvivalGear(s, hzRule.gearKey) ||
+              const nearFire = isNearFieldCampfire(mapObj, s);
+              const prot = nearFire ||
+                           hasSurvivalGear(s, hzRule.gearKey) ||
                            (hzRule.allowTorchBypass && s.torchTicks > 0) ||
                            (s.currentZone === "zone4_snow" && s.projectsBuilt && s.projectsBuilt.proj_z4_shelter);
               banner.className = prot ? "hazard-safe" : "hazard-danger";
-              banner.innerText = prot
-                ? (hzRule.name + " (🛡️" + hzRule.gearName + "已免疫)")
-                : (hzRule.name + " (⚠️未穿" + hzRule.gearName + ")");
+              banner.innerText = nearFire
+                ? (hzRule.name + " (🔥營火庇護中)")
+                : (prot ? (hzRule.name + " (🛡️" + hzRule.gearName + "已免疫)") : (hzRule.name + " (⚠️未穿" + hzRule.gearName + ")"));
             } else {
               banner.className = "";
               banner.style.display = "none";
@@ -4029,7 +4495,11 @@ window.Aetheria = window.Aetheria || {};
             if (!item || !item.data) return;
             const d = item.data;
 
-            if (d.isCampHerbFarm) {
+            if (d.isFieldCampfire && item.lbl) {
+              item.lbl.style.display = "block";
+              item.lbl.className = "dom-label ladder-spot-lbl";
+              item.lbl.innerText = "🔥求生營火";
+            } else if (d.isCampHerbFarm) {
               const fLv = s.campFarmLv || 0;
               const fReady = Boolean(fLv > 0 && s.campFarmReady);
               const dist = Math.hypot((s.heroX || 0) - d.x, (s.heroY || 0) - d.y);
@@ -4101,7 +4571,8 @@ window.Aetheria = window.Aetheria || {};
             const item = Ren.domPool.nodes[nId];
             if (!item || !item.data || !item.lbl) return;
             const n = item.data;
-            if (n.opened) {
+            if (n.opened || (n.isBuriedSpot && s.dugSpots && s.dugSpots[n.id])) {
+              item.el.style.display = "none";
               item.lbl.style.display = "none";
               return;
             }
@@ -4198,7 +4669,7 @@ window.Aetheria = window.Aetheria || {};
 
   function initHighlandsAndWorkshopModule() {
     try {
-      injectHighlandsAndWorkshopStyles();
+      injectSurvivalRpgStyles();
       registerSurvivalRpgSprites();
       registerSrpgDataIntoGame();
       hookSystemsForHighlandsAndWorkshop();
@@ -4227,7 +4698,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG Overhaul v10.3 init error:", err);
+      console.error("Survival RPG Kenney Overhaul v11.0 init error:", err);
     }
   }
 
