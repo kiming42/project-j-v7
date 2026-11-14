@@ -1,21 +1,20 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 擴大地圖、高低差懸崖山洞與格仔分類工坊模組 (survival-highlands-workshop.js - v9.6)
- * 終極修正重點：
- *   1. 【100% 修復紅框檢視器與格仔點擊無反應】：全面改用 HTML 內聯 onclick="Aetheria.HighlandsWorkshop.xxx()"，免疫底層 Emoji 轉圖示器的 innerHTML 重寫！
- *   2. 【100% 修復「⛏️工具」分頁消失】：內建完整 5 大採集工具 (手斧/十字鎬/釣竿/鉤爪/行囊 Lv.0~Lv.3) 升級系統，點擊工具分頁即刻顯示！
- *   3. 【補齊所有加工品像素圖示】：為松脂火把、石英提燈、炸彈、木板、麻繩、藥水補齊專屬圖示映射，不再出現空白格仔
- *   4. 保留 1560x1180 擴大地圖、南側高低差懸崖山洞 (y:800~1070)、怪物防穿懸崖與去標籤化
+ * Project J：艾瑟瑞亞的破曉 — 擴大地圖、高低差懸崖山洞與格仔分類工坊模組 (survival-highlands-workshop.js - v9.7)
+ * 更新重點：
+ *   1. 【刪除重覆武器與防具】：徹底移除排在 T10 後方重覆階級 (T2~T4) 的額外武器與防具，並加入同名去重與 T1➔T10 嚴格排序
+ *   2. 【保留完整格仔工坊與 5 大工具】：內聯 onclick 100% 即時切換紅框檢視器，完整顯示加工、5大工具、T1~T10 武防與洗煉
+ *   3. 【保留高低差懸崖與山洞】：1560x1180 擴大地圖、南側 L 型高低差懸崖山洞、怪物防穿懸崖與去標籤化
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入高低差懸崖地形與修正版格仔工坊 CSS =================
+  // ================= 1. 注入高低差懸崖地形與格仔工坊 CSS =================
   function injectHighlandsAndWorkshopStyles() {
-    if (document.getElementById("highlands-wk-v96-styles")) return;
+    if (document.getElementById("highlands-wk-v97-styles")) return;
     const style = document.createElement("style");
-    style.id = "highlands-wk-v96-styles";
+    style.id = "highlands-wk-v97-styles";
     style.textContent = `
-      /* ================= A. 參考圖風格：L型高低差黃土高台與深啡色垂直懸崖壁 ================= */
+      /* ================= A. L型高低差黃土高台與深啡色垂直懸崖壁 ================= */
       .srpg-plateau-top {
         position: absolute;
         background-color: #c6a664;
@@ -85,7 +84,7 @@ window.Aetheria = window.Aetheria || {};
         font-weight: 900;
       }
 
-      /* ================= B. 修正版格仔分類工坊 UI ================= */
+      /* ================= B. 格仔分類工坊 UI ================= */
       #panel-modal #modal-body {
         overflow-y: auto !important;
         padding-bottom: 42px !important;
@@ -488,19 +487,18 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 完整定義《Survival RPG》新素材、加工配方、5大工具與新武防 =================
+  // ================= 3. 定義《Survival RPG》素材、加工配方與 5 大採集工具（已移除重覆武防） =================
   const NEW_SRPG_MATERIALS = {
     coal:         { id: "coal",         name: "黑曜木炭",   tier: 1, desc: "【冶煉燃料】由枯枝窯燒或於高台山洞開採，是冶煉百煉精鋼錠與炸藥的核心燃料。" },
     rockSalt:     { id: "rockSalt",     name: "結晶岩鹽",   tier: 1, desc: "【高台礦產】採集自懸崖高台或岩壁礦洞，可醃製長效保存的岩鹽風乾肉脯。" },
-    quartz:       { id: "quartz",       name: "透明石英砂", tier: 2, desc: "【高台晶礦】採集自懸崖高台，可用於燒製鍊金藥瓶、探礦提燈與共鳴戰刃。" },
+    quartz:       { id: "quartz",       name: "透明石英砂", tier: 2, desc: "【高台晶礦】採集自懸崖高台，可用於燒製鍊金藥瓶與探礦提燈。" },
     rawHide:      { id: "rawHide",      name: "荒野獸皮",   tier: 1, desc: "【狩獵戰利品】討伐野外魔物掉落，可加工為堅韌的鞣製硬皮革。" },
-    curedLeather: { id: "curedLeather", name: "鞣製硬皮革", tier: 2, desc: "【進階加工材】以獸皮與松脂鞣製而成，用於鍛造高級皮甲與獵刀握柄。" },
-    steelIngot:   { id: "steelIngot",   name: "百煉精鋼錠", tier: 2, desc: "【高階冶煉材】以藍晶鐵礦與黑曜木炭高溫鍛打而成，可鍛造精鋼武器或直接打磨強化。" },
+    curedLeather: { id: "curedLeather", name: "鞣製硬皮革", tier: 2, desc: "【進階強化材】以獸皮與松脂鞣製而成，點擊「✨使用強化」可永久提升防禦力 +3、最大HP +12！" },
+    steelIngot:   { id: "steelIngot",   name: "百煉精鋼錠", tier: 2, desc: "【高階強化材】以藍晶鐵礦與黑曜木炭高溫鍛打而成，點擊「✨使用強化」可永久提升攻擊力 +4！" },
     ropeLadder:   { id: "ropeLadder",   name: "攀岩繩梯",   tier: 1, desc: "【高低差開路工具】由麻繩與原木編織而成，可架設在野外懸崖峭壁上攀爬至高台礦區！" },
     rationJerky:  { id: "rationJerky",  name: "風乾肉脯",   tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚與獸肉，食用立即恢復 +80% 飽食度與 +90 HP！" }
   };
 
-  // ★ 內建完整 5 大採集工具升級資料庫（確保「⛏️工具」分頁 100% 顯示並可升級！）
   const BUILTIN_TOOLS_DB = {
     axe: {
       id: "axe",
@@ -619,7 +617,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "steelIngot",
       toCount: 1,
       cost: { iron: 2, coal: 2 },
-      desc: "【★新配方・高溫冶煉】以鐵礦 x2 與黑曜木炭 x2 鍛造成精鋼錠（可造新武器，或按「使用強化」永久 ATK+4！）。"
+      desc: "【★新配方・高溫冶煉】以鐵礦 x2 與黑曜木炭 x2 鍛造成精鋼錠（點擊「✨使用強化」可永久提升主角攻擊力 +4！）。"
     },
     {
       id: "wk_cured_leather",
@@ -628,7 +626,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "curedLeather",
       toCount: 1,
       cost: { rawHide: 2, resin: 1 },
-      desc: "【★新配方・皮革加工】將荒野獸皮與松脂鞣製成硬皮革（可造新皮甲，或按「使用強化」永久 DEF+3 / HP+12！）。"
+      desc: "【★新配方・皮革加工】將荒野獸皮與松脂鞣製成硬皮革（點擊「✨使用強化」可永久提升防禦 +3 / 最大生命 +12！）。"
     },
     {
       id: "wk_plank",
@@ -749,68 +747,8 @@ window.Aetheria = window.Aetheria || {};
     }
   ];
 
-  const NEW_SRPG_WEAPONS = {
-    w_srpg_machete: {
-      id: "w_srpg_machete",
-      name: "荒野開山獵刀",
-      tier: 2,
-      atk: 34,
-      gold: 120,
-      cost: { steelIngot: 2, curedLeather: 1, wood: 2 },
-      desc: "【★新配方武器】以百煉精鋼錠與鞣製硬皮革打造的求生獵刀，兼具高攻擊力與破盾手感！"
-    },
-    w_srpg_quartz_blade: {
-      id: "w_srpg_quartz_blade",
-      name: "石英共鳴戰刃",
-      tier: 3,
-      atk: 56,
-      gold: 260,
-      cost: { steelIngot: 3, quartz: 3, mithril: 2 },
-      desc: "【★新配方武器】將透明石英砂熔入精鋼與秘銀鍛造的晶刃，大幅提升知識詠唱威力！"
-    },
-    w_srpg_highland_axe: {
-      id: "w_srpg_highland_axe",
-      name: "高原破岩巨斧",
-      tier: 4,
-      atk: 82,
-      gold: 450,
-      cost: { steelIngot: 4, obsidian: 2, curedLeather: 2 },
-      desc: "【★新配方武器】結合精鋼錠與熔岩黑曜石的重型戰斧，擁有摧枯拉朽的破壞力！"
-    }
-  };
-
-  const NEW_SRPG_ARMORS = {
-    a_srpg_leather: {
-      id: "a_srpg_leather",
-      name: "荒野硬化皮甲",
-      tier: 2,
-      def: 18,
-      hp: 50,
-      gold: 110,
-      cost: { curedLeather: 2, rope: 1 },
-      desc: "【★新配方防具】以鞣製硬皮革縫製的輕便獵裝，大幅提升野外生存力（DEF+18 / HP+50）。"
-    },
-    a_srpg_steel_mail: {
-      id: "a_srpg_steel_mail",
-      name: "百煉精鋼鎖甲",
-      tier: 3,
-      def: 34,
-      hp: 95,
-      gold: 250,
-      cost: { steelIngot: 3, curedLeather: 2 },
-      desc: "【★新配方防具】精鋼環扣內襯硬皮革的中階重甲，堅不可摧（DEF+34 / HP+95）。"
-    },
-    a_srpg_highland_plate: {
-      id: "a_srpg_highland_plate",
-      name: "高原守護重鎧",
-      tier: 4,
-      def: 52,
-      hp: 150,
-      gold: 420,
-      cost: { steelIngot: 4, quartz: 3, obsidian: 2 },
-      desc: "【★新配方防具】鑲嵌高台石英與黑曜石的精鋼全套重鎧（DEF+52 / HP+150）！"
-    }
-  };
+  const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
+  const REMOVED_DUPLICATE_ARMOR_IDS  = ["a_srpg_leather", "a_srpg_steel_mail", "a_srpg_highland_plate"];
 
   function registerSrpgDataIntoGame() {
     const Data = window.Aetheria.Data;
@@ -822,16 +760,42 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
+    // ★ 徹底清除重覆階級的額外武器與防具
     if (Data.WEAPONS) {
-      Object.keys(NEW_SRPG_WEAPONS).forEach(function(wk) {
-        Data.WEAPONS[wk] = NEW_SRPG_WEAPONS[wk];
+      REMOVED_DUPLICATE_WEAPON_IDS.forEach(function(wid) {
+        delete Data.WEAPONS[wid];
+      });
+    }
+    if (Data.ARMORS) {
+      REMOVED_DUPLICATE_ARMOR_IDS.forEach(function(aid) {
+        delete Data.ARMORS[aid];
       });
     }
 
-    if (Data.ARMORS) {
-      Object.keys(NEW_SRPG_ARMORS).forEach(function(ak) {
-        Data.ARMORS[ak] = NEW_SRPG_ARMORS[ak];
-      });
+    // 若玩家存檔中曾裝備過被刪除的重覆武防，自動回退至已解鎖的最高階原版武防
+    const s = window.Aetheria.State && window.Aetheria.State.data;
+    if (s) {
+      if (Array.isArray(s.unlockedWeapons)) {
+        s.unlockedWeapons = s.unlockedWeapons.filter(function(id) {
+          return REMOVED_DUPLICATE_WEAPON_IDS.indexOf(id) === -1;
+        });
+      }
+      if (s.equippedWeapon && REMOVED_DUPLICATE_WEAPON_IDS.indexOf(s.equippedWeapon) !== -1) {
+        s.equippedWeapon = (s.unlockedWeapons && s.unlockedWeapons.length > 0)
+          ? s.unlockedWeapons[s.unlockedWeapons.length - 1]
+          : "w_wood";
+      }
+
+      if (Array.isArray(s.unlockedArmors)) {
+        s.unlockedArmors = s.unlockedArmors.filter(function(id) {
+          return REMOVED_DUPLICATE_ARMOR_IDS.indexOf(id) === -1;
+        });
+      }
+      if (s.equippedArmor && REMOVED_DUPLICATE_ARMOR_IDS.indexOf(s.equippedArmor) !== -1) {
+        s.equippedArmor = (s.unlockedArmors && s.unlockedArmors.length > 0)
+          ? s.unlockedArmors[s.unlockedArmors.length - 1]
+          : "a_cloth";
+      }
     }
 
     if (Array.isArray(Data.WORKSHOP_RECIPES)) {
@@ -1112,7 +1076,7 @@ window.Aetheria = window.Aetheria || {};
     return mapObj;
   }
 
-  // ================= 5. 全新格仔化分類工坊系統（100% 內聯 onclick 免疫重寫 + 內建 5 大工具） =================
+  // ================= 5. 全新格仔化分類工坊系統（去重純淨版） =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -1140,7 +1104,6 @@ window.Aetheria = window.Aetheria || {};
       return "smelt";
     },
 
-    // ★ 供 HTML 內聯 onclick 直接呼叫的 4 個公開方法（不受 MutationObserver 重寫影響！）
     switchTab: function(tabId) {
       if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) window.Aetheria.Audio.sfxTalkBlip();
       this.curTab = tabId;
@@ -1180,7 +1143,7 @@ window.Aetheria = window.Aetheria || {};
 
       if (!this.canAffordRecipe(s, rec.cost, rec.goldCost || 0)) {
         window.Aetheria.Audio.sfxWrong();
-        window.Aetheria.UI.showToast("⚠️ 合成材料不足！請查看紅框檢視盒中標示紅色的材料。");
+        window.Aetheria.UI.showToast("⚠️ 合成材料不足！請查看上方檢視盒中標示紅色的材料。");
         return;
       }
 
@@ -1404,15 +1367,22 @@ window.Aetheria = window.Aetheria || {};
 
       if (tab === "workshop") {
         const recipeMap = {};
-        COMPLETE_WORKSHOP_RECIPES.forEach(function(r) { recipeMap[r.id] = r; });
+        const seenNames = {};
+        COMPLETE_WORKSHOP_RECIPES.forEach(function(r) {
+          recipeMap[r.id] = r;
+          seenNames[r.name] = true;
+        });
         const rawWks = Array.isArray(Data.WORKSHOP_RECIPES)
           ? Data.WORKSHOP_RECIPES
           : (Data.WORKSHOP_RECIPES && typeof Data.WORKSHOP_RECIPES === "object" ? Object.values(Data.WORKSHOP_RECIPES) : []);
         rawWks.forEach(function(r, idx) {
-          if (!r) return;
+          if (!r || !r.name) return;
           const rid = r.id || r.wkId || ("wk_legacy_" + idx);
           r.id = rid;
-          if (!recipeMap[rid]) recipeMap[rid] = r;
+          if (!recipeMap[rid] && !seenNames[r.name]) {
+            recipeMap[rid] = r;
+            seenNames[r.name] = true;
+          }
         });
 
         Object.values(recipeMap).forEach(function(r) {
@@ -1437,7 +1407,6 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
-      // ★ 100% 內建顯示 5 大採集工具 (伐木手斧、採礦十字鎬、垂釣魚竿、飛索鉤爪、探險行囊)
       else if (tab === "tools") {
         const toolsSource = (Data.TOOLS && Object.keys(Data.TOOLS).length >= 3) ? Data.TOOLS : BUILTIN_TOOLS_DB;
         ["axe", "pickaxe", "rod", "hook", "pouch"].forEach(function(tKey) {
@@ -1467,8 +1436,24 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
+      // ★ 武器與防具：自動按 ID 與名稱去重，並嚴格按 Tier (T1 ➔ T10) 由低至高排序！
       else if (tab === "weapons") {
-        Object.values(Data.WEAPONS || {}).forEach(function(w) {
+        const seenWId = {};
+        const seenWName = {};
+        const wList = Object.values(Data.WEAPONS || {}).filter(function(w) {
+          if (!w || !w.id || !w.name) return false;
+          if (REMOVED_DUPLICATE_WEAPON_IDS.indexOf(w.id) !== -1) return false;
+          if (seenWId[w.id] || seenWName[w.name]) return false;
+          seenWId[w.id] = true;
+          seenWName[w.name] = true;
+          return true;
+        });
+
+        wList.sort(function(a, b) {
+          return (a.tier || 1) - (b.tier || 1);
+        });
+
+        wList.forEach(function(w) {
           const unlocked = Boolean(s.unlockedWeapons && s.unlockedWeapons.indexOf(w.id) !== -1);
           const equipped = (s.equippedWeapon === w.id);
           const canDo = !unlocked && self.canAffordRecipe(s, w.cost, w.gold || 0);
@@ -1476,7 +1461,7 @@ window.Aetheria = window.Aetheria || {};
             uid: w.id,
             raw: w,
             itemType: "weapon",
-            subCat: (w.tier <= 2) ? "low" : "high",
+            subCat: (w.tier <= 4) ? "low" : "high",
             iconKey: "icon_sword",
             shortName: w.name,
             fullName: w.name + " (ATK +" + w.atk + ")",
@@ -1492,7 +1477,22 @@ window.Aetheria = window.Aetheria || {};
       }
 
       else if (tab === "armors") {
-        Object.values(Data.ARMORS || {}).forEach(function(a) {
+        const seenAId = {};
+        const seenAName = {};
+        const aList = Object.values(Data.ARMORS || {}).filter(function(a) {
+          if (!a || !a.id || !a.name) return false;
+          if (REMOVED_DUPLICATE_ARMOR_IDS.indexOf(a.id) !== -1) return false;
+          if (seenAId[a.id] || seenAName[a.name]) return false;
+          seenAId[a.id] = true;
+          seenAName[a.name] = true;
+          return true;
+        });
+
+        aList.sort(function(a, b) {
+          return (a.tier || 1) - (b.tier || 1);
+        });
+
+        aList.forEach(function(a) {
           const unlocked = Boolean(s.unlockedArmors && s.unlockedArmors.indexOf(a.id) !== -1);
           const equipped = (s.equippedArmor === a.id);
           const canDo = !unlocked && self.canAffordRecipe(s, a.cost, a.gold || 0);
@@ -1513,7 +1513,11 @@ window.Aetheria = window.Aetheria || {};
             desc: a.desc || ("防禦力 +" + a.def + "，最大生命 +" + (a.hp || 0))
           });
         });
+
+        const seenRId = {};
         Object.values(Data.RELICS || {}).forEach(function(rel) {
+          if (!rel || !rel.id || seenRId[rel.id]) return;
+          seenRId[rel.id] = true;
           const unlocked = Boolean(s.unlockedRelics && s.unlockedRelics.indexOf(rel.id) !== -1);
           const canDo = !unlocked && self.canAffordRecipe(s, rel.cost, rel.gold || 0);
           itemsList.push({
@@ -1547,8 +1551,8 @@ window.Aetheria = window.Aetheria || {};
         subFilters = [
           { id: "all",  label: "全部武器(" + itemsList.length + ")" },
           { id: "can",  label: "✅可鍛造/已擁有" },
-          { id: "low",  label: "T1~T2 初中階" },
-          { id: "high", label: "T3~T4 高階" }
+          { id: "low",  label: "T1~T4 初中階" },
+          { id: "high", label: "T5~T10 傳奇階" }
         ];
       } else if (tab === "armors") {
         subFilters = [
@@ -1586,7 +1590,6 @@ window.Aetheria = window.Aetheria || {};
 
       const selectedObj = this.currentFilteredMap[this.selectedItemId] || filteredItems[0];
 
-      // 建立紅框檢視盒 HTML（全部按鈕均使用內聯 onclick）
       let inspectorInnerHtml = "";
       if (selectedObj) {
         let chipsHtml = "";
@@ -1654,7 +1657,6 @@ window.Aetheria = window.Aetheria || {};
         inspectorInnerHtml = '<div style="color:#94a3b8; font-size:12px; text-align:center;">此分類下暫無項目</div>';
       }
 
-      // 建立下方 3 欄格仔 HTML（每個格仔與黃色製作鈕均使用內聯 onclick！）
       let gridCellsHtml = "";
       filteredItems.forEach(function(item) {
         const isSel = (selectedObj && selectedObj.uid === item.uid);
@@ -2102,7 +2104,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival Highlands & Grid Workshop v9.6 init error:", err);
+      console.error("Survival Highlands & Grid Workshop v9.7 init error:", err);
     }
   }
 
