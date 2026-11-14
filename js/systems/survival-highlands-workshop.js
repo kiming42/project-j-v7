@@ -1,20 +1,19 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 正統 Survival RPG 深度重製模組 (survival-highlands-workshop.js - v10.1 嚴密平衡版)
- * Cross-Check 平衡與邏輯修正：
- *   1. 【安全區保底素材】：每區西側安全區 (x < 660) 固定刷出 7 個保底特產點，確保 100% 可先在安全區集齊材料合成【環境求生裝】
- *   2. 【保護推石密室】：環境危機起點統一設為 x >= 660，完全避開 x:420~600 的推石解謎密室
- *   3. 【跨區傳送落點同步】：自動同步全地圖跨區傳送門的 targetX (+650px)，往返新舊區域落點 100% 精準
- *   4. 【隨機物件防卡牆淨化】：自動將誤刷入懸崖岩壁或新河道內的隨機素材與魔物移至中東段開闊腹地
- *   5. 【完整 12 項求生任務鏈】：涵蓋繩梯、礦洞、冶煉、肉脯與 1~6 區全套求生裝，合成時即時提示領獎
+ * Project J：艾瑟瑞亞的破曉 — 正統 Survival RPG 深度重製模組 (survival-highlands-workshop.js - v10.2)
+ * v10.2 三大升級（探險鐵鏟挖寶 ✖ ＋ 隱藏地底遺跡 ＋ 領悟配方系統）：
+ *   1. 【第6工具：探險鐵鏟 & ✖ 藏寶點】：於工坊工具分頁新增「探險鐵鏟 (Lv.1~Lv.3)」，可挖掘各區地面「✖」記號獲取【遠古遺跡鑰匙】與【遠古秘寶晶石】
+ *   2. 【隱藏地底遺跡子迷宮 (crypt_*)】：各區高台旁設有鎖住的【地底遺跡石門】，用鑰匙解鎖後可進入地底挑戰「遺跡守衛魔像」並開啟「遠古聖物石棺」
+ *   3. 【💡 領悟配方系統 & 33項配方】：獲得新素材時即時彈出「💡領悟新配方」提示；工坊支援切換「已領悟 / 🔒未領悟」並新增遠古晶石永久屬性秘藥
+ *   4. 完整保留 v10.1 的 2100x1320 大地圖、高低差懸崖山洞、6區環境求生裝、安全區保底素材與 15 項日誌求生懸賞
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入高低差懸崖、環境危機警示條與格仔工坊 CSS =================
+  // ================= 1. 注入高低差懸崖、地底遺跡、挖寶點與格仔工坊 CSS =================
   function injectHighlandsAndWorkshopStyles() {
-    if (document.getElementById("highlands-wk-v101-styles")) return;
+    if (document.getElementById("highlands-wk-v102-styles")) return;
     const style = document.createElement("style");
-    style.id = "highlands-wk-v101-styles";
+    style.id = "highlands-wk-v102-styles";
     style.textContent = `
       /* ================= A. L型高低差黃土高台與深啡色垂直懸崖壁 ================= */
       .srpg-plateau-top {
@@ -112,6 +111,19 @@ window.Aetheria = window.Aetheria || {};
         box-shadow: 0 0 6px rgba(245, 183, 0, 0.85);
         font-weight: 900;
       }
+      .dom-label.crypt-door-lbl {
+        background: linear-gradient(90deg, #2d1442 0%, #4a154b 100%);
+        color: #ffd166;
+        border: 1.5px solid #e0aaff;
+        box-shadow: 0 0 7px rgba(224, 170, 255, 0.85);
+        font-weight: 900;
+      }
+      .dom-label.dig-spot-lbl {
+        background: #4a2c11;
+        color: #ffd166;
+        border: 1.5px solid #f5b700;
+        font-weight: 900;
+      }
       .dom-label.elite-mon-lbl {
         background: linear-gradient(90deg, #6a040f 0%, #3c096c 100%);
         color: #ffd166;
@@ -188,8 +200,15 @@ window.Aetheria = window.Aetheria || {};
         border-color: #5ac54f;
         background: linear-gradient(180deg, #18281c 0%, #141815 100%);
       }
+      .wk-grid-cell.undiscovered {
+        opacity: 0.72;
+        border-style: dashed;
+        border-color: #64748b;
+      }
       .wk-grid-cell.selected {
         border-color: #ffd166 !important;
+        border-style: solid !important;
+        opacity: 1 !important;
         box-shadow: 0 0 9px rgba(245, 183, 0, 0.85);
         background: linear-gradient(180deg, #332614 0%, #1c150c 100%);
       }
@@ -212,6 +231,15 @@ window.Aetheria = window.Aetheria || {};
         font-size: 9px;
         font-weight: 900;
         color: #5ac54f;
+        pointer-events: none;
+      }
+      .wk-cell-lock-dot {
+        position: absolute;
+        top: 2px;
+        left: 4px;
+        font-size: 9px;
+        font-weight: 900;
+        color: #e0aaff;
         pointer-events: none;
       }
       .wk-cell-name {
@@ -272,7 +300,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 2. 註冊《Survival RPG》全套新素材與求生裝備像素圖示 =================
+  // ================= 2. 註冊《Survival RPG》像素圖示（新增鐵鏟、✖挖寶點、遺跡鑰匙、遺跡石門、遠古晶石） =================
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -294,6 +322,125 @@ window.Aetheria = window.Aetheria || {};
       }
       return c.toDataURL();
     }
+
+    // 🥄 第 6 把核心工具：探險鐵鏟 (icon_shovel)
+    const shovelIconUrl = buildGridDataUrl([
+      "...........KKKK.",
+      "..........KLLLLK",
+      ".........KLDDDDK",
+      ".........KLLLLK.",
+      "........KKLKK...",
+      ".......KLLK.....",
+      "......KLLK......",
+      ".....KLLK.......",
+      "....KKKK........",
+      "..KKCCCCKK......",
+      ".KCCWWWWCCK.....",
+      "KCCWWWWWWCCK....",
+      "KCCWWWWCCCCK....",
+      ".KCCCCCCCCK.....",
+      "..KKKKKKKK......",
+      "................"
+    ], { K: "#141013", L: "#d9a066", D: "#8f563b", C: "#94a3b8", W: "#ffffff" });
+
+    // ✖ 地面隱藏挖寶記號 (buried_x_spot)
+    const buriedXSpotUrl = buildGridDataUrl([
+      "................",
+      "................",
+      "..KKK......KKK..",
+      ".KDDDK....KDDDK.",
+      ".KDYYDK..KDYYDK.",
+      "..KDYYDKKDYYDK..",
+      "...KDYYYYYYDK...",
+      "....KDYYYYDK....",
+      "....KDYYYYDK....",
+      "...KDYYYYYYDK...",
+      "..KDYYDKKDYYDK..",
+      ".KDYYDK..KDYYDK.",
+      ".KDDDK....KDDDK.",
+      "..KKK......KKK..",
+      "................",
+      "................"
+    ], { K: "#2b1508", D: "#8f563b", Y: "#ffd166" });
+
+    // 🗝️ 遠古遺跡鑰匙 (mat_cryptKey)
+    const cryptKeyUrl = buildGridDataUrl([
+      "....KKKKKK......",
+      "...KYYYYYYK.....",
+      "..KYYKKKKYYK....",
+      "..KYYK..KYYK....",
+      "..KYYKKKKYYK....",
+      "...KYYYYYYK.....",
+      "....KKYYKK......",
+      ".....KYYK.......",
+      ".....KYYK.......",
+      ".....KYYKKKK....",
+      ".....KYYYYYK....",
+      ".....KYYKKKK....",
+      ".....KYYK.......",
+      ".....KYYYYYK....",
+      ".....KKKKKKK....",
+      "................"
+    ], { K: "#141013", Y: "#ffd166" });
+
+    // 🔮 遠古秘寶晶石 (mat_ancientGem)
+    const ancientGemUrl = buildGridDataUrl([
+      "......KKKK......",
+      "....KKPPPPKK....",
+      "...KPPWWWWPPK...",
+      "..KPPWYYYYWPPK..",
+      ".KPPWYYYYYYWPPK.",
+      "KPPWYYWWWWYYWPPK",
+      "KPPWYYWWWWYYWPPK",
+      "KPPWYYYYYYYYWPPK",
+      ".KPPWYYYYYYWPPK.",
+      "..KPPWWWWWWPPK..",
+      "...KPPPPPPPPK...",
+      "....KKPPPPKK....",
+      "......KKKK......",
+      "................",
+      "................",
+      "................"
+    ], { K: "#141013", P: "#9d4edd", W: "#ffffff", Y: "#ffd166" });
+
+    // 🔒 遠古地底遺跡石門 (crypt_door_locked / crypt_door_open)
+    const cryptDoorLockedUrl = buildGridDataUrl([
+      "....KKKKKKKK....",
+      "..KKGGGGGGGGKK..",
+      ".KGGDDDDDDDDGGK.",
+      "KGGDKKKKKKKKDGGK",
+      "KGDKPPPPPPPPKDGK",
+      "KGDKPYYYYYYPKDGK",
+      "KGDKPYKKKKYPKDGK",
+      "KGDKPYKYYKYPKDGK",
+      "KGDKPYKKKKYPKDGK",
+      "KGDKPPPYYPPPPDGK",
+      "KGDKPPPYYPPPPDGK",
+      "KGDKPPPPPPPPKDGK",
+      "KGGDKKKKKKKKDGGK",
+      "KGGGGGGGGGGGGGGK",
+      "KKKKKKKKKKKKKKKK",
+      "................"
+    ], { K: "#141013", G: "#64748b", D: "#334155", P: "#2d1442", Y: "#f5b700" });
+
+    const cryptDoorOpenUrl = buildGridDataUrl([
+      "....KKKKKKKK....",
+      "..KKGGGGGGGGKK..",
+      ".KGGDDDDDDDDGGK.",
+      "KGGDKKKKKKKKDGGK",
+      "KGDKOOOOOOOOODGK",
+      "KGDKOOOOOOOOODGK",
+      "KGDKOOCCCCCCODGK",
+      "KGDKOOOOOOOOODGK",
+      "KGDKOOCCCCCCODGK",
+      "KGDKOOOOOOOOODGK",
+      "KGDKOOCCCCCCODGK",
+      "KGDKOOOOOOOOODGK",
+      "KGGDKKKKKKKKDGGK",
+      "KGGGGGGGGGGGGGGK",
+      "KKKKKKKKKKKKKKKK",
+      "................"
+    ], { K: "#141013", G: "#64748b", D: "#334155", O: "#090608", C: "#5ac54f" });
 
     const clusterBoulderUrl = buildGridDataUrl([
       "....KKKKKK......",
@@ -562,6 +709,15 @@ window.Aetheria = window.Aetheria || {};
     ], { K: "#141013", Y: "#f5b700", B: "#1d5eb8", W: "#ffffff", C: "#8ce0ff", D: "#5c3824" });
 
     const customUrls = {
+      icon_shovel: shovelIconUrl,
+      buried_x_spot: buriedXSpotUrl,
+      crypt_door_locked: cryptDoorLockedUrl,
+      crypt_door_open: cryptDoorOpenUrl,
+      mat_cryptKey: cryptKeyUrl,
+      mat_ancientGem: ancientGemUrl,
+      mat_elixirAtk: ancientGemUrl,
+      mat_elixirHp: ancientGemUrl,
+      mat_elixirDef: ancientGemUrl,
       cluster_boulder: clusterBoulderUrl,
       cliff_stake: cliffStakeUrl,
       rope_ladder: ropeLadderUrl,
@@ -598,7 +754,7 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 六大區域環境危機定義（minX 統一設為 660，避開推石密室與西側安全採集區） =================
+  // ================= 3. 六大區域環境危機定義 =================
   const ZONE_HAZARD_RULES = {
     zone1_forest: {
       zoneId: "zone1_forest",
@@ -680,8 +836,13 @@ window.Aetheria = window.Aetheria || {};
     return (s.inventory[gearKey] || 0) > 0;
   }
 
-  // ================= 4. 定義 12 種新素材、7 件環境求生裝與 28 項工坊配方 =================
+  // ================= 4. 定義《Survival RPG》素材、6大工具與 33 項遞進式配方 =================
   const NEW_SRPG_MATERIALS = {
+    cryptKey:        { id: "cryptKey",        name: "遠古遺跡鑰匙",     tier: 2, desc: "【尋寶挖掘/工坊鍛造】用探險鐵鏟挖掘地面「✖」藏寶記號獲得，可解鎖各區的【🔒遠古地底遺跡】！" },
+    ancientGem:      { id: "ancientGem",      name: "遠古秘寶晶石",     tier: 3, desc: "【地底遺跡/挖寶秘寶】蘊含遠古神力的璀璨晶石，可於工坊提煉永久提升攻防血量的遠古秘藥！" },
+    elixirAtk:       { id: "elixirAtk",       name: "遠古力量秘藥",     tier: 3, desc: "【永久屬性秘藥】點擊「✨使用強化」飲用後，主角永久攻擊力 +6！" },
+    elixirHp:        { id: "elixirHp",        name: "遠古生命聖水",     tier: 3, desc: "【永久屬性秘藥】點擊「✨使用強化」飲用後，主角永久最大生命值 +30！" },
+    elixirDef:       { id: "elixirDef",       name: "遠古鐵壁靈液",     tier: 3, desc: "【永久屬性秘藥】點擊「✨使用強化」飲用後，主角永久防禦力 +5！" },
     venomSac:        { id: "venomSac",        name: "毒囊孢子",         tier: 1, desc: "【1區森林特產】採集自迷霧森林西側或毒菇妖掉落，可用於提煉抗瘴氣香囊。" },
     treeBark:        { id: "treeBark",        name: "堅韌樹皮",         tier: 1, desc: "【1區森林特產】剝自古老神木的厚樹皮，是製作清毒香囊與繩索的材料。" },
     coal:            { id: "coal",            name: "黑曜木炭",         tier: 1, desc: "【洞窟/高台礦產】由枯枝窯燒或於岩壁山洞開採，是冶煉精鋼錠與黑火藥的核心燃料。" },
@@ -705,13 +866,14 @@ window.Aetheria = window.Aetheria || {};
     gear_skyAegis:   { id: "gear_skyAegis",   name: "星隕避雷聖徽",     tier: 4, desc: "【6區天界求生裝】持有後永久免疫天界聖殿的「星界落雷威壓」，且答對破盾威力強化！" }
   };
 
+  // ★ 6 大採集與探索工具（新增第 6 把核心工具：shovel 探險鐵鏟，排成完美 3x2 六宮格！）
   const BUILTIN_TOOLS_DB = {
     axe: {
       id: "axe",
       name: "伐木手斧",
       iconKey: "icon_axe",
       tiers: {
-        0: { name: "徒手拾荒", desc: "尚未裝備手斧，僅能拾取散落枯枝与初階特產。" },
+        0: { name: "徒手拾荒", desc: "尚未裝備手斧，僅能拾取散落枯枝與初階特產。" },
         1: { name: "Lv.1 燧石手斧", cost: { branch: 2, flint: 2 }, gold: 0, desc: "可砍伐 1 階翠風原木、堅韌藤蔓、微光菇與琥珀松脂。" },
         2: { name: "Lv.2 精鐵伐木斧", cost: { iron: 2, wood: 2 }, gold: 80, desc: "可砍伐 2 階荒野亞麻、向陽太陽花與極地冰蓮。" },
         3: { name: "Lv.3 流沙秘銀斧", cost: { mithril: 2, plank: 2 }, gold: 220, desc: "可砍伐 3 階黃金世界樹葉與全大陸高階神木！" }
@@ -726,6 +888,17 @@ window.Aetheria = window.Aetheria || {};
         1: { name: "Lv.1 燧石十字鎬", cost: { branch: 2, flint: 2 }, gold: 0, desc: "可開採 1 階藍晶鐵礦脈。" },
         2: { name: "Lv.2 精鐵十字鎬", cost: { iron: 3, wood: 2 }, gold: 80, desc: "可開採 2 階玄武岩塊、流沙秘銀與深海珊瑚。" },
         3: { name: "Lv.3 秘銀破岩鎬", cost: { mithril: 2, basalt: 2 }, gold: 220, desc: "可開採 3 階熔岩黑曜石與深淵星隕鐵！" }
+      }
+    },
+    shovel: {
+      id: "shovel",
+      name: "探險鐵鏟",
+      iconKey: "icon_shovel",
+      tiers: {
+        0: { name: "尚未持有鐵鏟", desc: "製作鐵鏟後，可挖掘各區地面上的「✖ 藏寶記號」獲取地底遺跡鑰匙與秘寶！" },
+        1: { name: "Lv.1 精鐵探險鏟", cost: { wood: 2, iron: 1 }, gold: 0, desc: "【★尋寶必備】可挖掘全大陸地面「✖」藏寶點，挖出【遠古遺跡鑰匙】與【遠古秘寶晶石】！" },
+        2: { name: "Lv.2 秘銀尋寶鏟", cost: { plank: 2, mithril: 1, steelIngot: 1 }, gold: 120, desc: "挖掘「✖」藏寶點時金幣收穫加倍，且必定額外挖出流沙秘銀或石英砂！" },
+        3: { name: "Lv.3 星隕考古神鏟", cost: { obsidian: 1, starIron: 1, quartz: 2 }, gold: 260, desc: "傳奇考古神鏟！挖掘「✖」藏寶點必定獲得雙倍【遠古秘寶晶石】！" }
       }
     },
     rod: {
@@ -761,20 +934,36 @@ window.Aetheria = window.Aetheria || {};
     }
   };
 
+  // starter: true 代表初始預設已知配方；其餘進階配方會在玩家獲得任一關鍵材料時彈出「💡 領悟新配方」！
   const COMPLETE_WORKSHOP_RECIPES = [
+    // --- 🛡️ 環境求生裝備與開路鑰匙 (gear) ---
     {
       id: "wk_rope_ladder",
       name: "攀岩繩梯 x1",
       category: "gear",
+      starter: true,
       toKey: "ropeLadder",
       toCount: 1,
       cost: { rope: 1, wood: 2 },
       desc: "【★高低差開路必備】架設於各區南側的深啡色懸崖壁上，即可爬上黃土高台採集稀有礦脈！"
     },
     {
+      id: "wk_crypt_key",
+      name: "鍛造遺跡銅匙 x1",
+      category: "gear",
+      starter: false,
+      unlockBy: ["coal", "steelIngot", "cryptKey", "quartz"],
+      toKey: "cryptKey",
+      toCount: 1,
+      cost: { steelIngot: 1, coal: 2, quartz: 1 },
+      desc: "【★地底遺跡開鎖】除用鐵鏟挖寶外，亦可用精鋼錠與石英砂直接鍛造【遠古遺跡鑰匙】，開啟各區地底遺跡！"
+    },
+    {
       id: "wk_gear_gasmask",
       name: "清毒草藥香囊",
       category: "gear",
+      starter: true,
+      unlockBy: ["venomSac", "treeBark"],
       toKey: "gear_gasMask",
       toCount: 1,
       isUniqueGear: true,
@@ -785,6 +974,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_gear_lantern",
       name: "永明石英提燈",
       category: "gear",
+      starter: false,
+      unlockBy: ["quartz", "coal"],
       toKey: "gear_lantern",
       toCount: 1,
       isUniqueGear: true,
@@ -795,6 +986,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_gear_goggles",
       name: "防沙護目水壺",
       category: "gear",
+      starter: false,
+      unlockBy: ["cactusFruit", "curedLeather"],
       toKey: "gear_goggles",
       toCount: 1,
       isUniqueGear: true,
@@ -805,6 +998,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_gear_diving",
       name: "深海避水呼吸器",
       category: "gear",
+      starter: false,
+      unlockBy: ["chitin", "coral"],
       toKey: "gear_diving",
       toCount: 1,
       isUniqueGear: true,
@@ -815,6 +1010,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_gear_furcoat",
       name: "極地厚毛防寒斗篷",
       category: "gear",
+      starter: false,
+      unlockBy: ["thickPelt", "iceLotus"],
       toKey: "gear_furCoat",
       toCount: 1,
       isUniqueGear: true,
@@ -825,6 +1022,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_gear_heatshield",
       name: "冰蓮隔熱護心鏡",
       category: "gear",
+      starter: false,
+      unlockBy: ["sulfur", "obsidian"],
       toKey: "gear_heatShield",
       toCount: 1,
       isUniqueGear: true,
@@ -835,16 +1034,19 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_gear_skyaegis",
       name: "星隕避雷聖徽",
       category: "gear",
+      starter: false,
+      unlockBy: ["starIron", "goldLeaf"],
       toKey: "gear_skyAegis",
       toCount: 1,
       isUniqueGear: true,
       cost: { starIron: 1, obsidian: 1, quartz: 2 },
-      desc: "【★6區天界求生裝】永久免疫天界聖殿的「⚡星界落雷威壓」，並提升全屬性！"
+      desc: "【★6區天界求生裝】永久免疫天界聖殿的「⚡星界落雷威壓」，並提升破盾能力！"
     },
     {
       id: "wk_torch",
       name: "松脂火把 x2",
       category: "gear",
+      starter: true,
       toKey: "torchItem",
       toCount: 2,
       cost: { branch: 1, resin: 1 },
@@ -854,6 +1056,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_bomb",
       name: "爆破炸彈 x2",
       category: "gear",
+      starter: true,
       toKey: "bombItem",
       toCount: 2,
       cost: { flint: 2, clay: 1, resin: 1 },
@@ -863,15 +1066,20 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_coal_bomb",
       name: "硫磺黑火藥炸彈 x3",
       category: "gear",
+      starter: false,
+      unlockBy: ["coal", "sulfur"],
       toKey: "bombItem",
       toCount: 3,
       cost: { coal: 2, flint: 1 },
       desc: "【高效爆破】以黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！"
     },
+
+    // --- 🔥 冶煉與加工建材 (smelt) ---
     {
       id: "wk_charcoal",
       name: "窯燒黑木炭 x2",
       category: "smelt",
+      starter: true,
       toKey: "coal",
       toCount: 2,
       cost: { branch: 3 },
@@ -881,6 +1089,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_steel_ingot",
       name: "百煉精鋼錠 x1",
       category: "smelt",
+      starter: false,
+      unlockBy: ["coal", "iron"],
       toKey: "steelIngot",
       toCount: 1,
       cost: { iron: 2, coal: 2 },
@@ -890,6 +1100,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_cured_leather",
       name: "鞣製硬皮革 x1",
       category: "smelt",
+      starter: false,
+      unlockBy: ["rawHide"],
       toKey: "curedLeather",
       toCount: 1,
       cost: { rawHide: 2, resin: 1 },
@@ -899,6 +1111,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_bark_rope",
       name: "樹皮編織繩 x1",
       category: "smelt",
+      starter: true,
+      unlockBy: ["treeBark"],
       toKey: "rope",
       toCount: 1,
       cost: { treeBark: 2 },
@@ -908,6 +1122,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_plank",
       name: "加工厚木板 x1",
       category: "smelt",
+      starter: true,
       toKey: "plank",
       toCount: 1,
       cost: { wood: 2 },
@@ -917,6 +1132,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_rope",
       name: "強化麻繩索 x1",
       category: "smelt",
+      starter: true,
       toKey: "rope",
       toCount: 1,
       cost: { vine: 2 },
@@ -926,6 +1142,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_rope_hemp",
       name: "亞麻編織繩 x2",
       category: "smelt",
+      starter: false,
+      unlockBy: ["hemp"],
       toKey: "rope",
       toCount: 2,
       cost: { hemp: 2 },
@@ -935,6 +1153,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_pitch",
       name: "防水松脂膠 x1",
       category: "smelt",
+      starter: true,
       toKey: "pitch",
       toCount: 1,
       cost: { resin: 2, clay: 1 },
@@ -944,6 +1163,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_nails",
       name: "鍛造鐵釘 x2",
       category: "smelt",
+      starter: true,
       toKey: "nails",
       toCount: 2,
       cost: { iron: 1 },
@@ -953,6 +1173,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_steel_cable",
       name: "秘銀強化鋼索 x1",
       category: "smelt",
+      starter: false,
+      unlockBy: ["mithril"],
       toKey: "steelCable",
       toCount: 1,
       cost: { mithril: 1, rope: 1 },
@@ -962,6 +1184,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_heavy_sail",
       name: "防風重帆布 x1",
       category: "smelt",
+      starter: false,
+      unlockBy: ["sailCloth"],
       toKey: "heavySail",
       toCount: 1,
       cost: { sailCloth: 2, rope: 1 },
@@ -971,15 +1195,54 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_warm_fur",
       name: "禦寒獸毛氈 x1",
       category: "smelt",
+      starter: false,
+      unlockBy: ["sinew", "thickPelt"],
       toKey: "warmFur",
       toCount: 1,
       cost: { sinew: 2, hemp: 1 },
       desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。"
     },
+
+    // --- 🍖 口糧、靈藥與遠古秘寶鍊金 (survival) ---
+    {
+      id: "wk_elixir_atk",
+      name: "遠古力量秘藥 (ATK+6)",
+      category: "survival",
+      starter: false,
+      unlockBy: ["ancientGem"],
+      toKey: "elixirAtk",
+      toCount: 1,
+      cost: { ancientGem: 1, quartz: 1, herb: 2 },
+      desc: "【★地底遺跡秘傳】將遠古秘寶晶石提煉為力量秘藥，點擊「✨使用強化」永久提升主角攻擊力 +6！"
+    },
+    {
+      id: "wk_elixir_hp",
+      name: "遠古生命聖水 (HP+30)",
+      category: "survival",
+      starter: false,
+      unlockBy: ["ancientGem"],
+      toKey: "elixirHp",
+      toCount: 1,
+      cost: { ancientGem: 1, flower: 1, herb: 2 },
+      desc: "【★地底遺跡秘傳】將遠古秘寶晶石提煉為生命聖水，點擊「✨使用強化」永久提升最大生命 +30！"
+    },
+    {
+      id: "wk_elixir_def",
+      name: "遠古鐵壁靈液 (DEF+5)",
+      category: "survival",
+      starter: false,
+      unlockBy: ["ancientGem"],
+      toKey: "elixirDef",
+      toCount: 1,
+      cost: { ancientGem: 1, iron: 2 },
+      desc: "【★地底遺跡秘傳】將遠古秘寶晶石提煉為鐵壁靈液，點擊「✨使用強化」永久提升主角防禦力 +5！"
+    },
     {
       id: "wk_ration_jerky",
       name: "岩鹽風乾肉脯 x2",
       category: "survival",
+      starter: false,
+      unlockBy: ["rockSalt"],
       toKey: "rationJerky",
       toCount: 2,
       cost: { fish: 1, rockSalt: 1 },
@@ -989,6 +1252,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_cactus_ration",
       name: "仙人掌清涼飲 x2",
       category: "survival",
+      starter: false,
+      unlockBy: ["cactusFruit"],
       toKey: "rationFish",
       toCount: 2,
       cost: { cactusFruit: 1, herb: 1 },
@@ -998,6 +1263,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_ration_herb",
       name: "烘烤微光菇乾 x2",
       category: "survival",
+      starter: true,
       toKey: "rationHerb",
       toCount: 2,
       cost: { herb: 1, branch: 1 },
@@ -1007,6 +1273,7 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_ration_fish",
       name: "炭烤鮮魚乾 x2",
       category: "survival",
+      starter: true,
       toKey: "rationFish",
       toCount: 2,
       cost: { fish: 1, branch: 1 },
@@ -1016,6 +1283,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_alchemy_heal",
       name: "精煉生命藥水 x2",
       category: "survival",
+      starter: false,
+      unlockBy: ["quartz"],
       toKey: "potionHeal",
       toCount: 2,
       cost: { herb: 2, quartz: 1 },
@@ -1025,6 +1294,8 @@ window.Aetheria = window.Aetheria || {};
       id: "wk_alchemy_hint",
       name: "精煉洞察藥水 x2",
       category: "survival",
+      starter: false,
+      unlockBy: ["quartz", "flower"],
       toKey: "potionHint",
       toCount: 2,
       cost: { flower: 1, resin: 1, quartz: 1 },
@@ -1035,7 +1306,7 @@ window.Aetheria = window.Aetheria || {};
   const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
   const REMOVED_DUPLICATE_ARMOR_IDS  = ["a_srpg_leather", "a_srpg_steel_mail", "a_srpg_highland_plate"];
 
-  // ================= 5. 完整 12 項公會求生與高台開拓懸賞任務 =================
+  // ================= 5. 完整 15 項公會求生、鐵鏟挖寶與地底遺跡懸賞任務 =================
   const EXTRA_SURVIVAL_QUESTS = [
     {
       id: "sq_01_ladder",
@@ -1050,8 +1321,44 @@ window.Aetheria = window.Aetheria || {};
       }
     },
     {
+      id: "sq_01b_shovel",
+      title: "2.【尋寶工具】打造精鐵探險鏟",
+      giver: "矮人鐵匠・巴爾",
+      zone: "0.曙光營地",
+      desc: "在【工坊 ➔ ⛏️工具】使用翠風原木x2與藍晶鐵礦x1，打造出第6把核心工具【Lv.1 精鐵探險鏟】。",
+      rewardExp: 150,
+      rewardGold: 180,
+      check: function(s) { return Boolean(s.tools && (s.tools.shovel || 0) >= 1); }
+    },
+    {
+      id: "sq_01c_dig",
+      title: "3.【地底尋寶】挖掘「✖」藏寶記號",
+      giver: "行商・奇奇",
+      zone: "各區野外草地與高台",
+      desc: "持探險鐵鏟走到野外地面的「✖ 藏寶點」按 A 鍵挖掘，找尋埋藏的【遠古遺跡鑰匙】與【遠古秘寶晶石】。",
+      rewardExp: 200,
+      rewardGold: 240,
+      check: function(s) {
+        return Boolean(
+          s.dugTreasureOnce ||
+          (s.inventory && (s.inventory.cryptKey > 0 || s.inventory.ancientGem > 0)) ||
+          (s.unlockedCrypts && Object.keys(s.unlockedCrypts).length > 0)
+        );
+      }
+    },
+    {
+      id: "sq_01d_crypt",
+      title: "4.【地底遺跡】解鎖古老遺跡石門",
+      giver: "公會會長・艾莉婭",
+      zone: "各區高台東側 (x:925, y:1015)",
+      desc: "使用挖寶或鍛造獲得的【遠古遺跡鑰匙 x1】，解鎖任意區域的【🔒地底遺跡石門】並進入探索。",
+      rewardExp: 320,
+      rewardGold: 360,
+      check: function(s) { return Boolean(s.unlockedCrypts && Object.keys(s.unlockedCrypts).length > 0); }
+    },
+    {
       id: "sq_02_grotto",
-      title: "2.【岩壁秘境】開採高台石英與木炭",
+      title: "5.【岩壁秘境】開採高台石英與木炭",
       giver: "矮人鐵匠・巴爾",
       zone: "各區南側懸崖山洞",
       desc: "進入懸崖壁上的黑色山洞或爬上黃土高台，開採獲得【透明石英砂 x1】與【黑曜木炭 x1】。",
@@ -1067,7 +1374,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_03_gasmask",
-      title: "3.【森林求生】對抗劇毒瘴氣",
+      title: "6.【森林求生】對抗劇毒瘴氣",
       giver: "草藥師・梅姑",
       zone: "1.翠風迷霧森林",
       desc: "在森林西側安全區採集毒囊孢子x2、堅韌樹皮x2、微光菇x2，於工坊合成【清毒草藥香囊】免疫森林毒瘴。",
@@ -1077,7 +1384,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_04_lantern",
-      title: "4.【幽窟求生】打造永明石英提燈",
+      title: "7.【幽窟求生】打造永明石英提燈",
       giver: "矮人鐵匠・巴爾",
       zone: "1-B.微光蘑菇洞窟",
       desc: "收集透明石英砂x2、黑曜木炭x2、藍晶鐵礦x1，於工坊合成【永明石英提燈】免疫洞窟暗黑孢子。",
@@ -1087,7 +1394,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_05_steel",
-      title: "5.【高溫冶煉】鍛打百煉精鋼錠",
+      title: "8.【高溫冶煉】鍛打百煉精鋼錠",
       giver: "矮人鐵匠・巴爾",
       zone: "0.曙光營地",
       desc: "以藍晶鐵礦x2與黑曜木炭x2冶煉出【百煉精鋼錠】，並可點擊「使用強化」永久提升攻擊力。",
@@ -1097,7 +1404,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_06_leather",
-      title: "6.【皮革鞣製】加固鞣製硬皮革",
+      title: "9.【皮革鞣製】加固鞣製硬皮革",
       giver: "老獵人・雷恩",
       zone: "0.曙光營地",
       desc: "討伐魔物收集荒野獸皮x2並結合琥珀松脂x1，於工坊加工出【鞣製硬皮革】強化防具。",
@@ -1114,7 +1421,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_07_jerky",
-      title: "7.【荒野醃製】製作岩鹽風乾肉脯",
+      title: "10.【荒野醃製】製作岩鹽風乾肉脯",
       giver: "老漁夫・阿海",
       zone: "0.曙光營地",
       desc: "在懸崖高台採集結晶岩鹽x1並結合銀鱗鮮魚x1，於工坊醃製出頂級口糧【岩鹽風乾肉脯】。",
@@ -1124,7 +1431,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_08_goggles",
-      title: "8.【峽谷求生】穿越酷熱流沙風暴",
+      title: "11.【峽谷求生】穿越酷熱流沙風暴",
       giver: "斥候隊長・凱爾",
       zone: "2.流沙繩索峽谷",
       desc: "在峽谷西側採集多汁仙人掌x2、透明石英砂x2與硬皮革x1，合成【防沙護目水壺】免疫流沙減速。",
@@ -1134,7 +1441,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_09_diving",
-      title: "9.【海岸求生】深海避水呼吸器",
+      title: "12.【海岸求生】深海避水呼吸器",
       giver: "老船匠・達克",
       zone: "3.翡翠沉船海岸",
       desc: "在海岸西側收集堅硬甲殼x2、深海珊瑚x2與石英砂x1，合成【深海避水呼吸器】克服暗礁急流。",
@@ -1144,7 +1451,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_10_furcoat",
-      title: "10.【極地求生】抵禦暴雪凍傷",
+      title: "13.【極地求生】抵禦暴雪凍傷",
       giver: "冰原獵手・弗雷",
       zone: "4.霜語極寒雪原",
       desc: "在雪原西側收集極地厚獸毛x2、鞣製硬皮革x2與黑木炭x2，縫製【極地厚毛防寒斗篷】免疫凍傷。",
@@ -1154,7 +1461,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_11_heatshield",
-      title: "11.【火山求生】打造冰蓮隔熱鏡",
+      title: "14.【火山求生】打造冰蓮隔熱鏡",
       giver: "紅蓮學者・伊格",
       zone: "5.赤紅熔岩火山",
       desc: "收集火山硫磺晶x2、極地冰蓮x2與百煉精鋼錠x1，合成【冰蓮隔熱護心鏡】免疫火山煉獄火毒。",
@@ -1164,7 +1471,7 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "sq_12_skyaegis",
-      title: "12.【天界求生】凝聚星隕避雷聖徽",
+      title: "15.【天界求生】凝聚星隕避雷聖徽",
       giver: "破曉大賢者",
       zone: "6.天界浮空聖殿",
       desc: "收集深淵星隕鐵x1、熔岩黑曜石x1與透明石英砂x2，合成【星隕避雷聖徽】免疫天界落雷威壓。",
@@ -1173,6 +1480,57 @@ window.Aetheria = window.Aetheria || {};
       check: function(s) { return hasSurvivalGear(s, "gear_skyAegis"); }
     }
   ];
+
+  // ================= 6. 💡 領悟配方檢定系統 (Recipe Discovery Engine) =================
+  function syncDiscoveredMaterialsAndRecipes(s, notifyNew) {
+    if (!s) return;
+    if (!s.knownMaterials) s.knownMaterials = {};
+    if (!s.discoveredRecipes) s.discoveredRecipes = {};
+
+    // 記錄背包中所有持有過的材料
+    Object.keys(s.inventory || {}).forEach(function(matKey) {
+      if ((s.inventory[matKey] || 0) > 0) {
+        s.knownMaterials[matKey] = true;
+      }
+    });
+
+    const newlyInspired = [];
+    COMPLETE_WORKSHOP_RECIPES.forEach(function(rec) {
+      if (s.discoveredRecipes[rec.id]) return;
+
+      if (rec.starter) {
+        s.discoveredRecipes[rec.id] = true;
+        return;
+      }
+
+      // 只要玩家曾經收集過此配方的任一關鍵材料（或任何一項合成材料），即自動領悟該配方！
+      const unlockKeys = rec.unlockBy || Object.keys(rec.cost || {});
+      const hasSeenKey = unlockKeys.some(function(k) {
+        return Boolean(s.knownMaterials[k] || (s.inventory && s.inventory[k] > 0));
+      });
+
+      if (hasSeenKey) {
+        s.discoveredRecipes[rec.id] = true;
+        newlyInspired.push(rec.name.replace(/\s*x\d+$/i, ""));
+      }
+    });
+
+    if (notifyNew && newlyInspired.length > 0 && window.Aetheria.UI) {
+      setTimeout(function() {
+        window.Aetheria.UI.showToast("💡 領悟新配方：【" + newlyInspired.slice(0, 2).join("、") + "】！可於工坊查看！");
+      }, 380);
+    }
+  }
+
+  function isRecipeDiscovered(s, rec) {
+    if (!rec) return true;
+    if (rec.starter) return true;
+    if (s && s.discoveredRecipes && s.discoveredRecipes[rec.id]) return true;
+    const costKeys = Object.keys(rec.cost || {});
+    return costKeys.some(function(k) {
+      return Boolean((s && s.knownMaterials && s.knownMaterials[k]) || (s && s.inventory && s.inventory[k] > 0));
+    });
+  }
 
   function registerSrpgDataIntoGame() {
     const Data = window.Aetheria.Data;
@@ -1197,6 +1555,9 @@ window.Aetheria = window.Aetheria || {};
 
     const s = window.Aetheria.State && window.Aetheria.State.data;
     if (s) {
+      if (!s.tools) s.tools = { axe: 0, pickaxe: 0, shovel: 0, rod: 0, hook: 0, pouch: 0 };
+      if (s.tools.shovel === undefined) s.tools.shovel = 0;
+
       if (Array.isArray(s.unlockedWeapons)) {
         s.unlockedWeapons = s.unlockedWeapons.filter(function(id) {
           return REMOVED_DUPLICATE_WEAPON_IDS.indexOf(id) === -1;
@@ -1217,6 +1578,8 @@ window.Aetheria = window.Aetheria || {};
           ? s.unlockedArmors[s.unlockedArmors.length - 1]
           : "a_cloth";
       }
+
+      syncDiscoveredMaterialsAndRecipes(s, false);
     }
 
     if (Array.isArray(Data.WORKSHOP_RECIPES)) {
@@ -1236,13 +1599,12 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 6. 各區配置：保證西側安全區 (x < 660) 有充足保底素材！ =================
+  // ================= 7. 各區配置、山洞 (grotto_*) 與隱藏地底遺跡 (crypt_*) 子迷宮 =================
   const HIGHLAND_ZONES = {
     zone1_forest: {
       targetW: 2100, targetH: 1320,
       ores: ["quartz", "coal", "rockSalt", "quartz"],
       grottoOres: ["quartz", "coal", "quartz", "rockSalt", "coal", "iron"],
-      // safeZoneNodes 保證前 7 個點在 x < 640 安全區，確保 1 次就能採齊 3 個毒囊 + 3 個樹皮 + 2 個微光菇！
       safeZoneNodes: [
         { key: "venomSac", type: "wood" }, { key: "treeBark", type: "wood" },
         { key: "venomSac", type: "wood" }, { key: "treeBark", type: "wood" },
@@ -1255,7 +1617,9 @@ window.Aetheria = window.Aetheria || {};
         { key: "iron",     type: "crystal" }, { key: "venomSac", type: "wood" },
         { key: "treeBark", type: "wood" },    { key: "iron",     type: "crystal" }
       ],
-      eliteName: "★劇毒瘴氣樹魔"
+      eliteName: "★劇毒瘴氣樹魔",
+      cryptName: "翠風古老樹根地窖",
+      cryptBoss: "★遠古樹根守衛魔像"
     },
     cave1_mushroom: {
       targetW: 1960, targetH: 1260,
@@ -1272,7 +1636,9 @@ window.Aetheria = window.Aetheria || {};
         { key: "basalt",  type: "crystal" }, { key: "mithril", type: "crystal" },
         { key: "quartz",  type: "crystal" }, { key: "iron",    type: "crystal" }
       ],
-      eliteName: "★蝕心晶簇巨怪"
+      eliteName: "★蝕心晶簇巨怪",
+      cryptName: "幽窟地底秘銀聖堂",
+      cryptBoss: "★秘銀晶簇鎮守魔像"
     },
     zone2_canyon: {
       targetW: 2100, targetH: 1320,
@@ -1289,7 +1655,9 @@ window.Aetheria = window.Aetheria || {};
         { key: "flower",      type: "wood" },    { key: "hemp",        type: "wood" },
         { key: "chitin",      type: "crystal" }, { key: "mithril",     type: "crystal" }
       ],
-      eliteName: "★狂沙重甲蠍王"
+      eliteName: "★狂沙重甲蠍王",
+      cryptName: "流沙埋沒法老王陵",
+      cryptBoss: "★荒漠王陵黃金魔像"
     },
     zone3_coast: {
       targetW: 2100, targetH: 1320,
@@ -1306,7 +1674,9 @@ window.Aetheria = window.Aetheria || {};
         { key: "mithril",   type: "crystal" }, { key: "rockSalt",  type: "crystal" },
         { key: "hemp",      type: "wood" },    { key: "chitin",    type: "crystal" }
       ],
-      eliteName: "★暗礁鐵甲海魔"
+      eliteName: "★暗礁鐵甲海魔",
+      cryptName: "海底亞特蘭蒂斯密室",
+      cryptBoss: "★深海遺跡三叉戟魔像"
     },
     zone4_snow: {
       targetW: 2100, targetH: 1320,
@@ -1323,7 +1693,9 @@ window.Aetheria = window.Aetheria || {};
         { key: "sinew",     type: "wood" },    { key: "thickPelt", type: "wood" },
         { key: "obsidian",  type: "crystal" }, { key: "basalt",    type: "crystal" }
       ],
-      eliteName: "★極寒暴雪魔狼皇"
+      eliteName: "★極寒暴雪魔狼皇",
+      cryptName: "永凍冰河遠古神殿",
+      cryptBoss: "★極寒永凍冰晶魔像"
     },
     zone5_volcano: {
       targetW: 2100, targetH: 1320,
@@ -1340,7 +1712,9 @@ window.Aetheria = window.Aetheria || {};
         { key: "sulfur",   type: "crystal" }, { key: "obsidian", type: "crystal" },
         { key: "mithril",  type: "crystal" }, { key: "starIron", type: "crystal" }
       ],
-      eliteName: "★煉獄硫磺炎魔將"
+      eliteName: "★煉獄硫磺炎魔將",
+      cryptName: "地心黑曜熔爐秘殿",
+      cryptBoss: "★地心黑曜神鐵魔像"
     },
     zone6_sky: {
       targetW: 2100, targetH: 1320,
@@ -1357,11 +1731,14 @@ window.Aetheria = window.Aetheria || {};
         { key: "obsidian", type: "crystal" }, { key: "goldLeaf", type: "wood" },
         { key: "starIron", type: "crystal" }, { key: "quartz",   type: "crystal" }
       ],
-      eliteName: "★星界雷罰審判者"
+      eliteName: "★星界雷罰審判者",
+      cryptName: "星界破曉創世密室",
+      cryptBoss: "★創世星隕守護神像"
     }
   };
 
   const grottoMapsCache = {};
+  const cryptMapsCache = {};
 
   function buildCliffGrottoMap(parentZoneId) {
     const cfg = HIGHLAND_ZONES[parentZoneId] || HIGHLAND_ZONES.zone1_forest;
@@ -1390,6 +1767,19 @@ window.Aetheria = window.Aetheria || {};
         name: mInfo.name,
         opened: false
       });
+    });
+
+    // 山洞內亦埋藏 1 個 ✖ 藏寶挖掘點
+    nodes.push({
+      id: "grotto_dig_" + parentZoneId + "_" + Date.now(),
+      x: 240,
+      y: 205,
+      type: "crystal",
+      giveKey: "cryptKey",
+      isBuriedSpot: true,
+      reqToolLv: 0,
+      name: "✖藏寶點",
+      opened: false
     });
 
     return {
@@ -1429,6 +1819,111 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
+  // ★ 建立【🗝️ 隱藏地底古老遺跡 (crypt_<zoneId>)】獨立子迷宮
+  function buildAncientCryptMap(parentZoneId) {
+    const cfg = HIGHLAND_ZONES[parentZoneId] || HIGHLAND_ZONES.zone1_forest;
+    const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
+    const parentMap = (window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(parentZoneId)) || { recLv: 5 };
+    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+    const vaultClaimed = Boolean(s.claimedCryptVaults && s.claimedCryptVaults[parentZoneId]);
+
+    const nodes = [
+      // 頂部中央：遠古聖物石棺寶箱（需擊敗遺跡守衛魔像方可開啟）
+      {
+        id: "crypt_vault_" + parentZoneId,
+        x: 280,
+        y: 85,
+        type: "chest",
+        name: "遠古聖物石棺",
+        isCryptVaultChest: true,
+        parentZoneId: parentZoneId,
+        opened: vaultClaimed
+      }
+    ];
+
+    // 四角富集礦脈
+    const cryptOrePos = [
+      { x: 115, y: 115 }, { x: 445, y: 115 },
+      { x: 115, y: 245 }, { x: 445, y: 245 }
+    ];
+    cryptOrePos.forEach(function(pt, idx) {
+      const giveKey = cfg.ores[idx % cfg.ores.length];
+      const mInfo = matsDB[giveKey] || { name: giveKey };
+      nodes.push({
+        id: "crypt_ore_" + parentZoneId + "_" + idx + "_" + Date.now(),
+        x: pt.x,
+        y: pt.y,
+        type: "crystal",
+        giveKey: giveKey,
+        reqTool: "pickaxe",
+        reqToolLv: 0,
+        perfect: true,
+        isClusterBoulder: true,
+        name: "遺跡" + mInfo.name,
+        opened: false
+      });
+    });
+
+    const bossLv = Math.max(4, (parentMap.recLv || 3) + 3);
+    const monsters = [
+      {
+        id: "crypt_guardian_" + parentZoneId + "_" + Date.now(),
+        name: cfg.cryptBoss || "★遠古遺跡守衛魔像",
+        lv: bossLv,
+        x: 280,
+        y: 165,
+        homeX: 280,
+        homeY: 165,
+        type: "boss",
+        isBoss: false,
+        isShiny: true,
+        isSrpgElite: true,
+        isCryptGuardian: true,
+        alive: true
+      }
+    ];
+
+    return {
+      id: "crypt_" + parentZoneId,
+      parentZoneId: parentZoneId,
+      _refreshToken: Date.now(),
+      name: cfg.cryptName || "遠古地底遺跡",
+      recLv: bossLv,
+      bgm: "cave",
+      theme: "cave",
+      rain: false,
+      fog: false,
+      hasRiver: false,
+      width: 560,
+      height: 360,
+      dirtBlobs: [
+        { cx: 280, cy: 175, rx: 220, ry: 135 }
+      ],
+      trees: [],
+      decos: [
+        { x: 205, y: 82,  sprite: "brazier_on",   w: 26, h: 28, solid: true },
+        { x: 355, y: 82,  sprite: "brazier_on",   w: 26, h: 28, solid: true },
+        { x: 205, y: 175, sprite: "seal_pillar_on", w: 28, h: 32, solid: true },
+        { x: 355, y: 175, sprite: "seal_pillar_on", w: 28, h: 32, solid: true }
+      ],
+      nodes: nodes,
+      npcs: [],
+      monsters: monsters,
+      portals: [
+        {
+          id: "p_exit_crypt_" + parentZoneId,
+          name: "離開地底遺跡 ▾",
+          x: 280,
+          y: 318,
+          targetZone: parentZoneId,
+          targetX: 935,
+          targetY: 1055,
+          icon: "stairs"
+        }
+      ]
+    };
+  }
+
   function isInsideHighlandPlateau(x, y) {
     const inTopWing   = (x >= 395 && x <= 895 && y >= 802 && y <= 920);
     const inRightWing = (x >= 715 && x <= 895 && y >= 915 && y <= 1058);
@@ -1451,6 +1946,7 @@ window.Aetheria = window.Aetheria || {};
     const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
     const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
+    const cryptUnlocked = Boolean(s.unlockedCrypts && s.unlockedCrypts[mapObj.id]);
 
     const oldW = mapObj._origBaseWidth || mapObj.width || 1200;
     const oldH = mapObj._origBaseHeight || mapObj.height || 680;
@@ -1481,7 +1977,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // ★ Cross-Check 修正：同步修正指向擴建地圖東岸 (targetX >= 920) 的跨區返回傳送門落點！
     (mapObj.portals || []).forEach(function(p) {
       if (p.targetZone && HIGHLAND_ZONES[p.targetZone] && p.targetX && p.targetX >= 920 && p.targetX < 1500 && !p._targetShifted) {
         p._targetShifted = true;
@@ -1507,7 +2002,7 @@ window.Aetheria = window.Aetheria || {};
         if (t.isExpandedPerimeterTree) return false;
         if (t.y >= oldH - 72) return false;
         if (t.x >= oldW - 68) return false;
-        if (t.x >= 180 && t.x <= 960 && t.y >= 740 && t.y <= 1120) return false;
+        if (t.x >= 180 && t.x <= 990 && t.y >= 740 && t.y <= 1120) return false;
         if (mapObj.hasRiver && Math.abs(t.x - (mapObj.riverX || 1680)) < 55) return false;
         return true;
       });
@@ -1536,7 +2031,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // ★ Cross-Check 修正：將誤刷入「懸崖壁」或「新河道」內的隨機礦點與魔物自動移至中東段開闊腹地！
     if (mapObj.nodes) {
       mapObj.nodes.forEach(function(n, idx) {
         if (n.isHighlandOre || n.type === "chest") return;
@@ -1566,6 +2060,7 @@ window.Aetheria = window.Aetheria || {};
     mapObj.dirtBlobs.push(
       { cx: 280,  cy: 820,  rx: 95,  ry: 210, isExpandedBlob: true },
       { cx: 520,  cy: 1025, rx: 195, ry: 75,  isExpandedBlob: true },
+      { cx: 955,  cy: 1025, rx: 85,  ry: 70,  isExpandedBlob: true }, // 地底遺跡門前石板路
       { cx: 1280, cy: 340,  rx: 260, ry: 130, isExpandedBlob: true },
       { cx: 1320, cy: 680,  rx: 220, ry: 140, isExpandedBlob: true },
       { cx: 1320, cy: 1020, rx: 240, ry: 135, isExpandedBlob: true },
@@ -1577,6 +2072,7 @@ window.Aetheria = window.Aetheria || {};
     mapObj.portals = (mapObj.portals || []).filter(function(p) { return !p.isCliffCavePortal; });
     mapObj.monsters = (mapObj.monsters || []).filter(function(m) { return !m.isSrpgElite; });
 
+    // 1. 懸崖壁上的黑色山洞口
     mapObj.portals.push({
       id: "p_cliff_cave_" + mapObj.id,
       name: "山洞",
@@ -1589,6 +2085,7 @@ window.Aetheria = window.Aetheria || {};
       isCliffCavePortal: true
     });
 
+    // 2. 南北雙向攀岩繩梯錨點 + ★ 高台東側【🔒 地底遺跡石門 (x: 935, y: 1015)】
     mapObj.decos.push(
       {
         id: "cliff_ladder_north_" + mapObj.id,
@@ -1601,8 +2098,7 @@ window.Aetheria = window.Aetheria || {};
         isHighlandElement: true,
         isCliffLadderSpot: true,
         ladderSide: "north",
-        zoneId: mapObj.id,
-        ladderTitle: rigged ? "🧗繩梯(上下)" : "🧗架設繩梯"
+        zoneId: mapObj.id
       },
       {
         id: "cliff_ladder_south_" + mapObj.id,
@@ -1615,11 +2111,23 @@ window.Aetheria = window.Aetheria || {};
         isHighlandElement: true,
         isCliffLadderSpot: true,
         ladderSide: "south",
-        zoneId: mapObj.id,
-        ladderTitle: rigged ? "🧗繩梯(上下)" : "🧗架設繩梯"
+        zoneId: mapObj.id
+      },
+      {
+        id: "crypt_entrance_" + mapObj.id,
+        x: 935,
+        y: 1015,
+        sprite: cryptUnlocked ? "crypt_door_open" : "crypt_door_locked",
+        w: 34,
+        h: 34,
+        solid: false,
+        isHighlandElement: true,
+        isCryptEntrance: true,
+        zoneId: mapObj.id
       }
     );
 
+    // 3. 高台上的 4 簇高純度礦石
     const plateauOreCoords = [
       { x: 485, y: 845 },
       { x: 655, y: 870 },
@@ -1647,7 +2155,30 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // ★ 1. 西側外圍安全區 (x < 640) 保底 7 個特產採集點（確保玩家 100% 能在安全區集齊材料做求生裝！）
+    // ★ 4. 在各區埋藏 4 個地面【✖ 藏寶挖掘點】（西側安全區 2 個、高台 1 個、東側深處 1 個）
+    const buriedSpotsCoords = [
+      { x: 265,  y: 625, reqHighland: false }, // 西側安全區南下幹道旁（新手一造好鐵鏟就能即刻挖！）
+      { x: 585,  y: 1045,reqHighland: false }, // 懸崖山洞前方谷地
+      { x: 565,  y: 865, reqHighland: true  }, // 黃土高台中央
+      { x: 1260, y: 485, reqHighland: false }  // 東側深淵腹地
+    ];
+    buriedSpotsCoords.forEach(function(bpt, idx) {
+      mapObj.nodes.push({
+        id: "buried_x_" + mapObj.id + "_" + idx + "_" + token,
+        x: bpt.x,
+        y: bpt.y,
+        type: "crystal",
+        giveKey: "cryptKey",
+        reqToolLv: 0,
+        isHighlandOre: true,
+        isBuriedSpot: true,
+        reqHighland: bpt.reqHighland,
+        name: "✖藏寶點",
+        opened: false
+      });
+    });
+
+    // 5. 西側外圍安全區 (x < 640) 保底 7 個特產採集點
     const safeCoords = [
       { x: 185, y: 180 }, { x: 310, y: 165 },
       { x: 195, y: 490 }, { x: 325, y: 540 },
@@ -1676,7 +2207,7 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // ★ 2. 中東段深淵危險區 (x: 980 ~ 1560) 高純度豐厚資源點 (perfect: true 雙倍收穫獎勵！)
+    // 6. 中東段深淵危險區 (x: 980 ~ 1560) 高純度豐厚資源點
     const deepCoords = [
       { x: 1020, y: 260 }, { x: 1220, y: 340 }, { x: 1440, y: 280 },
       { x: 1120, y: 620 }, { x: 1360, y: 680 }, { x: 1520, y: 580 },
@@ -1704,7 +2235,7 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 3. 中東段深處 4 隻【★精英鎮守魔物】
+    // 7. 中東段深處 4 隻【★精英鎮守魔物】
     const baseRecLv = mapObj.recLv || 3;
     const eliteCoords = [
       { x: 1120, y: 340, lvAdd: 2 },
@@ -1732,10 +2263,11 @@ window.Aetheria = window.Aetheria || {};
     return mapObj;
   }
 
-  // 檢查是否有新達成但未領獎的求生懸賞任務
   function checkAndNotifyQuestCompletion() {
     const s = window.Aetheria.State && window.Aetheria.State.data;
     if (!s) return;
+    syncDiscoveredMaterialsAndRecipes(s, true);
+
     if (!s.claimedSrpgQuests) s.claimedSrpgQuests = {};
     if (!s._notifiedSrpgQuests) s._notifiedSrpgQuests = {};
 
@@ -1747,13 +2279,13 @@ window.Aetheria = window.Aetheria || {};
           if (window.Aetheria.UI) {
             window.Aetheria.UI.showToast("🎖️ 懸賞達成：" + q.title + "！請打開【日誌】領取獎賞！");
           }
-        }, 600);
+        }, 650);
         break;
       }
     }
   }
 
-  // ================= 7. 全新格仔化分類工坊系統 =================
+  // ================= 8. 全新格仔化分類工坊系統（支援 💡已領悟 / 🔒未領悟 切換） =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -1772,10 +2304,10 @@ window.Aetheria = window.Aetheria || {};
     getRecipeSubCategory: function(rec) {
       if (rec.category) return rec.category;
       const id = String(rec.id || "");
-      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("gear_") !== -1) {
+      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("gear_") !== -1 || id.indexOf("key") !== -1) {
         return "gear";
       }
-      if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1 || id.indexOf("cactus") !== -1) {
+      if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1 || id.indexOf("cactus") !== -1 || id.indexOf("elixir") !== -1) {
         return "survival";
       }
       return "smelt";
@@ -1844,6 +2376,8 @@ window.Aetheria = window.Aetheria || {};
       if (outKey === "rationJerky") {
         s.craftedJerkyOnce = true;
       }
+      if (!s.discoveredRecipes) s.discoveredRecipes = {};
+      s.discoveredRecipes[rec.id] = true;
 
       window.Aetheria.State.recalcMaxHp();
       window.Aetheria.Audio.sfxLevelUp();
@@ -1879,7 +2413,7 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
         const tKey = selectedObj.toolKey;
-        if (!s.tools) s.tools = { axe: 0, pickaxe: 0, rod: 0, hook: 0, pouch: 0 };
+        if (!s.tools) s.tools = { axe: 0, pickaxe: 0, shovel: 0, rod: 0, hook: 0, pouch: 0 };
         Object.entries(selectedObj.costMap || {}).forEach(function(entry) {
           s.inventory[entry[0]] = Math.max(0, (s.inventory[entry[0]] || 0) - entry[1]);
         });
@@ -1892,6 +2426,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.State.save();
         UI.updateAllHud();
         UI.showToast("⛏️ 工具升級成功！【" + selectedObj.shortName + "】已升至 Lv." + s.tools[tKey] + "！");
+        checkAndNotifyQuestCompletion();
         this.renderGridWorkshopModal(this.curTab);
         return;
       }
@@ -2004,6 +2539,23 @@ window.Aetheria = window.Aetheria || {};
         s.hp = Math.min(s.maxHp, s.hp + 12);
         window.Aetheria.Audio.sfxLevelUp();
         window.Aetheria.UI.showToast("🛡️ 使用【鞣製硬皮革】加固內甲：永久防禦 +3、最大生命 +12！");
+      } else if (matKey === "elixirAtk") {
+        s.inventory.elixirAtk--;
+        s.srpgBonusAtk = (s.srpgBonusAtk || 0) + 6;
+        window.Aetheria.Audio.sfxLevelUp();
+        window.Aetheria.UI.showToast("🔮 飲用【遠古力量秘藥】：主角永久攻擊力 +6！");
+      } else if (matKey === "elixirHp") {
+        s.inventory.elixirHp--;
+        s.srpgBonusHp = (s.srpgBonusHp || 0) + 30;
+        window.Aetheria.State.recalcMaxHp();
+        s.hp = Math.min(s.maxHp, s.hp + 30);
+        window.Aetheria.Audio.sfxLevelUp();
+        window.Aetheria.UI.showToast("🔮 飲用【遠古生命聖水】：主角永久最大生命 +30！");
+      } else if (matKey === "elixirDef") {
+        s.inventory.elixirDef--;
+        s.srpgBonusDef = (s.srpgBonusDef || 0) + 5;
+        window.Aetheria.Audio.sfxLevelUp();
+        window.Aetheria.UI.showToast("🔮 飲用【遠古鐵壁靈液】：主角永久防禦力 +5！");
       }
       window.Aetheria.State.save();
       this.renderGridWorkshopModal(this.curTab);
@@ -2057,6 +2609,8 @@ window.Aetheria = window.Aetheria || {};
 
       const itemsList = [];
       const matsDB = Data.MATERIALS || {};
+      let discoveredCount = 0;
+      let undiscoveredCount = 0;
 
       if (tab === "workshop") {
         const recipeMap = {};
@@ -2084,12 +2638,17 @@ window.Aetheria = window.Aetheria || {};
           const owned = (s.inventory && s.inventory[outKey]) || 0;
           const alreadyGotUnique = Boolean(r.isUniqueGear && owned >= 1);
           const canDo = !alreadyGotUnique && self.canAffordRecipe(s, r.cost, r.goldCost || 0);
+          const isDisc = isRecipeDiscovered(s, r) || canDo || alreadyGotUnique;
+
+          if (isDisc) discoveredCount++;
+          else undiscoveredCount++;
 
           itemsList.push({
             uid: r.id,
             raw: r,
             itemType: "recipe",
             subCat: subCat,
+            isDiscovered: isDisc,
             iconKey: "mat_" + outKey,
             shortName: r.name.replace(/\s*x\d+$/i, "").replace(/\s*\([^)]*\)/g, ""),
             fullName: r.name,
@@ -2103,10 +2662,10 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
+      // ★ 顯示 6 大核心工具（含新增的第 6 把工具：探險鐵鏟 shovel）
       else if (tab === "tools") {
-        const toolsSource = (Data.TOOLS && Object.keys(Data.TOOLS).length >= 3) ? Data.TOOLS : BUILTIN_TOOLS_DB;
-        ["axe", "pickaxe", "rod", "hook", "pouch"].forEach(function(tKey) {
-          const tDef = toolsSource[tKey] || BUILTIN_TOOLS_DB[tKey];
+        ["axe", "pickaxe", "shovel", "rod", "hook", "pouch"].forEach(function(tKey) {
+          const tDef = BUILTIN_TOOLS_DB[tKey] || (Data.TOOLS && Data.TOOLS[tKey]);
           if (!tDef) return;
           const curLv = (s.tools && s.tools[tKey]) || 0;
           const nextTier = tDef.tiers && tDef.tiers[curLv + 1];
@@ -2119,6 +2678,7 @@ window.Aetheria = window.Aetheria || {};
             toolKey: tKey,
             itemType: "tool",
             subCat: "all",
+            isDiscovered: true,
             iconKey: tDef.iconKey || "icon_axe",
             shortName: tDef.name,
             fullName: tDef.name + " (當前：" + curTierObj.name + ")",
@@ -2157,6 +2717,7 @@ window.Aetheria = window.Aetheria || {};
             raw: w,
             itemType: "weapon",
             subCat: (w.tier <= 4) ? "low" : "high",
+            isDiscovered: true,
             iconKey: "icon_sword",
             shortName: w.name,
             fullName: w.name + " (ATK +" + w.atk + ")",
@@ -2196,6 +2757,7 @@ window.Aetheria = window.Aetheria || {};
             raw: a,
             itemType: "armor",
             subCat: "armor",
+            isDiscovered: true,
             iconKey: "icon_shield",
             shortName: a.name,
             fullName: a.name + " (DEF +" + a.def + " / HP +" + (a.hp || 0) + ")",
@@ -2220,6 +2782,7 @@ window.Aetheria = window.Aetheria || {};
             raw: rel,
             itemType: "relic",
             subCat: "relic",
+            isDiscovered: true,
             iconKey: "crystal",
             shortName: rel.name,
             fullName: "【聖物】" + rel.name,
@@ -2236,11 +2799,12 @@ window.Aetheria = window.Aetheria || {};
       let subFilters = [];
       if (tab === "workshop") {
         subFilters = [
-          { id: "all",      label: "全部(" + itemsList.length + ")" },
+          { id: "all",      label: "💡已領悟(" + discoveredCount + ")" },
           { id: "can",      label: "✅可製作" },
-          { id: "gear",     label: "🛡️求生裝/開路" },
+          { id: "gear",     label: "🛡️求生/開路" },
           { id: "smelt",    label: "🔥冶煉/建材" },
-          { id: "survival", label: "🍖口糧/靈藥" }
+          { id: "survival", label: "🍖口糧/秘藥" },
+          { id: "locked",   label: "🔒未領悟(" + undiscoveredCount + ")" }
         ];
       } else if (tab === "weapons") {
         subFilters = [
@@ -2268,6 +2832,12 @@ window.Aetheria = window.Aetheria || {};
       }
 
       const filteredItems = itemsList.filter(function(item) {
+        if (tab === "workshop") {
+          if (self.curSubFilter === "locked") return !item.isDiscovered;
+          if (self.curSubFilter === "all") return item.isDiscovered;
+          if (self.curSubFilter === "can") return item.canCraft || item.unlocked;
+          return item.isDiscovered && item.subCat === self.curSubFilter;
+        }
         if (self.curSubFilter === "all") return true;
         if (self.curSubFilter === "can") return item.canCraft || item.unlocked;
         return item.subCat === self.curSubFilter;
@@ -2310,8 +2880,12 @@ window.Aetheria = window.Aetheria || {};
         let actionBtnHtml = "";
         if (selectedObj.itemType === "recipe") {
           const outKey = selectedObj.raw.toKey || selectedObj.raw.giveKey;
-          const canUseBuff = (outKey === "steelIngot" || outKey === "curedLeather" || outKey === "rationJerky") &&
-                             ((s.inventory && s.inventory[outKey]) || 0) > 0;
+          const isBuffConsumable = (
+            outKey === "steelIngot" || outKey === "curedLeather" || outKey === "rationJerky" ||
+            outKey === "elixirAtk"  || outKey === "elixirHp"     || outKey === "elixirDef"
+          );
+          const canUseBuff = isBuffConsumable && ((s.inventory && s.inventory[outKey]) || 0) > 0;
+
           if (selectedObj.unlocked) {
             actionBtnHtml = '<span style="color:#5ac54f; font-weight:900; white-space:nowrap;">★ 已生效</span>';
           } else {
@@ -2346,6 +2920,7 @@ window.Aetheria = window.Aetheria || {};
             '<div style="flex:1;">' +
               '<div style="font-size:13.5px; font-weight:900; color:#ffd166;">' +
                 S.iconHtml(selectedObj.iconKey, true) + selectedObj.fullName +
+                (!selectedObj.isDiscovered ? ' <span style="font-size:10.5px; color:#e0aaff;">(🔒收集下方任一材料即可領悟)</span>' : '') +
               '</div>' +
               '<div style="font-size:11px; color:#cbd5e1; margin-top:2px; line-height:1.3;">' + selectedObj.desc + '</div>' +
               (chipsHtml ? '<div style="margin-top:4px;">' + chipsHtml + '</div>' : '') +
@@ -2353,19 +2928,27 @@ window.Aetheria = window.Aetheria || {};
             actionBtnHtml +
           '</div>';
       } else {
-        inspectorInnerHtml = '<div style="color:#94a3b8; font-size:12px; text-align:center;">此分類下暫無項目</div>';
+        inspectorInnerHtml =
+          '<div style="color:#94a3b8; font-size:12px; text-align:center;">' +
+            (self.curSubFilter === "locked" ? '🎉 恭喜！你已領悟全部工坊配方！' : '此分類下暫無項目') +
+          '</div>';
       }
 
       let gridCellsHtml = "";
       filteredItems.forEach(function(item) {
         const isSel = (selectedObj && selectedObj.uid === item.uid);
-        const cls = "wk-grid-cell" + (item.canCraft ? " can-craft" : "") + (isSel ? " selected" : "");
+        const cls = "wk-grid-cell" +
+          (item.canCraft ? " can-craft" : "") +
+          (!item.isDiscovered ? " undiscovered" : "") +
+          (isSel ? " selected" : "");
         const showQuickBtn = item.canCraft || (item.unlocked && !item.equipped && (item.itemType === "weapon" || item.itemType === "armor"));
         const quickBtnLabel = item.unlocked ? "⚡裝備" : (item.itemType === "tool" ? "⛏️升級" : "🔨製作");
 
         gridCellsHtml +=
           '<div class="' + cls + '" onclick="Aetheria.HighlandsWorkshop.selectItem(\'' + item.uid + '\')">' +
-            (item.canCraft ? '<span class="wk-cell-craft-dot">●可做</span>' : '') +
+            (item.canCraft
+              ? '<span class="wk-cell-craft-dot">●可做</span>'
+              : (!item.isDiscovered ? '<span class="wk-cell-lock-dot">🔒未知</span>' : '')) +
             '<span class="wk-cell-badge">' + item.badgeText + '</span>' +
             '<div style="pointer-events:none;">' + S.iconHtml(item.iconKey) + '</div>' +
             '<div class="wk-cell-name">' + item.shortName + '</div>' +
@@ -2408,7 +2991,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 8. 掛載環境生存危機、精英怪與首領難度、日誌懸賞與高低差攀爬 =================
+  // ================= 9. 掛載鐵鏟挖寶 ✖、地底遺跡開鎖、領悟配方與戰鬥系統 =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -2468,6 +3051,13 @@ window.Aetheria = window.Aetheria || {};
           }
           return grottoMapsCache[zoneId];
         }
+        if (zoneId && zoneId.indexOf("crypt_") === 0) {
+          const cZone = zoneId.replace("crypt_", "");
+          if (!cryptMapsCache[zoneId]) {
+            cryptMapsCache[zoneId] = buildAncientCryptMap(cZone);
+          }
+          return cryptMapsCache[zoneId];
+        }
         const m = origGetMap(zoneId);
         if (m && HIGHLAND_ZONES[m.id]) {
           injectHighlandCliffIntoMap(m);
@@ -2478,9 +3068,8 @@ window.Aetheria = window.Aetheria || {};
       const origRefresh = Maps.refreshAllResources.bind(Maps);
       Maps.refreshAllResources = function() {
         origRefresh();
-        Object.keys(grottoMapsCache).forEach(function(k) {
-          delete grottoMapsCache[k];
-        });
+        Object.keys(grottoMapsCache).forEach(function(k) { delete grottoMapsCache[k]; });
+        Object.keys(cryptMapsCache).forEach(function(k) { delete cryptMapsCache[k]; });
         Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
           const m = origGetMap(zId);
           if (m) {
@@ -2596,6 +3185,7 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
+      // ★ 懸崖繩梯攀爬 ＆ 【🗝️ 地底遺跡石門開鎖進入】互動
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
@@ -2603,6 +3193,51 @@ window.Aetheria = window.Aetheria || {};
         if (mapObj && mapObj.decos) {
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
+
+            // 1. 🗝️ 遠古地底遺跡石門互動
+            if (d && d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
+              if (!s.unlockedCrypts) s.unlockedCrypts = {};
+              const zId = d.zoneId || mapObj.id;
+              const isOpen = Boolean(s.unlockedCrypts[zId]);
+
+              if (!isOpen) {
+                if ((s.inventory.cryptKey || 0) <= 0) {
+                  window.Aetheria.Audio.sfxWrong();
+                  window.Aetheria.UI.showToast("🔒 古老的地底遺跡石門緊閉！請先在【工坊➔⛏️工具】造出【探險鐵鏟】挖掘地面的「✖藏寶點」取得【遠古遺跡鑰匙】！");
+                  return;
+                }
+                s.inventory.cryptKey--;
+                s.unlockedCrypts[zId] = true;
+                d.sprite = "crypt_door_open";
+                if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
+                window.Aetheria.Audio.sfxLevelUp();
+                window.Aetheria.UI.showToast("🗝️ 使用【遠古遺跡鑰匙】解開了千古封印！正在進入地底古老遺跡……");
+                checkAndNotifyQuestCompletion();
+              } else {
+                window.Aetheria.Audio.sfxGather();
+              }
+
+              // 傳送進入地底遺跡子地圖 (crypt_<zoneId>)
+              const cryptMap = window.Aetheria.Data.Maps.getMap("crypt_" + zId);
+              s.currentZone = "crypt_" + zId;
+              s.onHighland = false;
+              s.heroX = 280;
+              s.heroY = 275;
+              s.petX = 258;
+              s.petY = 278;
+              if (window.Aetheria.Renderer) {
+                window.Aetheria.Renderer.builtZoneKey = null;
+                window.Aetheria.Renderer.renderWorld();
+              }
+              if (cryptMap && window.Aetheria.Audio && window.Aetheria.Audio.playBgm) {
+                window.Aetheria.Audio.playBgm("cave");
+              }
+              window.Aetheria.State.save();
+              window.Aetheria.UI.updateAllHud();
+              return;
+            }
+
+            // 2. 🧗 懸崖攀岩繩梯互動
             if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
               if (!s.riggedCliffs) s.riggedCliffs = {};
               const isRigged = Boolean(s.riggedCliffs[mapObj.id]);
@@ -2610,7 +3245,7 @@ window.Aetheria = window.Aetheria || {};
               if (!isRigged) {
                 if ((s.inventory.ropeLadder || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
-                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🛡️求生裝/開路】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
+                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🛡️求生/開路】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
                   return;
                 }
                 s.inventory.ropeLadder--;
@@ -2618,7 +3253,6 @@ window.Aetheria = window.Aetheria || {};
                 (mapObj.decos || []).forEach(function(dc) {
                   if (dc.isCliffLadderSpot) {
                     dc.sprite = "rope_ladder";
-                    dc.ladderTitle = "🧗繩梯(上下)";
                   }
                 });
                 if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
@@ -2663,27 +3297,125 @@ window.Aetheria = window.Aetheria || {};
       const origHint = Exp.updateContextHint.bind(Exp);
       Exp.updateContextHint = function(mapObj, s) {
         const hintEl = document.getElementById("a-btn-hint");
-        if (hintEl && mapObj && mapObj.decos) {
-          for (let i = 0; i < mapObj.decos.length; i++) {
-            const d = mapObj.decos[i];
-            if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
-              const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
-              hintEl.innerText = !rigged ? "架設繩梯" : (s.onHighland ? "爬下懸崖" : "爬上高台");
-              return;
+        if (hintEl && mapObj) {
+          if (mapObj.decos) {
+            for (let i = 0; i < mapObj.decos.length; i++) {
+              const d = mapObj.decos[i];
+              if (d && d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
+                const open = Boolean(s.unlockedCrypts && s.unlockedCrypts[d.zoneId || mapObj.id]);
+                hintEl.innerText = open ? "進入遺跡" : "鑰匙開鎖";
+                return;
+              }
+              if (d && d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
+                const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
+                hintEl.innerText = !rigged ? "架設繩梯" : (s.onHighland ? "爬下懸崖" : "爬上高台");
+                return;
+              }
+            }
+          }
+          if (mapObj.nodes) {
+            for (let j = 0; j < mapObj.nodes.length; j++) {
+              const n = mapObj.nodes[j];
+              if (n && !n.opened && n.isBuriedSpot && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 42) {
+                hintEl.innerText = "鐵鏟挖寶";
+                return;
+              }
             }
           }
         }
         origHint(mapObj, s);
       };
 
+      // ★ 處理【✖ 藏寶點鐵鏟挖掘】與【🏆 地底遺跡聖物石棺】
       const origHarvest = Exp.harvestNode.bind(Exp);
       Exp.harvestNode = function(node) {
         const s = window.Aetheria.State.data;
         if (node && node.reqHighland && !s.onHighland) {
           window.Aetheria.Audio.sfxWrong();
-          window.Aetheria.UI.showToast("🧗 此礦簇位於高台上！請先從懸崖邊的【🧗繩梯】爬上高台再開採！");
+          window.Aetheria.UI.showToast("🧗 此位置位於高台上！請先從懸崖邊的【🧗繩梯】爬上高台！");
           return;
         }
+
+        // 1. ✖ 藏寶挖掘點檢定（需持有 Lv.1+ 探險鐵鏟）
+        if (node && node.isBuriedSpot) {
+          const shovelLv = (s.tools && s.tools.shovel) || 0;
+          if (shovelLv < 1) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("🥄 地面有神秘的「✖」藏寶記號！請先在【工坊 ➔ ⛏️工具】打造【Lv.1 精鐵探險鏟】(原木x2+鐵礦x1) 挖掘！");
+            return;
+          }
+
+          node.opened = true;
+          s.dugTreasureOnce = true;
+          window.Aetheria.Audio.sfxLevelUp();
+
+          const zId = (s.currentZone || "").replace("grotto_", "");
+          const cryptAlreadyOpen = Boolean(s.unlockedCrypts && s.unlockedCrypts[zId]);
+          const hasKeyInBag = ((s.inventory && s.inventory.cryptKey) || 0) > 0;
+          const goldGain = (55 + (s.lv || 1) * 5) * (shovelLv >= 2 ? 2 : 1);
+          s.gold = (s.gold || 0) + goldGain;
+
+          // 若該區地底遺跡尚未解鎖且背包無鑰匙，保底優先挖出【遠古遺跡鑰匙 x1】！
+          if (!cryptAlreadyOpen && !hasKeyInBag) {
+            s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
+            s.inventory.ancientGem = (s.inventory.ancientGem || 0) + 1;
+            window.Aetheria.UI.showToast("🥄 鐵鏟挖寶大發現！挖出【🗝️遠古遺跡鑰匙 +1、🔮遠古秘寶晶石 +1】與 " + goldGain + " G！");
+          } else {
+            const gemCnt = (shovelLv >= 3) ? 2 : 1;
+            s.inventory.ancientGem = (s.inventory.ancientGem || 0) + gemCnt;
+            s.inventory.quartz = (s.inventory.quartz || 0) + 1;
+            if (Math.random() < 0.45) {
+              s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
+              window.Aetheria.UI.showToast("🥄 鐵鏟挖寶收穫：獲【🔮遠古秘寶晶石 +" + gemCnt + "、🗝️遺跡鑰匙 +1、石英砂 +1】與 " + goldGain + " G！");
+            } else {
+              window.Aetheria.UI.showToast("🥄 鐵鏟挖寶收穫：獲【🔮遠古秘寶晶石 +" + gemCnt + "、透明石英砂 +1】與 " + goldGain + " G！");
+            }
+          }
+
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+          checkAndNotifyQuestCompletion();
+          return;
+        }
+
+        // 2. 🏆 地底遺跡聖物石棺檢定（需先擊敗地底遺跡守衛魔像）
+        if (node && node.isCryptVaultChest) {
+          const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
+          const guardianAlive = curMap && (curMap.monsters || []).some(function(m) {
+            return m.isCryptGuardian && m.alive !== false;
+          });
+          if (guardianAlive) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("⚔️ 遠古聖物石棺受結界保護！請先擊敗前方的【★地底遺跡守衛魔像】！");
+            return;
+          }
+
+          if (!s.claimedCryptVaults) s.claimedCryptVaults = {};
+          const pZone = node.parentZoneId || s.currentZone;
+          if (node.opened || s.claimedCryptVaults[pZone]) {
+            node.opened = true;
+            window.Aetheria.UI.showToast("此遠古聖物石棺已經開啟過了！");
+            return;
+          }
+
+          node.opened = true;
+          s.claimedCryptVaults[pZone] = true;
+          s.gold = (s.gold || 0) + 350;
+          s.inventory.ancientGem = (s.inventory.ancientGem || 0) + 2;
+          s.inventory.tabletShard = (s.inventory.tabletShard || 0) + 1;
+          s.srpgBonusAtk = (s.srpgBonusAtk || 0) + 5;
+          s.srpgBonusHp  = (s.srpgBonusHp || 0) + 25;
+          window.Aetheria.State.recalcMaxHp();
+          s.hp = s.maxHp;
+
+          window.Aetheria.Audio.sfxLevelUp();
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+          window.Aetheria.UI.showToast("🏆 開啟遠古聖物石棺！獲【350G、🔮遠古秘寶晶石x2、聖碑殘片x1】，且永久 ATK+5 / HP+25！");
+          checkAndNotifyQuestCompletion();
+          return;
+        }
+
         origHarvest(node);
         checkAndNotifyQuestCompletion();
       };
@@ -2751,11 +3483,19 @@ window.Aetheria = window.Aetheria || {};
           const isCombat = (this.mode === "combat");
           const ref = this.mapMonsterRef;
           const isElite = Boolean(ref && ref.isSrpgElite);
+          const isCryptBoss = Boolean(ref && ref.isCryptGuardian);
           origWin();
 
           if (isCombat) {
             const s = window.Aetheria.State.data;
-            if (isElite) {
+            if (isCryptBoss) {
+              s.inventory.ancientGem = (s.inventory.ancientGem || 0) + 2;
+              s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
+              window.Aetheria.State.save();
+              setTimeout(function() {
+                window.Aetheria.UI.showToast("🔮 擊敗地底遺跡守衛！掉落【遠古秘寶晶石 x2、遠古遺跡鑰匙 x1】，後方石棺結界已解除！");
+              }, 450);
+            } else if (isElite) {
               s.inventory.rawHide = (s.inventory.rawHide || 0) + 2;
               const zCfg = HIGHLAND_ZONES[s.currentZone];
               if (zCfg && zCfg.safeZoneNodes && zCfg.safeZoneNodes[0]) {
@@ -2767,6 +3507,7 @@ window.Aetheria = window.Aetheria || {};
               s.inventory.rawHide = (s.inventory.rawHide || 0) + 1;
               window.Aetheria.State.save();
             }
+            checkAndNotifyQuestCompletion();
           }
         };
       }
@@ -2818,19 +3559,25 @@ window.Aetheria = window.Aetheria || {};
 
         Object.keys(this.domPool.decos || {}).forEach(function(k) {
           const item = Ren.domPool.decos[k];
-          if (item && item.data && item.data.isCliffLadderSpot && item.el) {
-            if (!item.lbl) {
-              const lbl = document.createElement("div");
-              lbl.className = "dom-label ladder-spot-lbl";
-              item.el.appendChild(lbl);
-              item.lbl = lbl;
-            }
+          if (!item || !item.data || !item.el) return;
+          if ((item.data.isCliffLadderSpot || item.data.isCryptEntrance) && !item.lbl) {
+            const lbl = document.createElement("div");
+            lbl.className = item.data.isCryptEntrance ? "dom-label crypt-door-lbl" : "dom-label ladder-spot-lbl";
+            item.el.appendChild(lbl);
+            item.lbl = lbl;
           }
         });
 
         Object.keys(this.domPool.nodes || {}).forEach(function(nId) {
           const item = Ren.domPool.nodes[nId];
-          if (item && item.data && item.data.isClusterBoulder && S) {
+          if (!item || !item.data || !S) return;
+          if (item.data.isBuriedSpot) {
+            item.el.innerHTML = '<img src="' + S.getDataURL("buried_x_spot") + '" alt="">';
+            if (item.lbl) {
+              item.lbl.className = "dom-label dig-spot-lbl";
+              item.el.appendChild(item.lbl);
+            }
+          } else if (item.data.isClusterBoulder) {
             item.el.innerHTML = '<img src="' + S.getDataURL("cluster_boulder") + '" alt="">';
             if (item.lbl) item.el.appendChild(item.lbl);
           }
@@ -2844,6 +3591,7 @@ window.Aetheria = window.Aetheria || {};
           const s = window.Aetheria.State.data;
           const S = window.Aetheria.Data.Sprites;
           const rigged = Boolean(s && s.riggedCliffs && s.riggedCliffs[s.currentZone]);
+          const cryptOpen = Boolean(s && s.unlockedCrypts && s.unlockedCrypts[s.currentZone]);
 
           const banner = document.getElementById("srpg-hazard-banner");
           const hzRule = ZONE_HAZARD_RULES[s.currentZone];
@@ -2864,7 +3612,8 @@ window.Aetheria = window.Aetheria || {};
 
           Object.keys(this.domPool.decos || {}).forEach(function(k) {
             const item = Ren.domPool.decos[k];
-            if (item && item.data && item.data.isCliffLadderSpot) {
+            if (!item || !item.data) return;
+            if (item.data.isCliffLadderSpot) {
               if (item.img && S) {
                 item.img.src = S.getDataURL(rigged ? "rope_ladder" : "cliff_stake");
               }
@@ -2872,6 +3621,15 @@ window.Aetheria = window.Aetheria || {};
                 item.lbl.style.display = "block";
                 item.lbl.className = "dom-label ladder-spot-lbl";
                 item.lbl.innerText = rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯";
+              }
+            } else if (item.data.isCryptEntrance) {
+              if (item.img && S) {
+                item.img.src = S.getDataURL(cryptOpen ? "crypt_door_open" : "crypt_door_locked");
+              }
+              if (item.lbl) {
+                item.lbl.style.display = "block";
+                item.lbl.className = "dom-label crypt-door-lbl";
+                item.lbl.innerText = cryptOpen ? "🏛️地底遺跡(已開)" : "🔒地底遺跡[需鑰匙]";
               }
             }
           });
@@ -2893,7 +3651,7 @@ window.Aetheria = window.Aetheria || {};
             }
             if (n.type === "chest") return;
             const dist = Math.hypot((s.heroX || 0) - n.x, (s.heroY || 0) - n.y);
-            item.lbl.style.display = (dist < 62) ? "block" : "none";
+            item.lbl.style.display = (dist < (n.isBuriedSpot ? 85 : 62)) ? "block" : "none";
           });
         } catch (e) {}
       };
@@ -2926,7 +3684,7 @@ window.Aetheria = window.Aetheria || {};
           const header = document.createElement("div");
           header.id = "srpg-bounty-section";
           header.style.cssText = "color:var(--na-gold); font-weight:900; margin:10px 0 4px; font-size:13px;";
-          header.innerText = "【🧭 區域環境求生與高台開拓懸賞 (共 12 項)】";
+          header.innerText = "【🧭 區域環境求生、鐵鏟尋寶與地底遺跡懸賞 (共 15 項)】";
           body.appendChild(header);
 
           EXTRA_SURVIVAL_QUESTS.forEach(function(q) {
@@ -3011,7 +3769,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG Overhaul v10.1 init error:", err);
+      console.error("Survival RPG Overhaul v10.2 init error:", err);
     }
   }
 
