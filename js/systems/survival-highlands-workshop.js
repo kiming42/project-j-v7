@@ -1,18 +1,20 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 擴大地圖、高低差懸崖山洞與格仔分類工坊模組 (survival-highlands-workshop.js - v9.7)
- * 更新重點：
- *   1. 【刪除重覆武器與防具】：徹底移除排在 T10 後方重覆階級 (T2~T4) 的額外武器與防具，並加入同名去重與 T1➔T10 嚴格排序
- *   2. 【保留完整格仔工坊與 5 大工具】：內聯 onclick 100% 即時切換紅框檢視器，完整顯示加工、5大工具、T1~T10 武防與洗煉
- *   3. 【保留高低差懸崖與山洞】：1560x1180 擴大地圖、南側 L 型高低差懸崖山洞、怪物防穿懸崖與去標籤化
+ * Project J：艾瑟瑞亞的破曉 — 正統 Survival RPG 深度重製模組 (survival-highlands-workshop.js - v10.1 嚴密平衡版)
+ * Cross-Check 平衡與邏輯修正：
+ *   1. 【安全區保底素材】：每區西側安全區 (x < 660) 固定刷出 7 個保底特產點，確保 100% 可先在安全區集齊材料合成【環境求生裝】
+ *   2. 【保護推石密室】：環境危機起點統一設為 x >= 660，完全避開 x:420~600 的推石解謎密室
+ *   3. 【跨區傳送落點同步】：自動同步全地圖跨區傳送門的 targetX (+650px)，往返新舊區域落點 100% 精準
+ *   4. 【隨機物件防卡牆淨化】：自動將誤刷入懸崖岩壁或新河道內的隨機素材與魔物移至中東段開闊腹地
+ *   5. 【完整 12 項求生任務鏈】：涵蓋繩梯、礦洞、冶煉、肉脯與 1~6 區全套求生裝，合成時即時提示領獎
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入高低差懸崖地形與格仔工坊 CSS =================
+  // ================= 1. 注入高低差懸崖、環境危機警示條與格仔工坊 CSS =================
   function injectHighlandsAndWorkshopStyles() {
-    if (document.getElementById("highlands-wk-v97-styles")) return;
+    if (document.getElementById("highlands-wk-v101-styles")) return;
     const style = document.createElement("style");
-    style.id = "highlands-wk-v97-styles";
+    style.id = "highlands-wk-v101-styles";
     style.textContent = `
       /* ================= A. L型高低差黃土高台與深啡色垂直懸崖壁 ================= */
       .srpg-plateau-top {
@@ -76,12 +78,45 @@ window.Aetheria = window.Aetheria || {};
         z-index: 4;
       }
 
+      #srpg-hazard-banner {
+        position: absolute;
+        top: 28px;
+        right: 6px;
+        z-index: 24;
+        padding: 2px 7px;
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: 900;
+        display: none;
+        pointer-events: none;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.8);
+      }
+      #srpg-hazard-banner.hazard-danger {
+        display: block;
+        background: rgba(157, 2, 8, 0.92);
+        color: #ffd166;
+        border: 1.5px solid #ff595e;
+        animation: bobQuest 0.9s infinite ease-in-out;
+      }
+      #srpg-hazard-banner.hazard-safe {
+        display: block;
+        background: rgba(20, 54, 42, 0.88);
+        color: #5ac54f;
+        border: 1.5px solid #5ac54f;
+      }
+
       .dom-label.ladder-spot-lbl {
         background: linear-gradient(90deg, #5c3824 0%, #8f563b 100%);
         color: #ffd166;
         border: 1.5px solid #f5b700;
         box-shadow: 0 0 6px rgba(245, 183, 0, 0.85);
         font-weight: 900;
+      }
+      .dom-label.elite-mon-lbl {
+        background: linear-gradient(90deg, #6a040f 0%, #3c096c 100%);
+        color: #ffd166;
+        border: 1.5px solid #ff758f;
+        box-shadow: 0 0 6px rgba(255, 89, 94, 0.8);
       }
 
       /* ================= B. 格仔分類工坊 UI ================= */
@@ -100,7 +135,6 @@ window.Aetheria = window.Aetheria || {};
         padding: 7px 9px;
         margin-bottom: 6px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.8);
-        transition: border-color 0.15s ease;
       }
       .wk-subfilter-bar {
         display: flex;
@@ -114,8 +148,8 @@ window.Aetheria = window.Aetheria || {};
         color: #cbd5e1;
         border: 1.5px solid #594950;
         border-radius: 14px;
-        padding: 3px 9px;
-        font-size: 11px;
+        padding: 3px 8px;
+        font-size: 10.5px;
         font-weight: 900;
         white-space: nowrap;
         cursor: pointer;
@@ -229,9 +263,16 @@ window.Aetheria = window.Aetheria || {};
       }
     `;
     document.head.appendChild(style);
+
+    const upper = document.getElementById("upper-screen");
+    if (upper && !document.getElementById("srpg-hazard-banner")) {
+      const banner = document.createElement("div");
+      banner.id = "srpg-hazard-banner";
+      upper.appendChild(banner);
+    }
   }
 
-  // ================= 2. 註冊《Survival RPG》像素圖示並補齊所有加工品圖示映射 =================
+  // ================= 2. 註冊《Survival RPG》全套新素材與求生裝備像素圖示 =================
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -463,6 +504,63 @@ window.Aetheria = window.Aetheria || {};
       "................"
     ], { K: "#141013", R: "#9d0208", D: "#6a040f", W: "#f8fafc" });
 
+    const venomSacUrl = buildGridDataUrl([
+      "......KKKK......",
+      "....KKPPPPKK....",
+      "...KPPGGGGPPK...",
+      "..KPPGWWWWGPPK..",
+      "..KPPGWPPWGPPK..",
+      ".KPPPPGGGGPPPPK.",
+      ".KPPPPPPPPPPPPK.",
+      ".KPPPGGGGGGPPPK.",
+      "..KPPGGGGGGPPK..",
+      "...KKPPPPPPKK...",
+      ".....KKKKKK.....",
+      "................",
+      "................",
+      "................",
+      "................",
+      "................"
+    ], { K: "#141013", P: "#7209b7", G: "#5ac54f", W: "#ffffff" });
+
+    const cactusUrl = buildGridDataUrl([
+      "......KKKK......",
+      ".....KGGGGK.....",
+      ".KK..KGWGGK..KK.",
+      "KGGK.KGGGGK.KGGK",
+      "KGGKKKGGGGKKKGGK",
+      "KGGGGGGGGGGGGGGK",
+      ".KKKKKGWGGKKKKK.",
+      ".....KGGGGK.....",
+      ".....KGGGGK.....",
+      "....KYYYYYYK....",
+      "...KDDDDDDDDK...",
+      "...KKKKKKKKKK...",
+      "................",
+      "................",
+      "................",
+      "................"
+    ], { K: "#141013", G: "#5ac54f", W: "#ffffff", Y: "#f5b700", D: "#8f563b" });
+
+    const survivalGearUrl = buildGridDataUrl([
+      "....KKKKKKKK....",
+      "..KKYYYYYYYYKK..",
+      ".KYYBBBBBBBBYYK.",
+      ".KYBBWWWWWWBBYK.",
+      "KYBBWCCCCCCWBBYK",
+      "KYBBWCCCCCCWBBYK",
+      ".KYBBWWWWWWBBYK.",
+      ".KYYBBBBBBBBYYK.",
+      "..KKYYYYYYYYKK..",
+      "...KDDDDDDDDK...",
+      "..KDDDDDDDDDDK..",
+      "..KKKKKKKKKKKK..",
+      "................",
+      "................",
+      "................",
+      "................"
+    ], { K: "#141013", Y: "#f5b700", B: "#1d5eb8", W: "#ffffff", C: "#8ce0ff", D: "#5c3824" });
+
     const customUrls = {
       cluster_boulder: clusterBoulderUrl,
       cliff_stake: cliffStakeUrl,
@@ -474,9 +572,22 @@ window.Aetheria = window.Aetheria || {};
       mat_rockSalt: rockSaltUrl,
       mat_quartz: quartzUrl,
       mat_rawHide: leatherUrl,
+      mat_thickPelt: leatherUrl,
+      mat_treeBark: leatherUrl,
       mat_curedLeather: leatherUrl,
       mat_steelIngot: steelIngotUrl,
-      mat_rationJerky: jerkyUrl
+      mat_rationJerky: jerkyUrl,
+      mat_venomSac: venomSacUrl,
+      mat_cactusFruit: cactusUrl,
+      mat_chitin: rockSaltUrl,
+      mat_sulfur: coalUrl,
+      mat_gear_gasMask: survivalGearUrl,
+      mat_gear_lantern: torchSpriteUrl,
+      mat_gear_goggles: survivalGearUrl,
+      mat_gear_diving: survivalGearUrl,
+      mat_gear_furCoat: leatherUrl,
+      mat_gear_heatShield: survivalGearUrl,
+      mat_gear_skyAegis: survivalGearUrl
     };
 
     const origGetDataURL = S.getDataURL.bind(S);
@@ -487,16 +598,111 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 3. 定義《Survival RPG》素材、加工配方與 5 大採集工具（已移除重覆武防） =================
+  // ================= 3. 六大區域環境危機定義（minX 統一設為 660，避開推石密室與西側安全採集區） =================
+  const ZONE_HAZARD_RULES = {
+    zone1_forest: {
+      zoneId: "zone1_forest",
+      name: "☠️ 劇毒瘴氣林",
+      gearKey: "gear_gasMask",
+      gearName: "清毒草藥香囊",
+      minX: 660,
+      hpDrain: 5,
+      hungerDrain: 1,
+      warnMsg: "☠️ 踏入深林【劇毒瘴氣區】！請先在西側安全區採集毒囊與樹皮，於工坊合成【清毒草藥香囊】免疫！"
+    },
+    cave1_mushroom: {
+      zoneId: "cave1_mushroom",
+      name: "🌑 蝕心暗黑孢子",
+      gearKey: "gear_lantern",
+      gearName: "永明石英提燈",
+      minX: 660,
+      hpDrain: 6,
+      hungerDrain: 2,
+      allowTorchBypass: true,
+      warnMsg: "🌑 洞窟深處【暗黑孢子侵蝕】！請點燃火把或在工坊合成【永明石英提燈】永久免疫！"
+    },
+    zone2_canyon: {
+      zoneId: "zone2_canyon",
+      name: "🌪️ 酷熱流沙風暴",
+      gearKey: "gear_goggles",
+      gearName: "防沙護目水壺",
+      minX: 660,
+      hpDrain: 6,
+      hungerDrain: 3,
+      slowFactor: 0.72,
+      warnMsg: "🌪️ 遭遇【酷熱流沙風暴】！請先在西側採集仙人掌與石英，於工坊合成【防沙護目水壺】免疫！"
+    },
+    zone3_coast: {
+      zoneId: "zone3_coast",
+      name: "🌊 暗礁蝕骨海風",
+      gearKey: "gear_diving",
+      gearName: "深海避水呼吸器",
+      minX: 660,
+      hpDrain: 8,
+      hungerDrain: 2,
+      warnMsg: "🌊 踏入【深海暗礁急流區】！請先在西側採集甲殼與珊瑚，於工坊合成【深海避水呼吸器】免疫！"
+    },
+    zone4_snow: {
+      zoneId: "zone4_snow",
+      name: "❄️ 極寒凍傷暴雪",
+      gearKey: "gear_furCoat",
+      gearName: "極地厚毛防寒斗篷",
+      minX: 660,
+      hpDrain: 11,
+      hungerDrain: 3,
+      slowFactor: 0.75,
+      warnMsg: "❄️ 暴風雪【極寒凍傷】！請先在西側收集極地厚獸毛，於工坊縫製【極地厚毛防寒斗篷】永久禦寒！"
+    },
+    zone5_volcano: {
+      zoneId: "zone5_volcano",
+      name: "🔥 煉獄火毒灼燒",
+      gearKey: "gear_heatShield",
+      gearName: "冰蓮隔熱護心鏡",
+      minX: 660,
+      hpDrain: 14,
+      hungerDrain: 3,
+      warnMsg: "🔥 火山【煉獄高溫火毒】！請先在西側採集硫磺晶並結合冰蓮，於工坊打造【冰蓮隔熱護心鏡】！"
+    },
+    zone6_sky: {
+      zoneId: "zone6_sky",
+      name: "⚡ 星界落雷威壓",
+      gearKey: "gear_skyAegis",
+      gearName: "星隕避雷聖徽",
+      minX: 660,
+      hpDrain: 16,
+      hungerDrain: 2,
+      warnMsg: "⚡ 天界【星界落雷威壓】！請在工坊合成【星隕避雷聖徽】免疫雷罰！"
+    }
+  };
+
+  function hasSurvivalGear(s, gearKey) {
+    if (!s || !s.inventory) return false;
+    return (s.inventory[gearKey] || 0) > 0;
+  }
+
+  // ================= 4. 定義 12 種新素材、7 件環境求生裝與 28 項工坊配方 =================
   const NEW_SRPG_MATERIALS = {
-    coal:         { id: "coal",         name: "黑曜木炭",   tier: 1, desc: "【冶煉燃料】由枯枝窯燒或於高台山洞開採，是冶煉百煉精鋼錠與炸藥的核心燃料。" },
-    rockSalt:     { id: "rockSalt",     name: "結晶岩鹽",   tier: 1, desc: "【高台礦產】採集自懸崖高台或岩壁礦洞，可醃製長效保存的岩鹽風乾肉脯。" },
-    quartz:       { id: "quartz",       name: "透明石英砂", tier: 2, desc: "【高台晶礦】採集自懸崖高台，可用於燒製鍊金藥瓶與探礦提燈。" },
-    rawHide:      { id: "rawHide",      name: "荒野獸皮",   tier: 1, desc: "【狩獵戰利品】討伐野外魔物掉落，可加工為堅韌的鞣製硬皮革。" },
-    curedLeather: { id: "curedLeather", name: "鞣製硬皮革", tier: 2, desc: "【進階強化材】以獸皮與松脂鞣製而成，點擊「✨使用強化」可永久提升防禦力 +3、最大HP +12！" },
-    steelIngot:   { id: "steelIngot",   name: "百煉精鋼錠", tier: 2, desc: "【高階強化材】以藍晶鐵礦與黑曜木炭高溫鍛打而成，點擊「✨使用強化」可永久提升攻擊力 +4！" },
-    ropeLadder:   { id: "ropeLadder",   name: "攀岩繩梯",   tier: 1, desc: "【高低差開路工具】由麻繩與原木編織而成，可架設在野外懸崖峭壁上攀爬至高台礦區！" },
-    rationJerky:  { id: "rationJerky",  name: "風乾肉脯",   tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚與獸肉，食用立即恢復 +80% 飽食度與 +90 HP！" }
+    venomSac:        { id: "venomSac",        name: "毒囊孢子",         tier: 1, desc: "【1區森林特產】採集自迷霧森林西側或毒菇妖掉落，可用於提煉抗瘴氣香囊。" },
+    treeBark:        { id: "treeBark",        name: "堅韌樹皮",         tier: 1, desc: "【1區森林特產】剝自古老神木的厚樹皮，是製作清毒香囊與繩索的材料。" },
+    coal:            { id: "coal",            name: "黑曜木炭",         tier: 1, desc: "【洞窟/高台礦產】由枯枝窯燒或於岩壁山洞開採，是冶煉精鋼錠與黑火藥的核心燃料。" },
+    quartz:          { id: "quartz",          name: "透明石英砂",       tier: 2, desc: "【高台晶礦】採集自懸崖高台與山洞，可用於燒製永明石英提燈、護目鏡片與藥瓶。" },
+    cactusFruit:     { id: "cactusFruit",     name: "多汁仙人掌",       tier: 2, desc: "【2區峽谷特產】富含清甜汁液的荒漠植物，可製作防沙護目水壺與解渴口糧。" },
+    rockSalt:        { id: "rockSalt",        name: "結晶岩鹽",         tier: 1, desc: "【高台/海岸礦產】採集自懸崖高台，可醃製長效保存的岩鹽風乾肉脯。" },
+    chitin:          { id: "chitin",          name: "堅硬甲殼",         tier: 2, desc: "【3區海岸/峽谷特產】巨蟹與毒蠍的防水甲殼，用於打造深海避水呼吸器。" },
+    rawHide:         { id: "rawHide",         name: "荒野獸皮",         tier: 1, desc: "【狩獵戰利品】討伐野外魔物掉落，可加工為堅韌的鞣製硬皮革。" },
+    thickPelt:       { id: "thickPelt",       name: "極地厚獸毛",       tier: 3, desc: "【4區雪原特產】極寒霜狼與雪原採集的厚重毛皮，是縫製防寒斗篷的核心材料。" },
+    sulfur:          { id: "sulfur",          name: "火山硫磺晶",       tier: 3, desc: "【5區火山特產】採集自火山口的高純度硫磺，可打造隔熱護心鏡與重型炸彈。" },
+    curedLeather:    { id: "curedLeather",    name: "鞣製硬皮革",       tier: 2, desc: "【進階強化材】以獸皮與松脂鞣製而成，點擊「✨使用強化」可永久提升防禦力 +3、最大HP +12！" },
+    steelIngot:      { id: "steelIngot",      name: "百煉精鋼錠",       tier: 2, desc: "【高階強化材】以藍晶鐵礦與黑曜木炭高溫鍛打而成，點擊「✨使用強化」可永久提升攻擊力 +4！" },
+    ropeLadder:      { id: "ropeLadder",      name: "攀岩繩梯",         tier: 1, desc: "【高低差開路工具】由麻繩與原木編織而成，可架設在各區南側懸崖壁上攀爬至高台礦區！" },
+    rationJerky:     { id: "rationJerky",     name: "風乾肉脯",         tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚與獸肉，食用立即恢復 +80% 飽食度與 +90 HP！" },
+    gear_gasMask:    { id: "gear_gasMask",    name: "清毒草藥香囊",     tier: 2, desc: "【1區森林求生裝】佩戴後永久免疫翠風森林深處的「劇毒瘴氣」，並提升最大生命 +25！" },
+    gear_lantern:    { id: "gear_lantern",    name: "永明石英提燈",     tier: 2, desc: "【洞窟求生裝】持有後永久免疫蘑菇洞窟與深淵地牢的「暗黑孢子侵蝕」，且不耗火把步數！" },
+    gear_goggles:    { id: "gear_goggles",    name: "防沙護目水壺",     tier: 2, desc: "【2區峽谷求生裝】持有後永久免疫流沙峽谷的「酷熱流沙減速與脫水」，移動恢復敏捷！" },
+    gear_diving:     { id: "gear_diving",     name: "深海避水呼吸器",   tier: 3, desc: "【3區海岸求生裝】持有後永久免疫翡翠海岸的「暗礁海蝕冷風」，並提升防禦力 +6！" },
+    gear_furCoat:    { id: "gear_furCoat",    name: "極地厚毛防寒斗篷", tier: 3, desc: "【4區雪原求生裝】穿戴後永久免疫霜語雪原的「極寒暴雪凍傷」，並提升最大生命 +50！" },
+    gear_heatShield: { id: "gear_heatShield", name: "冰蓮隔熱護心鏡",   tier: 4, desc: "【5區火山求生裝】持有後永久免疫熔岩火山的「煉獄火毒灼燒」，並提升攻擊力 +10！" },
+    gear_skyAegis:   { id: "gear_skyAegis",   name: "星隕避雷聖徽",     tier: 4, desc: "【6區天界求生裝】持有後永久免疫天界聖殿的「星界落雷威壓」，且答對破盾威力強化！" }
   };
 
   const BUILTIN_TOOLS_DB = {
@@ -505,7 +711,7 @@ window.Aetheria = window.Aetheria || {};
       name: "伐木手斧",
       iconKey: "icon_axe",
       tiers: {
-        0: { name: "徒手拾荒", desc: "尚未裝備手斧，僅能拾取散落枯枝。" },
+        0: { name: "徒手拾荒", desc: "尚未裝備手斧，僅能拾取散落枯枝与初階特產。" },
         1: { name: "Lv.1 燧石手斧", cost: { branch: 2, flint: 2 }, gold: 0, desc: "可砍伐 1 階翠風原木、堅韌藤蔓、微光菇與琥珀松脂。" },
         2: { name: "Lv.2 精鐵伐木斧", cost: { iron: 2, wood: 2 }, gold: 80, desc: "可砍伐 2 階荒野亞麻、向陽太陽花與極地冰蓮。" },
         3: { name: "Lv.3 流沙秘銀斧", cost: { mithril: 2, plank: 2 }, gold: 220, desc: "可砍伐 3 階黃金世界樹葉與全大陸高階神木！" }
@@ -559,34 +765,95 @@ window.Aetheria = window.Aetheria || {};
     {
       id: "wk_rope_ladder",
       name: "攀岩繩梯 x1",
-      category: "explore",
+      category: "gear",
       toKey: "ropeLadder",
       toCount: 1,
       cost: { rope: 1, wood: 2 },
       desc: "【★高低差開路必備】架設於各區南側的深啡色懸崖壁上，即可爬上黃土高台採集稀有礦脈！"
     },
     {
+      id: "wk_gear_gasmask",
+      name: "清毒草藥香囊",
+      category: "gear",
+      toKey: "gear_gasMask",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { venomSac: 2, treeBark: 2, herb: 2 },
+      desc: "【★1區森林求生裝】永久免疫翠風森林深處的「☠️劇毒瘴氣」，並永久提升最大生命 +25！"
+    },
+    {
+      id: "wk_gear_lantern",
+      name: "永明石英提燈",
+      category: "gear",
+      toKey: "gear_lantern",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { quartz: 2, coal: 2, iron: 1 },
+      desc: "【★洞窟求生裝】永久照亮蘑菇洞窟與深淵地牢，免疫「🌑暗黑孢子侵蝕」且不耗火把！"
+    },
+    {
+      id: "wk_gear_goggles",
+      name: "防沙護目水壺",
+      category: "gear",
+      toKey: "gear_goggles",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { cactusFruit: 2, quartz: 2, curedLeather: 1 },
+      desc: "【★2區峽谷求生裝】永久免疫流沙峽谷的「🌪️酷熱流沙減速與脫水」，恢復全速移動！"
+    },
+    {
+      id: "wk_gear_diving",
+      name: "深海避水呼吸器",
+      category: "gear",
+      toKey: "gear_diving",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { chitin: 2, coral: 2, quartz: 1 },
+      desc: "【★3區海岸求生裝】永久免疫翡翠海岸的「🌊暗礁蝕骨海風」，並永久提升防禦力 +6！"
+    },
+    {
+      id: "wk_gear_furcoat",
+      name: "極地厚毛防寒斗篷",
+      category: "gear",
+      toKey: "gear_furCoat",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { thickPelt: 2, curedLeather: 2, coal: 2 },
+      desc: "【★4區雪原求生裝】永久免疫霜語雪原的「❄️極寒暴雪凍傷」，並永久提升最大生命 +50！"
+    },
+    {
+      id: "wk_gear_heatshield",
+      name: "冰蓮隔熱護心鏡",
+      category: "gear",
+      toKey: "gear_heatShield",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { sulfur: 2, iceLotus: 2, steelIngot: 1 },
+      desc: "【★5區火山求生裝】永久免疫熔岩火山的「🔥煉獄火毒灼燒」，並永久提升攻擊力 +10！"
+    },
+    {
+      id: "wk_gear_skyaegis",
+      name: "星隕避雷聖徽",
+      category: "gear",
+      toKey: "gear_skyAegis",
+      toCount: 1,
+      isUniqueGear: true,
+      cost: { starIron: 1, obsidian: 1, quartz: 2 },
+      desc: "【★6區天界求生裝】永久免疫天界聖殿的「⚡星界落雷威壓」，並提升全屬性！"
+    },
+    {
       id: "wk_torch",
       name: "松脂火把 x2",
-      category: "explore",
+      category: "gear",
       toKey: "torchItem",
       toCount: 2,
       cost: { branch: 1, resin: 1 },
       desc: "【地牢與黑夜照明】點燃後照亮黑霧地牢，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！"
     },
     {
-      id: "wk_quartz_lantern",
-      name: "石英探礦提燈 (火把x4)",
-      category: "explore",
-      toKey: "torchItem",
-      toCount: 4,
-      cost: { iron: 1, quartz: 1, coal: 1 },
-      desc: "【★新配方・強光照明】以鐵礦、石英砂與木炭打造，一次產出相當於 4 支火把的長效照明！"
-    },
-    {
       id: "wk_bomb",
       name: "爆破炸彈 x2",
-      category: "explore",
+      category: "gear",
       toKey: "bombItem",
       toCount: 2,
       cost: { flint: 2, clay: 1, resin: 1 },
@@ -594,12 +861,12 @@ window.Aetheria = window.Aetheria || {};
     },
     {
       id: "wk_coal_bomb",
-      name: "黑火藥重型炸彈 x3",
-      category: "explore",
+      name: "硫磺黑火藥炸彈 x3",
+      category: "gear",
       toKey: "bombItem",
       toCount: 3,
-      cost: { coal: 2, flint: 1, clay: 1 },
-      desc: "【★新配方・高效爆破】以黑曜木炭調配黑火藥，一次大量製造 3 顆爆破炸彈！"
+      cost: { coal: 2, flint: 1 },
+      desc: "【高效爆破】以黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！"
     },
     {
       id: "wk_charcoal",
@@ -608,7 +875,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "coal",
       toCount: 2,
       cost: { branch: 3 },
-      desc: "【★新配方・基礎冶煉】將 3 根散落枯枝悶燒成 2 塊高熱能黑曜木炭，用於冶煉精鋼錠。"
+      desc: "【基礎冶煉】將 3 根散落枯枝悶燒成 2 塊高熱能黑曜木炭，用於冶煉精鋼錠。"
     },
     {
       id: "wk_steel_ingot",
@@ -617,7 +884,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "steelIngot",
       toCount: 1,
       cost: { iron: 2, coal: 2 },
-      desc: "【★新配方・高溫冶煉】以鐵礦 x2 與黑曜木炭 x2 鍛造成精鋼錠（點擊「✨使用強化」可永久提升主角攻擊力 +4！）。"
+      desc: "【高溫冶煉】以鐵礦 x2 與黑曜木炭 x2 鍛造成精鋼錠（點擊「✨使用強化」永久提升主角攻擊力 +4！）。"
     },
     {
       id: "wk_cured_leather",
@@ -626,7 +893,16 @@ window.Aetheria = window.Aetheria || {};
       toKey: "curedLeather",
       toCount: 1,
       cost: { rawHide: 2, resin: 1 },
-      desc: "【★新配方・皮革加工】將荒野獸皮與松脂鞣製成硬皮革（點擊「✨使用強化」可永久提升防禦 +3 / 最大生命 +12！）。"
+      desc: "【皮革加工】將荒野獸皮與松脂鞣製成硬皮革（點擊「✨使用強化」永久提升防禦 +3 / 最大生命 +12！）。"
+    },
+    {
+      id: "wk_bark_rope",
+      name: "樹皮編織繩 x1",
+      category: "smelt",
+      toKey: "rope",
+      toCount: 1,
+      cost: { treeBark: 2 },
+      desc: "【森林製繩】將 2 塊堅韌樹皮搓成強韌麻繩索，方便快速合成攀岩繩梯。"
     },
     {
       id: "wk_plank",
@@ -707,7 +983,16 @@ window.Aetheria = window.Aetheria || {};
       toKey: "rationJerky",
       toCount: 2,
       cost: { fish: 1, rockSalt: 1 },
-      desc: "【★新配方・頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！"
+      desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！"
+    },
+    {
+      id: "wk_cactus_ration",
+      name: "仙人掌清涼飲 x2",
+      category: "survival",
+      toKey: "rationFish",
+      toCount: 2,
+      cost: { cactusFruit: 1, herb: 1 },
+      desc: "【沙漠甘露】將多汁仙人掌與微光菇調製成清涼補給飲（等同 2 份鮮魚乾口糧，+60%飽食/+60HP）！"
     },
     {
       id: "wk_ration_herb",
@@ -734,7 +1019,7 @@ window.Aetheria = window.Aetheria || {};
       toKey: "potionHeal",
       toCount: 2,
       cost: { herb: 2, quartz: 1 },
-      desc: "【★新配方・隨身鍊金】以微光菇 x2 與高台石英砂燒製的玻璃瓶，免費提煉 2 瓶生命藥水！"
+      desc: "【隨身鍊金】以微光菇 x2 與高台石英砂燒製的玻璃瓶，免費提煉 2 瓶生命藥水！"
     },
     {
       id: "wk_alchemy_hint",
@@ -743,12 +1028,151 @@ window.Aetheria = window.Aetheria || {};
       toKey: "potionHint",
       toCount: 2,
       cost: { flower: 1, resin: 1, quartz: 1 },
-      desc: "【★新配方・隨身鍊金】以太陽花、松脂與高台石英砂提煉 2 瓶洞察藥水！"
+      desc: "【隨身鍊金】以太陽花、松脂與高台石英砂提煉 2 瓶洞察藥水！"
     }
   ];
 
   const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
   const REMOVED_DUPLICATE_ARMOR_IDS  = ["a_srpg_leather", "a_srpg_steel_mail", "a_srpg_highland_plate"];
+
+  // ================= 5. 完整 12 項公會求生與高台開拓懸賞任務 =================
+  const EXTRA_SURVIVAL_QUESTS = [
+    {
+      id: "sq_01_ladder",
+      title: "1.【高台開拓】編織攀岩繩梯",
+      giver: "老獵人・雷恩",
+      zone: "1.翠風迷霧森林",
+      desc: "在工坊合成【攀岩繩梯 x1】(麻繩x1+原木x2)，並前往第1區森林南側懸崖架設繩梯爬上黃土高台。",
+      rewardExp: 140,
+      rewardGold: 160,
+      check: function(s) {
+        return Boolean((s.riggedCliffs && Object.keys(s.riggedCliffs).length > 0) || (s.inventory && s.inventory.ropeLadder > 0));
+      }
+    },
+    {
+      id: "sq_02_grotto",
+      title: "2.【岩壁秘境】開採高台石英與木炭",
+      giver: "矮人鐵匠・巴爾",
+      zone: "各區南側懸崖山洞",
+      desc: "進入懸崖壁上的黑色山洞或爬上黃土高台，開採獲得【透明石英砂 x1】與【黑曜木炭 x1】。",
+      rewardExp: 160,
+      rewardGold: 180,
+      check: function(s) {
+        return Boolean(
+          (s.inventory && (s.inventory.quartz > 0 || s.inventory.coal > 0)) ||
+          hasSurvivalGear(s, "gear_lantern") ||
+          (s.srpgBonusAtk || 0) > 0
+        );
+      }
+    },
+    {
+      id: "sq_03_gasmask",
+      title: "3.【森林求生】對抗劇毒瘴氣",
+      giver: "草藥師・梅姑",
+      zone: "1.翠風迷霧森林",
+      desc: "在森林西側安全區採集毒囊孢子x2、堅韌樹皮x2、微光菇x2，於工坊合成【清毒草藥香囊】免疫森林毒瘴。",
+      rewardExp: 200,
+      rewardGold: 220,
+      check: function(s) { return hasSurvivalGear(s, "gear_gasMask"); }
+    },
+    {
+      id: "sq_04_lantern",
+      title: "4.【幽窟求生】打造永明石英提燈",
+      giver: "矮人鐵匠・巴爾",
+      zone: "1-B.微光蘑菇洞窟",
+      desc: "收集透明石英砂x2、黑曜木炭x2、藍晶鐵礦x1，於工坊合成【永明石英提燈】免疫洞窟暗黑孢子。",
+      rewardExp: 250,
+      rewardGold: 280,
+      check: function(s) { return hasSurvivalGear(s, "gear_lantern"); }
+    },
+    {
+      id: "sq_05_steel",
+      title: "5.【高溫冶煉】鍛打百煉精鋼錠",
+      giver: "矮人鐵匠・巴爾",
+      zone: "0.曙光營地",
+      desc: "以藍晶鐵礦x2與黑曜木炭x2冶煉出【百煉精鋼錠】，並可點擊「使用強化」永久提升攻擊力。",
+      rewardExp: 280,
+      rewardGold: 300,
+      check: function(s) { return Boolean((s.srpgBonusAtk || 0) > 0 || (s.inventory && s.inventory.steelIngot > 0)); }
+    },
+    {
+      id: "sq_06_leather",
+      title: "6.【皮革鞣製】加固鞣製硬皮革",
+      giver: "老獵人・雷恩",
+      zone: "0.曙光營地",
+      desc: "討伐魔物收集荒野獸皮x2並結合琥珀松脂x1，於工坊加工出【鞣製硬皮革】強化防具。",
+      rewardExp: 280,
+      rewardGold: 300,
+      check: function(s) {
+        return Boolean(
+          (s.srpgBonusDef || 0) > 0 ||
+          (s.inventory && s.inventory.curedLeather > 0) ||
+          hasSurvivalGear(s, "gear_goggles") ||
+          hasSurvivalGear(s, "gear_furCoat")
+        );
+      }
+    },
+    {
+      id: "sq_07_jerky",
+      title: "7.【荒野醃製】製作岩鹽風乾肉脯",
+      giver: "老漁夫・阿海",
+      zone: "0.曙光營地",
+      desc: "在懸崖高台採集結晶岩鹽x1並結合銀鱗鮮魚x1，於工坊醃製出頂級口糧【岩鹽風乾肉脯】。",
+      rewardExp: 240,
+      rewardGold: 260,
+      check: function(s) { return Boolean(s.craftedJerkyOnce || (s.inventory && s.inventory.rationJerky > 0)); }
+    },
+    {
+      id: "sq_08_goggles",
+      title: "8.【峽谷求生】穿越酷熱流沙風暴",
+      giver: "斥候隊長・凱爾",
+      zone: "2.流沙繩索峽谷",
+      desc: "在峽谷西側採集多汁仙人掌x2、透明石英砂x2與硬皮革x1，合成【防沙護目水壺】免疫流沙減速。",
+      rewardExp: 380,
+      rewardGold: 400,
+      check: function(s) { return hasSurvivalGear(s, "gear_goggles"); }
+    },
+    {
+      id: "sq_09_diving",
+      title: "9.【海岸求生】深海避水呼吸器",
+      giver: "老船匠・達克",
+      zone: "3.翡翠沉船海岸",
+      desc: "在海岸西側收集堅硬甲殼x2、深海珊瑚x2與石英砂x1，合成【深海避水呼吸器】克服暗礁急流。",
+      rewardExp: 500,
+      rewardGold: 520,
+      check: function(s) { return hasSurvivalGear(s, "gear_diving"); }
+    },
+    {
+      id: "sq_10_furcoat",
+      title: "10.【極地求生】抵禦暴雪凍傷",
+      giver: "冰原獵手・弗雷",
+      zone: "4.霜語極寒雪原",
+      desc: "在雪原西側收集極地厚獸毛x2、鞣製硬皮革x2與黑木炭x2，縫製【極地厚毛防寒斗篷】免疫凍傷。",
+      rewardExp: 680,
+      rewardGold: 700,
+      check: function(s) { return hasSurvivalGear(s, "gear_furCoat"); }
+    },
+    {
+      id: "sq_11_heatshield",
+      title: "11.【火山求生】打造冰蓮隔熱鏡",
+      giver: "紅蓮學者・伊格",
+      zone: "5.赤紅熔岩火山",
+      desc: "收集火山硫磺晶x2、極地冰蓮x2與百煉精鋼錠x1，合成【冰蓮隔熱護心鏡】免疫火山煉獄火毒。",
+      rewardExp: 880,
+      rewardGold: 920,
+      check: function(s) { return hasSurvivalGear(s, "gear_heatShield"); }
+    },
+    {
+      id: "sq_12_skyaegis",
+      title: "12.【天界求生】凝聚星隕避雷聖徽",
+      giver: "破曉大賢者",
+      zone: "6.天界浮空聖殿",
+      desc: "收集深淵星隕鐵x1、熔岩黑曜石x1與透明石英砂x2，合成【星隕避雷聖徽】免疫天界落雷威壓。",
+      rewardExp: 1200,
+      rewardGold: 1500,
+      check: function(s) { return hasSurvivalGear(s, "gear_skyAegis"); }
+    }
+  ];
 
   function registerSrpgDataIntoGame() {
     const Data = window.Aetheria.Data;
@@ -760,7 +1184,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // ★ 徹底清除重覆階級的額外武器與防具
     if (Data.WEAPONS) {
       REMOVED_DUPLICATE_WEAPON_IDS.forEach(function(wid) {
         delete Data.WEAPONS[wid];
@@ -772,7 +1195,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // 若玩家存檔中曾裝備過被刪除的重覆武防，自動回退至已解鎖的最高階原版武防
     const s = window.Aetheria.State && window.Aetheria.State.data;
     if (s) {
       if (Array.isArray(s.unlockedWeapons)) {
@@ -785,7 +1207,6 @@ window.Aetheria = window.Aetheria || {};
           ? s.unlockedWeapons[s.unlockedWeapons.length - 1]
           : "w_wood";
       }
-
       if (Array.isArray(s.unlockedArmors)) {
         s.unlockedArmors = s.unlockedArmors.filter(function(id) {
           return REMOVED_DUPLICATE_ARMOR_IDS.indexOf(id) === -1;
@@ -815,15 +1236,129 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 4. 擴大地圖尺寸至 1560x1180，將高低差懸崖設於 y:800~1070 =================
+  // ================= 6. 各區配置：保證西側安全區 (x < 660) 有充足保底素材！ =================
   const HIGHLAND_ZONES = {
-    zone1_forest:   { targetW: 1560, targetH: 1180, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"] },
-    cave1_mushroom: { targetW: 1480, targetH: 1140, ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"] },
-    zone2_canyon:   { targetW: 1560, targetH: 1180, ores: ["mithril", "quartz", "rockSalt", "coal"],     grottoOres: ["coal", "mithril", "quartz", "basalt"] },
-    zone3_coast:    { targetW: 1560, targetH: 1180, ores: ["coral", "rockSalt", "quartz", "coal"],       grottoOres: ["coal", "coral", "rockSalt", "mithril"] },
-    zone4_snow:     { targetW: 1560, targetH: 1180, ores: ["obsidian", "rockSalt", "quartz", "mithril"], grottoOres: ["coal", "obsidian", "quartz", "mithril"] },
-    zone5_volcano:  { targetW: 1560, targetH: 1180, ores: ["starIron", "obsidian", "coal", "quartz"],    grottoOres: ["coal", "starIron", "obsidian", "quartz"] },
-    zone6_sky:      { targetW: 1560, targetH: 1180, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "obsidian", "quartz", "mithril"] }
+    zone1_forest: {
+      targetW: 2100, targetH: 1320,
+      ores: ["quartz", "coal", "rockSalt", "quartz"],
+      grottoOres: ["quartz", "coal", "quartz", "rockSalt", "coal", "iron"],
+      // safeZoneNodes 保證前 7 個點在 x < 640 安全區，確保 1 次就能採齊 3 個毒囊 + 3 個樹皮 + 2 個微光菇！
+      safeZoneNodes: [
+        { key: "venomSac", type: "wood" }, { key: "treeBark", type: "wood" },
+        { key: "venomSac", type: "wood" }, { key: "treeBark", type: "wood" },
+        { key: "venomSac", type: "wood" }, { key: "treeBark", type: "wood" },
+        { key: "herb",     type: "wood" }
+      ],
+      deepBiomeNodes: [
+        { key: "wood",     type: "wood" },    { key: "vine",     type: "wood" },
+        { key: "herb",     type: "wood" },    { key: "resin",    type: "wood" },
+        { key: "iron",     type: "crystal" }, { key: "venomSac", type: "wood" },
+        { key: "treeBark", type: "wood" },    { key: "iron",     type: "crystal" }
+      ],
+      eliteName: "★劇毒瘴氣樹魔"
+    },
+    cave1_mushroom: {
+      targetW: 1960, targetH: 1260,
+      ores: ["quartz", "coal", "mithril", "quartz"],
+      grottoOres: ["quartz", "coal", "mithril", "quartz", "coal", "basalt"],
+      safeZoneNodes: [
+        { key: "quartz", type: "crystal" }, { key: "coal",   type: "crystal" },
+        { key: "quartz", type: "crystal" }, { key: "coal",   type: "crystal" },
+        { key: "quartz", type: "crystal" }, { key: "coal",   type: "crystal" },
+        { key: "iron",   type: "crystal" }
+      ],
+      deepBiomeNodes: [
+        { key: "mithril", type: "crystal" }, { key: "herb",    type: "wood" },
+        { key: "basalt",  type: "crystal" }, { key: "mithril", type: "crystal" },
+        { key: "quartz",  type: "crystal" }, { key: "iron",    type: "crystal" }
+      ],
+      eliteName: "★蝕心晶簇巨怪"
+    },
+    zone2_canyon: {
+      targetW: 2100, targetH: 1320,
+      ores: ["quartz", "mithril", "rockSalt", "coal"],
+      grottoOres: ["quartz", "coal", "mithril", "quartz", "basalt", "rockSalt"],
+      safeZoneNodes: [
+        { key: "cactusFruit", type: "wood" },    { key: "quartz",      type: "crystal" },
+        { key: "cactusFruit", type: "wood" },    { key: "quartz",      type: "crystal" },
+        { key: "cactusFruit", type: "wood" },    { key: "hemp",        type: "wood" },
+        { key: "resin",       type: "wood" }
+      ],
+      deepBiomeNodes: [
+        { key: "mithril",     type: "crystal" }, { key: "basalt",      type: "crystal" },
+        { key: "flower",      type: "wood" },    { key: "hemp",        type: "wood" },
+        { key: "chitin",      type: "crystal" }, { key: "mithril",     type: "crystal" }
+      ],
+      eliteName: "★狂沙重甲蠍王"
+    },
+    zone3_coast: {
+      targetW: 2100, targetH: 1320,
+      ores: ["coral", "rockSalt", "quartz", "mithril"],
+      grottoOres: ["coral", "quartz", "rockSalt", "coal", "mithril", "coral"],
+      safeZoneNodes: [
+        { key: "chitin",   type: "crystal" }, { key: "coral",    type: "crystal" },
+        { key: "chitin",   type: "crystal" }, { key: "coral",    type: "crystal" },
+        { key: "chitin",   type: "crystal" }, { key: "coral",    type: "crystal" },
+        { key: "quartz",   type: "crystal" }
+      ],
+      deepBiomeNodes: [
+        { key: "sailCloth", type: "wood" },    { key: "coral",     type: "crystal" },
+        { key: "mithril",   type: "crystal" }, { key: "rockSalt",  type: "crystal" },
+        { key: "hemp",      type: "wood" },    { key: "chitin",    type: "crystal" }
+      ],
+      eliteName: "★暗礁鐵甲海魔"
+    },
+    zone4_snow: {
+      targetW: 2100, targetH: 1320,
+      ores: ["obsidian", "rockSalt", "quartz", "iceLotus"],
+      grottoOres: ["coal", "obsidian", "quartz", "mithril", "coal", "rockSalt"],
+      safeZoneNodes: [
+        { key: "thickPelt", type: "wood" },    { key: "coal",      type: "crystal" },
+        { key: "thickPelt", type: "wood" },    { key: "coal",      type: "crystal" },
+        { key: "thickPelt", type: "wood" },    { key: "iceLotus",  type: "wood" },
+        { key: "iceLotus",  type: "wood" }
+      ],
+      deepBiomeNodes: [
+        { key: "iceLotus",  type: "wood" },    { key: "obsidian",  type: "crystal" },
+        { key: "sinew",     type: "wood" },    { key: "thickPelt", type: "wood" },
+        { key: "obsidian",  type: "crystal" }, { key: "basalt",    type: "crystal" }
+      ],
+      eliteName: "★極寒暴雪魔狼皇"
+    },
+    zone5_volcano: {
+      targetW: 2100, targetH: 1320,
+      ores: ["starIron", "obsidian", "sulfur", "quartz"],
+      grottoOres: ["sulfur", "starIron", "obsidian", "coal", "sulfur", "iron"],
+      safeZoneNodes: [
+        { key: "sulfur",   type: "crystal" }, { key: "coal",     type: "crystal" },
+        { key: "sulfur",   type: "crystal" }, { key: "iron",     type: "crystal" },
+        { key: "sulfur",   type: "crystal" }, { key: "iceLotus", type: "wood" },
+        { key: "obsidian", type: "crystal" }
+      ],
+      deepBiomeNodes: [
+        { key: "obsidian", type: "crystal" }, { key: "starIron", type: "crystal" },
+        { key: "sulfur",   type: "crystal" }, { key: "obsidian", type: "crystal" },
+        { key: "mithril",  type: "crystal" }, { key: "starIron", type: "crystal" }
+      ],
+      eliteName: "★煉獄硫磺炎魔將"
+    },
+    zone6_sky: {
+      targetW: 2100, targetH: 1320,
+      ores: ["starIron", "goldLeaf", "quartz", "obsidian"],
+      grottoOres: ["starIron", "obsidian", "quartz", "goldLeaf", "starIron", "quartz"],
+      safeZoneNodes: [
+        { key: "starIron", type: "crystal" }, { key: "obsidian", type: "crystal" },
+        { key: "quartz",   type: "crystal" }, { key: "quartz",   type: "crystal" },
+        { key: "starIron", type: "crystal" }, { key: "obsidian", type: "crystal" },
+        { key: "goldLeaf", type: "wood" }
+      ],
+      deepBiomeNodes: [
+        { key: "starIron", type: "crystal" }, { key: "goldLeaf", type: "wood" },
+        { key: "obsidian", type: "crystal" }, { key: "goldLeaf", type: "wood" },
+        { key: "starIron", type: "crystal" }, { key: "quartz",   type: "crystal" }
+      ],
+      eliteName: "★星界雷罰審判者"
+    }
   };
 
   const grottoMapsCache = {};
@@ -850,7 +1385,7 @@ window.Aetheria = window.Aetheria || {};
         giveKey: giveKey,
         reqTool: "pickaxe",
         reqToolLv: 0,
-        perfect: (idx % 2 === 0),
+        perfect: true,
         isClusterBoulder: true,
         name: mInfo.name,
         opened: false
@@ -925,17 +1460,60 @@ window.Aetheria = window.Aetheria || {};
     mapObj.width = Math.max(oldW, cfg.targetW);
     mapObj.height = Math.max(oldH, cfg.targetH);
 
+    const SHIFT_DX = 650;
+    if (!mapObj._deepSanctumShifted) {
+      mapObj._deepSanctumShifted = true;
+      if (mapObj.hasRiver) {
+        mapObj.riverX = (mapObj.riverX || 1030) + SHIFT_DX;
+      }
+      (mapObj.decos || []).forEach(function(d) {
+        if (d.x >= 960) d.x += SHIFT_DX;
+      });
+      (mapObj.portals || []).forEach(function(p) {
+        if (p.x >= 960) p.x += SHIFT_DX;
+      });
+      (mapObj.npcs || []).forEach(function(n) {
+        if (n.x >= 960) n.x += SHIFT_DX;
+      });
+      (mapObj.dirtBlobs || []).forEach(function(b) {
+        if (b.cx && b.cx >= 960) b.cx += SHIFT_DX;
+        if (b.x && b.x >= 960) b.x += SHIFT_DX;
+      });
+    }
+
+    // ★ Cross-Check 修正：同步修正指向擴建地圖東岸 (targetX >= 920) 的跨區返回傳送門落點！
+    (mapObj.portals || []).forEach(function(p) {
+      if (p.targetZone && HIGHLAND_ZONES[p.targetZone] && p.targetX && p.targetX >= 920 && p.targetX < 1500 && !p._targetShifted) {
+        p._targetShifted = true;
+        p.targetX += SHIFT_DX;
+      }
+    });
+
+    (mapObj.monsters || []).forEach(function(m) {
+      if (m.isBoss && m.x < 1500 && mapObj.width >= 2000) {
+        m.x += SHIFT_DX;
+        m.homeX = m.x;
+      }
+    });
+    (mapObj.nodes || []).forEach(function(n) {
+      if (n.type === "chest" && !n.isPuzzleVaultChest && n.x >= 960 && n.x < 1500 && !n._chestShifted) {
+        n._chestShifted = true;
+        n.x += SHIFT_DX;
+      }
+    });
+
     if (mapObj.trees) {
       mapObj.trees = mapObj.trees.filter(function(t) {
         if (t.isExpandedPerimeterTree) return false;
         if (t.y >= oldH - 72) return false;
         if (t.x >= oldW - 68) return false;
         if (t.x >= 180 && t.x <= 960 && t.y >= 740 && t.y <= 1120) return false;
+        if (mapObj.hasRiver && Math.abs(t.x - (mapObj.riverX || 1680)) < 55) return false;
         return true;
       });
 
       for (let bx = 20; bx < mapObj.width - 20; bx += 42) {
-        if (mapObj.hasRiver && Math.abs(bx - (mapObj.riverX || 1030)) < 48) continue;
+        if (mapObj.hasRiver && Math.abs(bx - (mapObj.riverX || 1680)) < 52) continue;
         mapObj.trees.push({ x: bx, y: mapObj.height - 42, isExpandedPerimeterTree: true });
         if (bx >= oldW - 40) {
           mapObj.trees.push({ x: bx, y: 18, isExpandedPerimeterTree: true });
@@ -947,19 +1525,39 @@ window.Aetheria = window.Aetheria || {};
           mapObj.trees.push({ x: 18, y: by, isExpandedPerimeterTree: true });
         }
       }
-      mapObj.trees.push(
-        { x: 345, y: 1065, isExpandedPerimeterTree: true },
-        { x: 405, y: 1080, isExpandedPerimeterTree: true }
-      );
+      const midForestCoords = [
+        { x: 1080, y: 180 }, { x: 1240, y: 220 }, { x: 1420, y: 160 },
+        { x: 1150, y: 480 }, { x: 1360, y: 520 }, { x: 1510, y: 440 },
+        { x: 1080, y: 780 }, { x: 1280, y: 860 }, { x: 1460, y: 740 },
+        { x: 1160, y: 1080 }, { x: 1380, y: 1120 }, { x: 345, y: 1065 }, { x: 405, y: 1080 }
+      ];
+      midForestCoords.forEach(function(pt) {
+        mapObj.trees.push({ x: pt.x, y: pt.y, isExpandedPerimeterTree: true });
+      });
     }
 
+    // ★ Cross-Check 修正：將誤刷入「懸崖壁」或「新河道」內的隨機礦點與魔物自動移至中東段開闊腹地！
+    if (mapObj.nodes) {
+      mapObj.nodes.forEach(function(n, idx) {
+        if (n.isHighlandOre || n.type === "chest") return;
+        const inCliff = isBlockedByCliffFromLowland(n.x, n.y);
+        const inRiver = Boolean(mapObj.hasRiver && Math.abs(n.x - (mapObj.riverX || 1680)) < 52);
+        if (inCliff || inRiver) {
+          n.x = 980 + ((idx * 95) % 520);
+          n.y = 180 + ((idx * 130) % 520);
+        }
+      });
+    }
     if (mapObj.monsters) {
-      mapObj.monsters.forEach(function(m) {
-        if (!m.isBoss && isBlockedByCliffFromLowland(m.x, m.y)) {
-          m.x = 240;
-          m.y = 920;
-          m.homeX = 240;
-          m.homeY = 920;
+      mapObj.monsters.forEach(function(m, idx) {
+        if (m.isBoss) return;
+        const inCliff = isBlockedByCliffFromLowland(m.x, m.y);
+        const inRiver = Boolean(mapObj.hasRiver && Math.abs(m.x - (mapObj.riverX || 1680)) < 52);
+        if (inCliff || inRiver) {
+          m.x = 960 + ((idx * 110) % 540);
+          m.y = 220 + ((idx * 140) % 480);
+          m.homeX = m.x;
+          m.homeY = m.y;
         }
       });
     }
@@ -968,13 +1566,16 @@ window.Aetheria = window.Aetheria || {};
     mapObj.dirtBlobs.push(
       { cx: 280,  cy: 820,  rx: 95,  ry: 210, isExpandedBlob: true },
       { cx: 520,  cy: 1025, rx: 195, ry: 75,  isExpandedBlob: true },
-      { cx: 1320, cy: 380,  rx: 145, ry: 190, isExpandedBlob: true },
-      { cx: 1280, cy: 860,  rx: 155, ry: 140, isExpandedBlob: true }
+      { cx: 1280, cy: 340,  rx: 260, ry: 130, isExpandedBlob: true },
+      { cx: 1320, cy: 680,  rx: 220, ry: 140, isExpandedBlob: true },
+      { cx: 1320, cy: 1020, rx: 240, ry: 135, isExpandedBlob: true },
+      { cx: 1860, cy: 640,  rx: 150, ry: 280, isExpandedBlob: true }
     );
 
     mapObj.decos = (mapObj.decos || []).filter(function(d) { return !d.isHighlandElement; });
     mapObj.nodes = (mapObj.nodes || []).filter(function(n) { return !n.isHighlandOre; });
     mapObj.portals = (mapObj.portals || []).filter(function(p) { return !p.isCliffCavePortal; });
+    mapObj.monsters = (mapObj.monsters || []).filter(function(m) { return !m.isSrpgElite; });
 
     mapObj.portals.push({
       id: "p_cliff_cave_" + mapObj.id,
@@ -1046,37 +1647,113 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    const extraExpansionCoords = [
-      { x: 210,  y: 860,  key: "coal",     type: "crystal" },
-      { x: 260,  y: 1020, key: "rockSalt", type: "crystal" },
-      { x: 1240, y: 260,  key: "quartz",   type: "crystal" },
-      { x: 1380, y: 440,  key: "coal",     type: "crystal" },
-      { x: 1320, y: 760,  key: "rockSalt", type: "crystal" },
-      { x: 1220, y: 960,  key: "quartz",   type: "crystal" }
+    // ★ 1. 西側外圍安全區 (x < 640) 保底 7 個特產採集點（確保玩家 100% 能在安全區集齊材料做求生裝！）
+    const safeCoords = [
+      { x: 185, y: 180 }, { x: 310, y: 165 },
+      { x: 195, y: 490 }, { x: 325, y: 540 },
+      { x: 215, y: 720 }, { x: 315, y: 740 },
+      { x: 245, y: 940 }
     ];
-    extraExpansionCoords.forEach(function(ec, idx) {
-      const mInfo = matsDB[ec.key] || { name: ec.key };
+    const safePool = cfg.safeZoneNodes || [];
+    safeCoords.forEach(function(pt, idx) {
+      const tpl = safePool[idx % safePool.length] || { key: "coal", type: "crystal" };
+      const mInfo = matsDB[tpl.key] || { name: tpl.key };
+      const isCluster = (tpl.key === "coal" || tpl.key === "rockSalt" || tpl.key === "quartz" || tpl.key === "sulfur");
       mapObj.nodes.push({
-        id: "exp_srpg_node_" + mapObj.id + "_" + idx + "_" + token,
-        x: ec.x,
-        y: ec.y,
-        type: ec.type,
-        giveKey: ec.key,
-        reqTool: "pickaxe",
+        id: "safe_srpg_node_" + mapObj.id + "_" + idx + "_" + token,
+        x: pt.x,
+        y: pt.y,
+        type: tpl.type,
+        giveKey: tpl.key,
+        reqTool: tpl.type === "wood" ? "axe" : "pickaxe",
         reqToolLv: 0,
         perfect: false,
         isHighlandOre: true,
-        isClusterBoulder: true,
+        isClusterBoulder: isCluster,
         reqHighland: false,
         name: mInfo.name,
         opened: false
       });
     });
 
+    // ★ 2. 中東段深淵危險區 (x: 980 ~ 1560) 高純度豐厚資源點 (perfect: true 雙倍收穫獎勵！)
+    const deepCoords = [
+      { x: 1020, y: 260 }, { x: 1220, y: 340 }, { x: 1440, y: 280 },
+      { x: 1120, y: 620 }, { x: 1360, y: 680 }, { x: 1520, y: 580 },
+      { x: 1080, y: 960 }, { x: 1340, y: 1020 },{ x: 1540, y: 920 }
+    ];
+    const deepPool = cfg.deepBiomeNodes || [];
+    deepCoords.forEach(function(pt, idx) {
+      const tpl = deepPool[idx % deepPool.length] || { key: "coal", type: "crystal" };
+      const mInfo = matsDB[tpl.key] || { name: tpl.key };
+      const isCluster = (tpl.key === "coal" || tpl.key === "rockSalt" || tpl.key === "quartz" || tpl.key === "sulfur");
+      mapObj.nodes.push({
+        id: "deep_srpg_node_" + mapObj.id + "_" + idx + "_" + token,
+        x: pt.x,
+        y: pt.y,
+        type: tpl.type,
+        giveKey: tpl.key,
+        reqTool: tpl.type === "wood" ? "axe" : "pickaxe",
+        reqToolLv: 0,
+        perfect: true,
+        isHighlandOre: true,
+        isClusterBoulder: isCluster,
+        reqHighland: false,
+        name: "高純度" + mInfo.name,
+        opened: false
+      });
+    });
+
+    // 3. 中東段深處 4 隻【★精英鎮守魔物】
+    const baseRecLv = mapObj.recLv || 3;
+    const eliteCoords = [
+      { x: 1120, y: 340, lvAdd: 2 },
+      { x: 1380, y: 520, lvAdd: 3 },
+      { x: 1260, y: 940, lvAdd: 3 },
+      { x: 1540, y: 380, lvAdd: 4 }
+    ];
+    eliteCoords.forEach(function(ep, idx) {
+      mapObj.monsters.push({
+        id: "srpg_elite_" + mapObj.id + "_" + idx + "_" + token,
+        name: cfg.eliteName || "★荒野精英魔將",
+        lv: baseRecLv + ep.lvAdd,
+        x: ep.x,
+        y: ep.y,
+        homeX: ep.x,
+        homeY: ep.y,
+        type: (idx % 2 === 0) ? "skull" : "bamboo",
+        isBoss: false,
+        isShiny: true,
+        isSrpgElite: true,
+        alive: true
+      });
+    });
+
     return mapObj;
   }
 
-  // ================= 5. 全新格仔化分類工坊系統（去重純淨版） =================
+  // 檢查是否有新達成但未領獎的求生懸賞任務
+  function checkAndNotifyQuestCompletion() {
+    const s = window.Aetheria.State && window.Aetheria.State.data;
+    if (!s) return;
+    if (!s.claimedSrpgQuests) s.claimedSrpgQuests = {};
+    if (!s._notifiedSrpgQuests) s._notifiedSrpgQuests = {};
+
+    for (let i = 0; i < EXTRA_SURVIVAL_QUESTS.length; i++) {
+      const q = EXTRA_SURVIVAL_QUESTS[i];
+      if (!s.claimedSrpgQuests[q.id] && !s._notifiedSrpgQuests[q.id] && q.check(s)) {
+        s._notifiedSrpgQuests[q.id] = true;
+        setTimeout(function() {
+          if (window.Aetheria.UI) {
+            window.Aetheria.UI.showToast("🎖️ 懸賞達成：" + q.title + "！請打開【日誌】領取獎賞！");
+          }
+        }, 600);
+        break;
+      }
+    }
+  }
+
+  // ================= 7. 全新格仔化分類工坊系統 =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -1095,10 +1772,10 @@ window.Aetheria = window.Aetheria || {};
     getRecipeSubCategory: function(rec) {
       if (rec.category) return rec.category;
       const id = String(rec.id || "");
-      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("lantern") !== -1) {
-        return "explore";
+      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("gear_") !== -1) {
+        return "gear";
       }
-      if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1) {
+      if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1 || id.indexOf("cactus") !== -1) {
         return "survival";
       }
       return "smelt";
@@ -1141,6 +1818,12 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       if (!rec) return;
 
+      const outKey = rec.toKey || rec.giveKey || rec.outKey;
+      if (rec.isUniqueGear && (s.inventory[outKey] || 0) >= 1) {
+        window.Aetheria.UI.showToast("✨ 你已經擁有並裝備了【" + rec.name + "】，效果正永久生效中！");
+        return;
+      }
+
       if (!this.canAffordRecipe(s, rec.cost, rec.goldCost || 0)) {
         window.Aetheria.Audio.sfxWrong();
         window.Aetheria.UI.showToast("⚠️ 合成材料不足！請查看上方檢視盒中標示紅色的材料。");
@@ -1154,16 +1837,24 @@ window.Aetheria = window.Aetheria || {};
         s.gold = Math.max(0, (s.gold || 0) - rec.goldCost);
       }
 
-      const outKey = rec.toKey || rec.giveKey || rec.outKey;
       const outCnt = rec.toCount || rec.count || rec.qty || 1;
       if (outKey) {
         s.inventory[outKey] = (s.inventory[outKey] || 0) + outCnt;
       }
+      if (outKey === "rationJerky") {
+        s.craftedJerkyOnce = true;
+      }
 
+      window.Aetheria.State.recalcMaxHp();
       window.Aetheria.Audio.sfxLevelUp();
       window.Aetheria.State.save();
       window.Aetheria.UI.updateAllHud();
-      window.Aetheria.UI.showToast("🔨 合成成功！獲得【" + rec.name + "】！");
+      window.Aetheria.UI.showToast(
+        rec.isUniqueGear
+          ? ("🛡️ 求生裝備合成成功！【" + rec.name + "】已永久生效！")
+          : ("🔨 合成成功！獲得【" + rec.name + "】！")
+      );
+      checkAndNotifyQuestCompletion();
     },
 
     executePrimaryItemAction: function(selectedObj) {
@@ -1296,6 +1987,7 @@ window.Aetheria = window.Aetheria || {};
 
       if (matKey === "rationJerky") {
         s.inventory.rationJerky--;
+        s.craftedJerkyOnce = true;
         window.Aetheria.State.restoreHunger(80, 90);
         window.Aetheria.Audio.sfxLevelUp();
         window.Aetheria.UI.showToast("🍖 食用【岩鹽風乾肉脯】：恢復 +80% 飽食度與 +90 HP！");
@@ -1316,6 +2008,7 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.State.save();
       this.renderGridWorkshopModal(this.curTab);
       window.Aetheria.UI.updateAllHud();
+      checkAndNotifyQuestCompletion();
     },
 
     buildMainTabBarHtml: function(activeTab) {
@@ -1387,9 +2080,11 @@ window.Aetheria = window.Aetheria || {};
 
         Object.values(recipeMap).forEach(function(r) {
           const subCat = self.getRecipeSubCategory(r);
-          const canDo = self.canAffordRecipe(s, r.cost, r.goldCost || 0);
           const outKey = r.toKey || r.giveKey || r.outKey;
           const owned = (s.inventory && s.inventory[outKey]) || 0;
+          const alreadyGotUnique = Boolean(r.isUniqueGear && owned >= 1);
+          const canDo = !alreadyGotUnique && self.canAffordRecipe(s, r.cost, r.goldCost || 0);
+
           itemsList.push({
             uid: r.id,
             raw: r,
@@ -1398,8 +2093,9 @@ window.Aetheria = window.Aetheria || {};
             iconKey: "mat_" + outKey,
             shortName: r.name.replace(/\s*x\d+$/i, "").replace(/\s*\([^)]*\)/g, ""),
             fullName: r.name,
-            badgeText: "持有 " + owned,
+            badgeText: alreadyGotUnique ? "★已生效" : ("持有 " + owned),
             canCraft: canDo,
+            unlocked: alreadyGotUnique,
             costMap: r.cost,
             goldCost: r.goldCost || 0,
             desc: r.desc || "工坊合成加工品。"
@@ -1436,7 +2132,6 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
-      // ★ 武器與防具：自動按 ID 與名稱去重，並嚴格按 Tier (T1 ➔ T10) 由低至高排序！
       else if (tab === "weapons") {
         const seenWId = {};
         const seenWName = {};
@@ -1543,7 +2238,7 @@ window.Aetheria = window.Aetheria || {};
         subFilters = [
           { id: "all",      label: "全部(" + itemsList.length + ")" },
           { id: "can",      label: "✅可製作" },
-          { id: "explore",  label: "🧗開路/照明" },
+          { id: "gear",     label: "🛡️求生裝/開路" },
           { id: "smelt",    label: "🔥冶煉/建材" },
           { id: "survival", label: "🍖口糧/靈藥" }
         ];
@@ -1617,13 +2312,17 @@ window.Aetheria = window.Aetheria || {};
           const outKey = selectedObj.raw.toKey || selectedObj.raw.giveKey;
           const canUseBuff = (outKey === "steelIngot" || outKey === "curedLeather" || outKey === "rationJerky") &&
                              ((s.inventory && s.inventory[outKey]) || 0) > 0;
-          actionBtnHtml =
-            '<div style="display:flex; flex-direction:column; gap:4px;">' +
-              '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; font-size:13px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">🔨 立即製作</button>' +
-              (canUseBuff
-                ? '<button class="na-btn" style="padding:4px 8px; font-size:11px; border-color:#5ac54f; color:#5ac54f;" onclick="Aetheria.HighlandsWorkshop.useSrpgConsumable(\'' + outKey + '\')">✨ 使用強化</button>'
-                : '') +
-            '</div>';
+          if (selectedObj.unlocked) {
+            actionBtnHtml = '<span style="color:#5ac54f; font-weight:900; white-space:nowrap;">★ 已生效</span>';
+          } else {
+            actionBtnHtml =
+              '<div style="display:flex; flex-direction:column; gap:4px;">' +
+                '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; font-size:13px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">🔨 立即製作</button>' +
+                (canUseBuff
+                  ? '<button class="na-btn" style="padding:4px 8px; font-size:11px; border-color:#5ac54f; color:#5ac54f;" onclick="Aetheria.HighlandsWorkshop.useSrpgConsumable(\'' + outKey + '\')">✨ 使用強化</button>'
+                  : '') +
+              '</div>';
+          }
         } else if (selectedObj.itemType === "tool") {
           actionBtnHtml = selectedObj.isMax
             ? '<span style="color:#5ac54f; font-weight:900; white-space:nowrap;">★ 已滿級</span>'
@@ -1687,12 +2386,29 @@ window.Aetheria = window.Aetheria || {};
       if (this.savedScrollTop > 0) {
         body.scrollTop = this.savedScrollTop;
       }
+    },
+
+    claimSurvivalQuest: function(qId) {
+      const s = window.Aetheria.State.data;
+      if (!s.claimedSrpgQuests) s.claimedSrpgQuests = {};
+      if (s.claimedSrpgQuests[qId]) return;
+
+      const q = EXTRA_SURVIVAL_QUESTS.find(function(x) { return x.id === qId; });
+      if (!q || !q.check(s)) return;
+
+      s.claimedSrpgQuests[qId] = true;
+      window.Aetheria.State.gainRewards(q.rewardExp, q.rewardGold, 30);
+      window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
+      window.Aetheria.UI.openQuestLogModal();
+      window.Aetheria.UI.updateAllHud();
+      window.Aetheria.UI.showToast("🎖️ 完成求生懸賞【" + q.title + "】！獲 +" + q.rewardExp + " EXP、+" + q.rewardGold + " G！");
     }
   };
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 6. 掛載高低差移動碰撞、怪物防穿懸崖、雙繩梯攀爬與格仔工坊 =================
+  // ================= 8. 掛載環境生存危機、精英怪與首領難度、日誌懸賞與高低差攀爬 =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -1705,13 +2421,17 @@ window.Aetheria = window.Aetheria || {};
       if (St.getTotalAtk) {
         const origAtk = St.getTotalAtk.bind(St);
         St.getTotalAtk = function() {
-          return origAtk() + ((this.data && this.data.srpgBonusAtk) || 0);
+          const s = this.data || {};
+          const heatBonus = hasSurvivalGear(s, "gear_heatShield") ? 10 : 0;
+          return origAtk() + (s.srpgBonusAtk || 0) + heatBonus;
         };
       }
       if (St.getTotalDef) {
         const origDef = St.getTotalDef.bind(St);
         St.getTotalDef = function() {
-          return origDef() + ((this.data && this.data.srpgBonusDef) || 0);
+          const s = this.data || {};
+          const diveBonus = hasSurvivalGear(s, "gear_diving") ? 6 : 0;
+          return origDef() + (s.srpgBonusDef || 0) + diveBonus;
         };
       }
       if (St.recalcMaxHp) {
@@ -1719,11 +2439,21 @@ window.Aetheria = window.Aetheria || {};
         St.recalcMaxHp = function() {
           origMaxHp();
           if (this.data) {
-            const pouchLv = (this.data.tools && this.data.tools.pouch) || 0;
+            const s = this.data;
+            const pouchLv = (s.tools && s.tools.pouch) || 0;
             const pouchHp = (pouchLv >= 2) ? 70 : (pouchLv === 1) ? 30 : 0;
-            this.data.maxHp += ((this.data.srpgBonusHp || 0) + pouchHp);
-            if (this.data.hp > this.data.maxHp) this.data.hp = this.data.maxHp;
+            const maskHp  = hasSurvivalGear(s, "gear_gasMask") ? 25 : 0;
+            const furHp   = hasSurvivalGear(s, "gear_furCoat") ? 50 : 0;
+            s.maxHp += ((s.srpgBonusHp || 0) + pouchHp + maskHp + furHp);
+            if (s.hp > s.maxHp) s.hp = s.maxHp;
           }
+        };
+      }
+      if (St.getBonusShieldBreak) {
+        const origBreak = St.getBonusShieldBreak.bind(St);
+        St.getBonusShieldBreak = function() {
+          const s = this.data || {};
+          return origBreak() + (hasSurvivalGear(s, "gear_skyAegis") ? 1 : 0);
         };
       }
     }
@@ -1762,6 +2492,9 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Exp) {
+      let hazardStepCounter = 0;
+      let lastHazardWarnTime = 0;
+
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const s = window.Aetheria.State.data;
@@ -1769,7 +2502,27 @@ window.Aetheria = window.Aetheria || {};
         const prevY = s.heroY;
         const prevZone = s.currentZone;
 
+        const hzRule = ZONE_HAZARD_RULES[s.currentZone];
+        const inHazardArea = Boolean(hzRule && s.heroX >= hzRule.minX);
+        const isProtected = Boolean(
+          hzRule && (
+            hasSurvivalGear(s, hzRule.gearKey) ||
+            (hzRule.allowTorchBypass && s.torchTicks > 0) ||
+            (s.currentZone === "zone4_snow" && s.projectsBuilt && s.projectsBuilt.proj_z4_shelter)
+          )
+        );
+
+        const savedDX = this.moveDX;
+        const savedDY = this.moveDY;
+        if (this.isMoving && inHazardArea && !isProtected && hzRule.slowFactor) {
+          this.moveDX = savedDX * hzRule.slowFactor;
+          this.moveDY = savedDY * hzRule.slowFactor;
+        }
+
         origUpdateStep();
+
+        this.moveDX = savedDX;
+        this.moveDY = savedDY;
 
         if (s.currentZone !== prevZone) {
           s.onHighland = false;
@@ -1790,6 +2543,23 @@ window.Aetheria = window.Aetheria || {};
           if (isBlockedByCliffFromLowland(s.heroX, s.heroY)) {
             s.heroX = prevX;
             s.heroY = prevY;
+          }
+        }
+
+        if (this.isMoving && inHazardArea && !isProtected) {
+          hazardStepCounter++;
+          if (hazardStepCounter >= 38) {
+            hazardStepCounter = 0;
+            s.hp = Math.max(1, (s.hp || 100) - (hzRule.hpDrain || 6));
+            s.hunger = Math.max(0, (s.hunger !== undefined ? s.hunger : 100) - (hzRule.hungerDrain || 1));
+            window.Aetheria.UI.spawnFloatingText(hzRule.name + " -" + hzRule.hpDrain + "HP", "#ff595e", false);
+            window.Aetheria.UI.updateAllHud();
+
+            const now = Date.now();
+            if (now - lastHazardWarnTime > 9000) {
+              lastHazardWarnTime = now;
+              window.Aetheria.UI.showToast(hzRule.warnMsg);
+            }
           }
         }
       };
@@ -1840,7 +2610,7 @@ window.Aetheria = window.Aetheria || {};
               if (!isRigged) {
                 if ((s.inventory.ropeLadder || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
-                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🔨加工】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
+                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🛡️求生裝/開路】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
                   return;
                 }
                 s.inventory.ropeLadder--;
@@ -1852,6 +2622,7 @@ window.Aetheria = window.Aetheria || {};
                   }
                 });
                 if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
+                checkAndNotifyQuestCompletion();
               }
 
               window.Aetheria.Audio.sfxGather();
@@ -1914,20 +2685,91 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
         origHarvest(node);
+        checkAndNotifyQuestCompletion();
       };
     }
 
-    if (Bat && Bat.winBattle) {
-      const origWin = Bat.winBattle.bind(Bat);
-      Bat.winBattle = function() {
-        const isCombat = (this.mode === "combat");
-        origWin();
-        if (isCombat && Math.random() < 0.60) {
+    if (Bat) {
+      if (Bat.startBattle) {
+        const origStart = Bat.startBattle.bind(Bat);
+        Bat.startBattle = function(mapMonsterNode, customMode, customQuestionId) {
+          origStart(mapMonsterNode, customMode, customQuestionId);
+
           const s = window.Aetheria.State.data;
-          s.inventory.rawHide = (s.inventory.rawHide || 0) + 1;
-          window.Aetheria.State.save();
-        }
-      };
+          const e = this.enemy;
+          if (!e || this.mode !== "combat") return;
+
+          const hzRule = ZONE_HAZARD_RULES[s.currentZone];
+          if (hzRule && s.heroX >= hzRule.minX && !hasSurvivalGear(s, hzRule.gearKey) && !(hzRule.allowTorchBypass && s.torchTicks > 0)) {
+            e.maxShield = (e.maxShield || 1) + 1;
+            e.shield = (e.shield || 1) + 1;
+            e.atk = Math.round((e.atk || 20) * 1.25);
+          }
+
+          if (mapMonsterNode && mapMonsterNode.isSrpgElite) {
+            e.isSrpgElite = true;
+            e.maxHp = Math.round(e.maxHp * 1.55);
+            e.hp = e.maxHp;
+            e.atk = Math.round((e.atk || 20) * 1.35);
+            e.maxShield = Math.max(3, (e.maxShield || 2) + 1);
+            e.shield = e.maxShield;
+          }
+
+          if (e.isBoss) {
+            e.maxHp = Math.round(e.maxHp * 1.35);
+            e.hp = e.maxHp;
+            e.atk = Math.round((e.atk || 25) * 1.25);
+            e.maxShield = Math.max(4, (e.maxShield || 3) + 1);
+            e.shield = e.maxShield;
+            e._enrageUsed = false;
+          }
+
+          this.updateBattleHUD();
+        };
+      }
+
+      if (Bat.executeEnemyCounterPhase) {
+        const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
+        Bat.executeEnemyCounterPhase = function(answeredRight) {
+          const e = this.enemy;
+          if (e && e.isBoss && !e._enrageUsed && e.hp > 0 && e.hp <= e.maxHp * 0.50) {
+            e._enrageUsed = true;
+            e.broken = false;
+            e.shield = Math.max(2, Math.ceil(e.maxShield * 0.75));
+            e.atk = Math.round(e.atk * 1.20);
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.spawnFloatingText("⚡領主狂暴・護盾再生!", "#ff595e", true);
+            window.Aetheria.UI.showToast("⚡ 首領進入半血狂暴狀態！護盾已重新凝聚，請善用 BP 增幅破盾！");
+          }
+          origCounter(answeredRight);
+        };
+      }
+
+      if (Bat.winBattle) {
+        const origWin = Bat.winBattle.bind(Bat);
+        Bat.winBattle = function() {
+          const isCombat = (this.mode === "combat");
+          const ref = this.mapMonsterRef;
+          const isElite = Boolean(ref && ref.isSrpgElite);
+          origWin();
+
+          if (isCombat) {
+            const s = window.Aetheria.State.data;
+            if (isElite) {
+              s.inventory.rawHide = (s.inventory.rawHide || 0) + 2;
+              const zCfg = HIGHLAND_ZONES[s.currentZone];
+              if (zCfg && zCfg.safeZoneNodes && zCfg.safeZoneNodes[0]) {
+                const bKey = zCfg.safeZoneNodes[0].key;
+                s.inventory[bKey] = (s.inventory[bKey] || 0) + 2;
+              }
+              window.Aetheria.State.save();
+            } else if (Math.random() < 0.65) {
+              s.inventory.rawHide = (s.inventory.rawHide || 0) + 1;
+              window.Aetheria.State.save();
+            }
+          }
+        };
+      }
     }
 
     if (Ren) {
@@ -2003,6 +2845,23 @@ window.Aetheria = window.Aetheria || {};
           const S = window.Aetheria.Data.Sprites;
           const rigged = Boolean(s && s.riggedCliffs && s.riggedCliffs[s.currentZone]);
 
+          const banner = document.getElementById("srpg-hazard-banner");
+          const hzRule = ZONE_HAZARD_RULES[s.currentZone];
+          if (banner) {
+            if (hzRule && s.heroX >= hzRule.minX) {
+              const prot = hasSurvivalGear(s, hzRule.gearKey) ||
+                           (hzRule.allowTorchBypass && s.torchTicks > 0) ||
+                           (s.currentZone === "zone4_snow" && s.projectsBuilt && s.projectsBuilt.proj_z4_shelter);
+              banner.className = prot ? "hazard-safe" : "hazard-danger";
+              banner.innerText = prot
+                ? (hzRule.name + " (🛡️" + hzRule.gearName + "已免疫)")
+                : (hzRule.name + " (⚠️未穿" + hzRule.gearName + ")");
+            } else {
+              banner.className = "";
+              banner.style.display = "none";
+            }
+          }
+
           Object.keys(this.domPool.decos || {}).forEach(function(k) {
             const item = Ren.domPool.decos[k];
             if (item && item.data && item.data.isCliffLadderSpot) {
@@ -2014,6 +2873,13 @@ window.Aetheria = window.Aetheria || {};
                 item.lbl.className = "dom-label ladder-spot-lbl";
                 item.lbl.innerText = rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯";
               }
+            }
+          });
+
+          Object.keys(this.domPool.monsters || {}).forEach(function(mId) {
+            const item = Ren.domPool.monsters[mId];
+            if (item && item.data && item.data.isSrpgElite && item.data.alive !== false && item.lbl) {
+              item.lbl.className = "dom-label elite-mon-lbl";
             }
           });
 
@@ -2046,6 +2912,47 @@ window.Aetheria = window.Aetheria || {};
         }
         WorkshopUIManager.renderGridWorkshopModal(activeTab || WorkshopUIManager.curTab || "workshop");
       };
+
+      if (UI.openQuestLogModal) {
+        const origQuestLog = UI.openQuestLogModal.bind(UI);
+        UI.openQuestLogModal = function() {
+          origQuestLog();
+          const body = document.getElementById("modal-body");
+          if (!body || document.getElementById("srpg-bounty-section")) return;
+
+          const s = window.Aetheria.State.data;
+          if (!s.claimedSrpgQuests) s.claimedSrpgQuests = {};
+
+          const header = document.createElement("div");
+          header.id = "srpg-bounty-section";
+          header.style.cssText = "color:var(--na-gold); font-weight:900; margin:10px 0 4px; font-size:13px;";
+          header.innerText = "【🧭 區域環境求生與高台開拓懸賞 (共 12 項)】";
+          body.appendChild(header);
+
+          EXTRA_SURVIVAL_QUESTS.forEach(function(q) {
+            const done = q.check(s);
+            const claimed = Boolean(s.claimedSrpgQuests[q.id]);
+            const card = document.createElement("div");
+            card.className = "sys-card";
+            card.style.borderColor = claimed ? "#3d3136" : (done ? "#5ac54f" : "#38b6ff");
+            card.innerHTML =
+              '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
+                '<div>' +
+                  '<b style="color:' + (claimed ? '#94a3b8' : (done ? '#5ac54f' : '#ffd166')) + '; font-size:12.5px;">' + q.title + '</b>' +
+                  '<div style="font-size:11px; color:#8ce0ff;">委託人：' + q.giver + ' (' + q.zone + ')</div>' +
+                  '<div style="font-size:11.5px; color:#cbd5e1; margin-top:2px;">' + q.desc + '</div>' +
+                  '<div style="font-size:11px; color:#ffd166; margin-top:2px;">獎賞：' + q.rewardExp + ' EXP ＋ ' + q.rewardGold + ' G</div>' +
+                '</div>' +
+                (claimed
+                  ? '<span style="color:#5ac54f; font-weight:900; white-space:nowrap; font-size:11.5px;">✓ 已完成</span>'
+                  : (done
+                      ? '<button class="na-btn highlight" style="padding:6px 10px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.claimSurvivalQuest(\'' + q.id + '\')">領取獎賞</button>'
+                      : '<span style="color:#94a3b8; white-space:nowrap; font-size:11px;">進行中</span>')) +
+              '</div>';
+            body.appendChild(card);
+          });
+        };
+      }
 
       if (UI.openRationQuickModal) {
         const origRation = UI.openRationQuickModal.bind(UI);
@@ -2104,7 +3011,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival Highlands & Grid Workshop v9.7 init error:", err);
+      console.error("Survival RPG Overhaul v10.1 init error:", err);
     }
   }
 
