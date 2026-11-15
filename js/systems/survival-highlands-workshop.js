@@ -1,18 +1,47 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 任務物資100%保底、羅盤大圖與機關解謎模組 (survival-highlands-workshop.js - v11.7)
- * 核心修正與保障：
- *   1. 【全任務物品 100% 保底途徑】：自動掃描全遊戲材料庫，確保「黑曜耐火磚、炎魔熔核、熔岩龍鱗、海妖核心、幽靈古帆布、強韌獸筋、聖碑殘片、遠古遺跡鑰匙」皆可在工坊合成，並於各區高台/打怪保底掉落！
- *   2. 【修橋不倒退任務進度】：在河邊工程牌投入建材修橋後，自動保留主線任務所需的建材計數，不再出現修完橋反而變成 2/3 的問題
- *   3. 【包含 v11.6 全部修復】：羅盤不遮擋底部對話文字、四方石像解開後按 A 鍵直接開寶箱、營地北面三個帳篷走到門口踏墊即可順暢進入
+ * Project J：艾瑟瑞亞的破曉 — 效能極速優化、龍皇定位與羅盤解謎模組 (survival-highlands-workshop.js - v11.8)
+ * 核心修正：
+ *   1. 【徹底消除帳篷前與行走 Lag】：
+ *      - 為 adjustCampTentsUpward 加上一次性快取鎖，不再每幀重複運算
+ *      - 所有 innerText / style.display 更新改用變更檢查鎖 (Diff Guard)，杜絕每秒 60 次觸發底層 DOM MutationObserver
+ *      - 羅盤小地圖改為僅在座標移動 >= 3px 時才重繪，徹底移除 renderWorld 內的 getBoundingClientRect()
+ *   2. 【第六章「紅蓮火山龍皇」明確定位與保底】：
+ *      - 確保 5.赤紅熔岩火山 東岸 (x:1120, y:240) 駐守【守關領主・紅蓮火山龍皇】，西岸 (x:780, y:420) 駐守【★紅蓮炎魔將(掉炎魔熔核)】
+ *      - 點擊左下角羅盤放大全區地圖時，直接標示「🔴紅蓮火山龍皇」位置
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
+  // ================= 0. 效能防抖工具（防止每幀重複修改 DOM 導致 Lag） =================
+  function setTextIfChanged(el, newText) {
+    if (!el) return;
+    if (el._lastTxt !== newText) {
+      el._lastTxt = newText;
+      el.innerText = newText;
+    }
+  }
+
+  function setClassIfChanged(el, newCls) {
+    if (!el) return;
+    if (el._lastCls !== newCls) {
+      el._lastCls = newCls;
+      el.className = newCls;
+    }
+  }
+
+  function setDisplayIfChanged(el, newDisp) {
+    if (!el) return;
+    if (el._lastDisp !== newDisp) {
+      el._lastDisp = newDisp;
+      el.style.display = newDisp;
+    }
+  }
+
   // ================= 1. 注入羅盤圖層修正、橋樑對齊與格仔工坊 CSS =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v117-styles")) return;
+    if (document.getElementById("srpg-kenney-v118-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v117-styles";
+    style.id = "srpg-kenney-v118-styles";
     style.textContent = `
       .kenney-terrain-canvas {
         position: absolute !important;
@@ -195,26 +224,17 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 掛載左下角「N/E/S/W 圓形羅盤小地圖」並確保不遮擋對話框 =================
+  // ================= 2. 掛載左下角「N/E/S/W 圓形羅盤小地圖」（僅在切換場景時掛載，零 Reflow 卡頓） =================
+  let cachedCompassCanvas = null;
   function mountGuaranteedCompassWidget() {
+    if (cachedCompassCanvas && document.body.contains(cachedCompassCanvas)) {
+      return cachedCompassCanvas;
+    }
     const upper = document.getElementById("upper-screen");
     if (!upper) return null;
 
-    const upperRect = upper.getBoundingClientRect();
-    Array.from(upper.children).forEach(function(ch) {
-      if (ch.id === "srpg-compass-widget" || ch.id === "world-viewport" ||
-          ch.id === "hud-overlay" || ch.id === "hud-hearts-box" ||
-          ch.id === "weather-fx-layer" || ch.id === "sleep-transition-overlay") {
-        return;
-      }
-      const r = ch.getBoundingClientRect();
-      if (ch.id === "minimap-box" || ch.id === "minimap" ||
-          (r.width > 25 && r.width < 135 && r.height > 20 && r.height < 115 && (r.left - upperRect.left) < 40 && (upperRect.bottom - r.bottom) < 40)) {
-        ch.style.display = "none";
-      } else if (r.width >= 160 && (upperRect.bottom - r.bottom) < 60) {
-        ch.style.zIndex = "95";
-      }
-    });
+    const oldMinimap = document.getElementById("minimap-box") || document.getElementById("minimap");
+    if (oldMinimap) oldMinimap.style.display = "none";
 
     let widget = document.getElementById("srpg-compass-widget");
     let canvas = document.getElementById("srpg-compass-canvas");
@@ -254,6 +274,7 @@ window.Aetheria = window.Aetheria || {};
 
       upper.appendChild(widget);
     }
+    cachedCompassCanvas = canvas;
     return canvas;
   }
 
@@ -270,6 +291,9 @@ window.Aetheria = window.Aetheria || {};
 
   let cachedTerrainCanvas = null;
   let cachedTerrainZoneId = "";
+  let lastMinimapHeroX = -999;
+  let lastMinimapHeroY = -999;
+  let lastMinimapZone = "";
 
   function seededHash(x, y, seed) {
     let h = (x * 374761393 + y * 668265263 + (seed || 0) * 1442695041) | 0;
@@ -502,6 +526,7 @@ window.Aetheria = window.Aetheria || {};
 
     cachedTerrainCanvas = canvas;
     cachedTerrainZoneId = mapObj.id;
+    lastMinimapZone = ""; // 強制下次更新羅盤
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
   }
 
@@ -571,9 +596,20 @@ window.Aetheria = window.Aetheria || {};
     ctx.restore();
   }
 
-  function renderCompassMinimap(mapObj, s) {
-    const mmCanvas = mountGuaranteedCompassWidget();
-    if (!mmCanvas || !mapObj || !s) return;
+  // ★ 效能優化版羅盤繪製：僅當主角移動 >= 3px 或切換地圖時才重繪 Canvas，消除每幀繪圖卡頓！
+  function renderCompassMinimap(mapObj, s, forceRedraw) {
+    if (!mapObj || !s) return;
+    const hx = s.heroX || 300;
+    const hy = s.heroY || 240;
+    if (!forceRedraw && lastMinimapZone === mapObj.id && Math.hypot(hx - lastMinimapHeroX, hy - lastMinimapHeroY) < 3) {
+      return;
+    }
+    lastMinimapHeroX = hx;
+    lastMinimapHeroY = hy;
+    lastMinimapZone = mapObj.id;
+
+    const mmCanvas = cachedCompassCanvas || mountGuaranteedCompassWidget();
+    if (!mmCanvas) return;
 
     const ctx = mmCanvas.getContext("2d");
     ctx.clearRect(0, 0, 96, 96);
@@ -581,8 +617,8 @@ window.Aetheria = window.Aetheria || {};
     ctx.fillRect(0, 0, 96, 96);
 
     const viewSpan = 680;
-    const sx = (s.heroX || 300) - viewSpan / 2;
-    const sy = (s.heroY || 240) - viewSpan / 2;
+    const sx = hx - viewSpan / 2;
+    const sy = hy - viewSpan / 2;
     const scale = 96 / viewSpan;
 
     if (cachedTerrainCanvas && cachedTerrainZoneId === mapObj.id) {
@@ -626,6 +662,16 @@ window.Aetheria = window.Aetheria || {};
       if (px >= -4 && px <= 100 && py >= -4 && py <= 100) {
         ctx.fillStyle = "#38b6ff";
         ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
+      }
+    });
+
+    (mapObj.monsters || []).forEach(function(m) {
+      if (m.alive === false || !m.isBoss) return;
+      const mx = (m.x - sx) * scale;
+      const my = (m.y - sy) * scale;
+      if (mx >= -4 && mx <= 100 && my >= -4 && my <= 100) {
+        ctx.beginPath(); ctx.arc(mx, my, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "#e03c4b"; ctx.fill();
       }
     });
 
@@ -874,15 +920,12 @@ window.Aetheria = window.Aetheria || {};
   };
 
   const COMPLETE_WORKSHOP_RECIPES = [
-    // --- 🧗 開路與照明 (explore) ---
     { id: "wk_rope_ladder",    name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",  toCount: 1, cost: { rope: 1, wood: 2 },          desc: "【★高低差開路必備】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！" },
     { id: "wk_crypt_key",      name: "鍛造遺跡鑰匙 x1",       category: "explore",  toKey: "cryptKey",    toCount: 1, cost: { mithril: 1, coal: 1 },       desc: "【★地底遺跡開鎖保底】若地面「✖」藏寶點的鑰匙已用完，可用秘銀與黑木炭直接鍛造【遠古遺跡鑰匙】！" },
     { id: "wk_torch",          name: "松脂火把 x2",           category: "explore",  toKey: "torchItem",   toCount: 2, cost: { branch: 1, resin: 1 },       desc: "【地牢與黑夜照明】點燃後照亮黑霧地牢，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！" },
     { id: "wk_quartz_lantern", name: "石英探礦提燈 (火把x4)", category: "explore",  toKey: "torchItem",   toCount: 4, cost: { iron: 1, quartz: 1, coal: 1 }, desc: "【強光照明】以鐵礦、石英砂與木炭打造，一次產出相當於 4 支火把的長效照明！" },
     { id: "wk_bomb",           name: "爆破炸彈 x2",           category: "explore",  toKey: "bombItem",    toCount: 2, cost: { flint: 2, clay: 1, resin: 1 }, desc: "【秘境開路】可炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱！" },
     { id: "wk_coal_bomb",      name: "黑火藥重型炸彈 x3",     category: "explore",  toKey: "bombItem",    toCount: 3, cost: { coal: 2, flint: 1 },         desc: "【高效爆破】以高台黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！" },
-
-    // --- 🔥 建材加工與任務特殊物資保底 (smelt) ---
     { id: "wk_plank",          name: "加工厚木板 x1",         category: "smelt",    toKey: "plank",       toCount: 1, cost: { wood: 2 },                   desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋與升級大帆船。" },
     { id: "wk_rope",           name: "強化麻繩索 x1",         category: "smelt",    toKey: "rope",        toCount: 1, cost: { vine: 2 },                   desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】與吊橋的必備材料。" },
     { id: "wk_rope_hemp",      name: "亞麻編織繩 x2",         category: "smelt",    toKey: "rope",        toCount: 2, cost: { hemp: 2 },                   desc: "【高效製繩】以峽谷荒野亞麻一次編織出 2 條強韌麻繩索。" },
@@ -891,8 +934,6 @@ window.Aetheria = window.Aetheria || {};
     { id: "wk_steel_cable",    name: "秘銀強化鋼索 x1",       category: "smelt",    toKey: "steelCable",  toCount: 1, cost: { mithril: 1, rope: 1 },       desc: "【高階建材】融合流沙秘銀與麻繩索打造的超強韌鋼索。" },
     { id: "wk_heavy_sail",     name: "防風重帆布 x1",         category: "smelt",    toKey: "heavySail",   toCount: 1, cost: { sailCloth: 2, rope: 1 },     desc: "【遠航建材】縫合幽靈古帆布與麻繩，用於建造破浪遠洋大帆船。" },
     { id: "wk_warm_fur",       name: "禦寒獸毛氈 x1",         category: "smelt",    toKey: "warmFur",     toCount: 1, cost: { sinew: 2, hemp: 1 },         desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。" },
-
-    // --- 🍖 口糧補給 (survival) ---
     { id: "wk_ration_jerky",   name: "岩鹽風乾肉脯 x2",       category: "survival", toKey: "rationJerky", toCount: 2, cost: { fish: 1, rockSalt: 1 },      desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！" },
     { id: "wk_ration_herb",    name: "烘烤微光菇乾 x2",       category: "survival", toKey: "rationHerb",  toCount: 2, cost: { herb: 1, branch: 1 },        desc: "【基礎口糧】食用每份可恢復 +35% 飽食度與 +25 HP。" },
     { id: "wk_ration_fish",    name: "炭烤鮮魚乾 x2",         category: "survival", toKey: "rationFish",  toCount: 2, cost: { fish: 1, branch: 1 },        desc: "【進階口糧】食用每份可恢復 +60% 飽食度與 +60 HP。" },
@@ -903,7 +944,6 @@ window.Aetheria = window.Aetheria || {};
   const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
   const REMOVED_DUPLICATE_ARMOR_IDS  = ["a_srpg_leather", "a_srpg_steel_mail", "a_srpg_highland_plate"];
 
-  // ★ 核心新增：自動掃描全遊戲 Data.MATERIALS，為所有怪物掉落／Boss 核心／章節橋樑建材建立「工坊 100% 保底合成配方」！
   let dynamicGuaranteedRecipes = [];
   function buildGuaranteedQuestMaterialRecipes() {
     const Data = window.Aetheria.Data;
@@ -927,7 +967,6 @@ window.Aetheria = window.Aetheria || {};
       if (!mObj || !mObj.name) return;
       const mName = mObj.name;
 
-      // 針對所有可能卡任務的特殊材料（即使原版已有配方也會確保存在，若無配方則自動建立保底提煉配方）
       let costMap = null;
       let count = 1;
       let descText = "";
@@ -955,11 +994,9 @@ window.Aetheria = window.Aetheria || {};
       } else if ((mName.indexOf("聖碑") !== -1 || mName.indexOf("殘片") !== -1) && !existingOutKeys[mKey]) {
         costMap = { starIron: 1, obsidian: 1, quartz: 1 };
         descText = "【★終章聖碑保底】除開啟各區地底遺跡石棺獲得外，亦可用星隕鐵與石英砂修復合成【" + mName + "】！";
-      } else if (mName.indexOf("浮空") !== -1 || mName.indexOf("天界") !== -1 || mName.indexOf("星輝") !== -1) {
-        if (!existingOutKeys[mKey]) {
-          costMap = { starIron: 1, quartz: 2 };
-          descText = "【★終章天界建材保底】以深淵星隕鐵與透明石英砂鍛造【" + mName + "】！";
-        }
+      } else if ((mName.indexOf("浮空") !== -1 || mName.indexOf("天界") !== -1 || mName.indexOf("星輝") !== -1) && !existingOutKeys[mKey]) {
+        costMap = { starIron: 1, quartz: 2 };
+        descText = "【★終章天界建材保底】以深淵星隕鐵與透明石英砂鍛造【" + mName + "】！";
       }
 
       if (costMap) {
@@ -1013,14 +1050,11 @@ window.Aetheria = window.Aetheria || {};
         s.equippedArmor = (s.unlockedArmors && s.unlockedArmors.length > 0) ? s.unlockedArmors[s.unlockedArmors.length - 1] : "a_cloth";
       }
 
-      // ★ 自動修復：若玩家已修好第 5 區火山石拱橋 (proj_z5_bridge)，自動確保背包內至少有 3 塊「黑曜耐火磚」，徹底解決截圖中 2/3 卡任務的問題！
       if (s.projectsBuilt && s.projectsBuilt.proj_z5_bridge && Data.MATERIALS) {
         Object.keys(Data.MATERIALS).forEach(function(mk) {
           const m = Data.MATERIALS[mk];
           if (m && m.name && m.name.indexOf("耐火磚") !== -1) {
-            if ((s.inventory[mk] || 0) < 3) {
-              s.inventory[mk] = 3;
-            }
+            if ((s.inventory[mk] || 0) < 3) s.inventory[mk] = 3;
           }
         });
       }
@@ -1042,7 +1076,6 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // 輔助函式：按名稱關鍵字尋找 Data.MATERIALS 內的真實材料 key
   function findMatKeyByNameKeyword(keyword, fallbackKey) {
     const mats = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
     const found = Object.keys(mats).find(function(k) {
@@ -1051,9 +1084,12 @@ window.Aetheria = window.Aetheria || {};
     return found || fallbackKey;
   }
 
-  // ================= 6. 曙光營地三帳篷門口對齊踏墊 (y=86) =================
+  // ================= 6. ★ 曙光營地三帳篷調整（加入 _campTentsAdjustedToken 快取鎖，不再每幀重複跑！） =================
   function adjustCampTentsUpward(campMap) {
     if (!campMap || campMap.id !== "camp_hub") return campMap;
+    const token = campMap._refreshToken || "init";
+    if (campMap._campTentsAdjustedToken === token) return campMap;
+    campMap._campTentsAdjustedToken = token;
 
     campMap.decos = (campMap.decos || []).filter(function(d) {
       return !d.isCampHerbFarm && !d.isCampFishTrap && !d.isMuseumBuilding && !d.isTrainingDummy;
@@ -1072,7 +1108,7 @@ window.Aetheria = window.Aetheria || {};
 
     (campMap.portals || []).forEach(function(p) {
       if (p.targetZone === "tent_guild" || p.targetZone === "tent_hero" || p.targetZone === "tent_forge") {
-        p.y = 86;
+        p.y = 84;
       }
     });
 
@@ -1088,7 +1124,7 @@ window.Aetheria = window.Aetheria || {};
         const tm = Maps.getMap(tZone);
         if (tm && tm.portals) {
           tm.portals.forEach(function(ep) {
-            if (ep.targetZone === "camp_hub") ep.targetY = 118;
+            if (ep.targetZone === "camp_hub") ep.targetY = 116;
           });
         }
       });
@@ -1228,14 +1264,14 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 8. 各區高低差懸崖、山洞 (grotto_*) 與隱藏地底遺跡 (crypt_*) =================
+  // ================= 8. 各區高低差懸崖、山洞 (grotto_*)、地底遺跡 (crypt_*) 與第六章【紅蓮火山龍皇】定位 =================
   const HIGHLAND_ZONES = {
     zone1_forest:   { targetW: 1680, targetH: 1180, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"],   cryptName: "翠風古老樹根地窖", cryptBoss: "★遠古樹根守衛魔像" },
     cave1_mushroom: { targetW: 1580, targetH: 1140, ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "幽窟地底秘銀聖堂", cryptBoss: "★秘銀晶簇鎮守魔像" },
     zone2_canyon:   { targetW: 1680, targetH: 1180, ores: ["mithril", "quartz", "rockSalt", "coal"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "流沙埋沒法老王陵", cryptBoss: "★荒漠王陵黃金魔像" },
     zone3_coast:    { targetW: 1680, targetH: 1180, ores: ["coral", "sailCloth", "rockSalt", "quartz"],  grottoOres: ["coral", "sailCloth", "rockSalt", "mithril"],cryptName: "海底亞特蘭蒂斯密室", cryptBoss: "★深海遺跡三叉戟魔像" },
     zone4_snow:     { targetW: 1680, targetH: 1180, ores: ["obsidian", "sinew", "iceLotus", "quartz"],   grottoOres: ["obsidian", "sinew", "coal", "mithril"],cryptName: "永凍冰河遠古神殿", cryptBoss: "★極寒永凍冰晶魔像" },
-    zone5_volcano:  { targetW: 1680, targetH: 1180, ores: ["obsidian", "starIron", "coal", "quartz"],    grottoOres: ["obsidian", "starIron", "coal", "quartz"],cryptName: "地心黑曜熔爐秘殿", cryptBoss: "★地心黑曜神鐵魔像" },
+    zone5_volcano:  { targetW: 1680, targetH: 1180, ores: ["obsidian", "starIron", "coal", "quartz"],    grottoOres: ["obsidian", "starIron", "coal", "quartz"],cryptName: "地心黑曜熔爐秘殿", cryptBoss: "★紅蓮火山龍皇・分身" },
     zone6_sky:      { targetW: 1680, targetH: 1180, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "goldLeaf", "quartz", "obsidian"],cryptName: "星界破曉創世密室", cryptBoss: "★創世星隕守護神像" }
   };
 
@@ -1248,7 +1284,6 @@ window.Aetheria = window.Aetheria || {};
     const parentMap = (window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(parentZoneId)) || { recLv: 3 };
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
 
-    // 在第 5 區火山的岩壁礦洞內，直接額外放入「熔岩龍鱗」與「炎魔熔核」礦簇，保證玩家不靠運氣也能採集到！
     const grottoPool = cfg.grottoOres.slice();
     if (parentZoneId === "zone5_volcano") {
       grottoPool.push(findMatKeyByNameKeyword("龍鱗", "obsidian"));
@@ -1325,7 +1360,7 @@ window.Aetheria = window.Aetheria || {};
       monsters: [{
         id: "crypt_guardian_" + parentZoneId + "_" + Date.now(),
         name: cfg.cryptBoss || "★遠古遺跡守衛魔像", lv: bossLv, x: 280, y: 165, homeX: 280, homeY: 165,
-        type: "boss", isBoss: false, isShiny: true, isCryptGuardian: true, alive: true
+        type: "boss", isBoss: (parentZoneId === "zone5_volcano"), isShiny: true, isCryptGuardian: true, alive: true
       }],
       portals: [{ id: "p_exit_crypt_" + parentZoneId, name: "離開地底遺跡 ▾", x: 280, y: 318, targetZone: parentZoneId, targetX: 935, targetY: 1055, icon: "stairs" }]
     };
@@ -1384,11 +1419,41 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (mapObj.monsters) {
+      mapObj.monsters = mapObj.monsters.filter(function(m) { return !m.isVolcanoHelperSubBoss; });
       mapObj.monsters.forEach(function(m) {
         if (!m.isBoss && isBlockedByCliffFromLowland(m.x, m.y)) {
           m.x = 240; m.y = 720; m.homeX = 240; m.homeY = 720;
         }
       });
+
+      // ★ 確保「5. 赤紅熔岩火山 (zone5_volcano)」東岸 (x:1120, y:240) 明確駐守【守關領主・紅蓮火山龍皇】，西岸駐守【★紅蓮炎魔將(掉炎魔熔核)】！
+      if (mapObj.id === "zone5_volcano") {
+        let volcanoBoss = mapObj.monsters.find(function(m) { return m && m.isBoss; });
+        if (volcanoBoss) {
+          volcanoBoss.name = "守關領主・紅蓮火山龍皇";
+          volcanoBoss.x = 1120;
+          volcanoBoss.y = 240;
+          volcanoBoss.homeX = 1120;
+          volcanoBoss.homeY = 240;
+        } else {
+          mapObj.monsters.push({
+            id: "boss_zone5_volcano_dragon",
+            name: "守關領主・紅蓮火山龍皇",
+            lv: (mapObj.recLv || 22) + 3,
+            x: 1120, y: 240, homeX: 1120, homeY: 240,
+            type: "boss", isBoss: true, alive: true
+          });
+        }
+
+        // 在火山西岸 (不用過橋的 x:780, y:420) 額外放置一隻「★紅蓮炎魔將(掉炎魔熔核)」
+        mapObj.monsters.push({
+          id: "volcano_flame_core_subboss_" + token,
+          name: "★紅蓮炎魔將[掉熔核]",
+          lv: mapObj.recLv || 22,
+          x: 780, y: 420, homeX: 780, homeY: 420,
+          type: "skull", isBoss: false, isShiny: true, isVolcanoHelperSubBoss: true, alive: true
+        });
+      }
     }
 
     mapObj.dirtBlobs = (mapObj.dirtBlobs || []).filter(function(b) { return !b.isExpandedBlob; });
@@ -1415,7 +1480,6 @@ window.Aetheria = window.Aetheria || {};
       { id: "crypt_entrance_" + mapObj.id,     x: 935, y: 1015, sprite: cryptUnlocked ? "crypt_door_open" : "crypt_door_locked", w: 34, h: 34, solid: false, isHighlandElement: true, isCryptEntrance: true, zoneId: mapObj.id }
     );
 
-    // 高台礦簇（第 5 區火山高台直接包含「熔岩龍鱗」與「炎魔熔核」採集點！）
     const plateauOres = cfg.ores.slice();
     if (mapObj.id === "zone5_volcano") {
       plateauOres[1] = findMatKeyByNameKeyword("龍鱗", "obsidian");
@@ -1562,9 +1626,9 @@ window.Aetheria = window.Aetheria || {};
       (mapObj.monsters || []).forEach(function(m) {
         if (m.alive === false || !m.isBoss) return;
         const mx = m.x * scaleX, my = m.y * scaleY;
-        ctx.beginPath(); ctx.arc(mx, my, 6.5, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(mx, my, 7.5, 0, Math.PI * 2);
         ctx.fillStyle = "#e03c4b"; ctx.fill();
-        ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 2; ctx.stroke();
       });
 
       const hx = (s.heroX || 300) * scaleX, hy = (s.heroY || 240) * scaleY;
@@ -1582,14 +1646,14 @@ window.Aetheria = window.Aetheria || {};
         '<span>🟨 <b>秘寶箱/機關陣</b></span>' +
         '<span>🟪 <b>地底遺跡門</b></span>' +
         '<span>🟦 <b>山洞/傳送口</b></span>' +
-        '<span>🔴 <b>區域首領</b></span>';
+        '<span>🔴 <b>區域首領(龍皇)</b></span>';
       body.appendChild(legend);
 
       canvas.onclick = function(ev) {
         const rect = canvas.getBoundingClientRect();
         const clickX = Math.round(((ev.clientX - rect.left) / rect.width) * W);
         const clickY = Math.round(((ev.clientY - rect.top) / rect.height) * H);
-        window.Aetheria.UI.showToast("🧭 地圖座標 (" + clickX + ", " + clickY + ")｜對照黃圈紅 ✖ 與地形前往探索吧！");
+        window.Aetheria.UI.showToast("🧭 地圖座標 (" + clickX + ", " + clickY + ")｜對照黃圈紅 ✖ 與 🔴首領標記前往探索吧！");
       };
     },
 
@@ -2045,7 +2109,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 10. 掛載系統（含任務掉落保底與修橋建材保留） =================
+  // ================= 10. 掛載系統（極速防抖 + 龍皇擊敗保底） =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -2094,7 +2158,7 @@ window.Aetheria = window.Aetheria || {};
         Object.keys(grottoMapsCache).forEach(function(k) { delete grottoMapsCache[k]; });
         Object.keys(cryptMapsCache).forEach(function(k) { delete cryptMapsCache[k]; });
         const camp = origGetMap("camp_hub");
-        if (camp) adjustCampTentsUpward(camp);
+        if (camp) { camp._campTentsAdjustedToken = null; adjustCampTentsUpward(camp); }
         Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
           const m = origGetMap(zId);
           if (m) { m._highlandInjectedToken = null; injectHighlandCliffIntoMap(m); }
@@ -2345,7 +2409,6 @@ window.Aetheria = window.Aetheria || {};
           }
         }
 
-        // ★ 保護修橋建材：記錄呼叫 origInteract 前的耐火磚/建材數量，若此次互動建成了橋樑，自動補回任務檢查所需的建材！
         const brickKey = findMatKeyByNameKeyword("耐火磚", null);
         const beforeBrick = (brickKey && s.inventory) ? (s.inventory[brickKey] || 0) : 0;
         const wasVolcanoBridgeBuilt = Boolean(s.projectsBuilt && s.projectsBuilt.proj_z5_bridge);
@@ -2359,6 +2422,7 @@ window.Aetheria = window.Aetheria || {};
         }
       };
 
+      // ★ 效能優化：A 鍵提示文字僅在文字有變動時才更新 DOM，徹底消除經過帳篷文字時的 Lag！
       const origHint = Exp.updateContextHint.bind(Exp);
       Exp.updateContextHint = function(mapObj, s) {
         const hintEl = document.getElementById("a-btn-hint");
@@ -2367,8 +2431,8 @@ window.Aetheria = window.Aetheria || {};
             for (let pIdx = 0; pIdx < mapObj.portals.length; pIdx++) {
               const pt = mapObj.portals[pIdx];
               if (pt && (pt.targetZone === "tent_guild" || pt.targetZone === "tent_hero" || pt.targetZone === "tent_forge") &&
-                  Math.hypot(s.heroX - pt.x, s.heroY - pt.y) < 44) {
-                hintEl.innerText = "進入帳篷";
+                  Math.hypot(s.heroX - pt.x, s.heroY - pt.y) < 42) {
+                setTextIfChanged(hintEl, "進入帳篷");
                 return;
               }
             }
@@ -2379,11 +2443,11 @@ window.Aetheria = window.Aetheria || {};
               const n = mapObj.nodes[j];
               if (!n || n.opened) continue;
               if (n.isExplorePuzzleChest && Math.hypot(s.heroX - n.x, s.heroY - n.y) < (puzzleDone ? 78 : 44)) {
-                hintEl.innerText = "開啟秘寶箱";
+                setTextIfChanged(hintEl, "開啟秘寶箱");
                 return;
               }
               if (n.isBuriedSpot && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 42) {
-                hintEl.innerText = "鐵鏟挖寶";
+                setTextIfChanged(hintEl, "鐵鏟挖寶");
                 return;
               }
             }
@@ -2392,18 +2456,18 @@ window.Aetheria = window.Aetheria || {};
             for (let i = 0; i < mapObj.decos.length; i++) {
               const d = mapObj.decos[i];
               if (!d) continue;
-              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) { hintEl.innerText = "閱讀古碑"; return; }
-              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { hintEl.innerText = puzzleDone ? "開啟秘寶箱" : "點燃火盆"; return; }
-              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { hintEl.innerText = puzzleDone ? "開啟秘寶箱" : "旋轉石像"; return; }
-              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { hintEl.innerText = puzzleDone ? "開啟秘寶箱" : "扳動拉桿"; return; }
+              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) { setTextIfChanged(hintEl, "閱讀古碑"); return; }
+              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "點燃火盆"); return; }
+              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "旋轉石像"); return; }
+              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "扳動拉桿"); return; }
               if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
                 const open = Boolean(s.unlockedCrypts && s.unlockedCrypts[d.zoneId || mapObj.id]);
-                hintEl.innerText = open ? "進入遺跡" : "鑰匙開鎖";
+                setTextIfChanged(hintEl, open ? "進入遺跡" : "鑰匙開鎖");
                 return;
               }
               if (d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
                 const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
-                hintEl.innerText = !rigged ? "架設繩梯" : (s.onHighland ? "爬下懸崖" : "爬上高台");
+                setTextIfChanged(hintEl, !rigged ? "架設繩梯" : (s.onHighland ? "爬下懸崖" : "爬上高台"));
                 return;
               }
             }
@@ -2477,7 +2541,7 @@ window.Aetheria = window.Aetheria || {};
           s.dugSpots[node.id] = true;
           if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
             const domNode = window.Aetheria.Renderer.domPool.nodes[node.id];
-            if (domNode && domNode.el) domNode.el.style.display = "none";
+            if (domNode && domNode.el) setDisplayIfChanged(domNode.el, "none");
           }
           window.Aetheria.Audio.sfxLevelUp();
 
@@ -2535,11 +2599,12 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // ★ 戰鬥勝利保底掉落：在第 3/4/5/6 區打贏任何魔物時，若背包內缺少該區關鍵任務掉落物（海妖核心、古帆布、獸筋、熔岩龍鱗、炎魔熔核），100% 保底贈送！
+    // ★ 戰鬥勝利保底：在火山擊敗「紅蓮火山龍皇」或地底「紅蓮火山龍皇・分身」時，同步標記 zone5_volcano 首領已擊敗並贈送炎魔熔核！
     if (Bat && Bat.winBattle) {
       const origWin = Bat.winBattle.bind(Bat);
       Bat.winBattle = function() {
         const isCombat = (this.mode === "combat");
+        const ref = this.mapMonsterRef;
         origWin();
         if (isCombat) {
           const s = window.Aetheria.State.data;
@@ -2557,6 +2622,16 @@ window.Aetheria = window.Aetheria || {};
             const coreKey  = findMatKeyByNameKeyword("熔核", null);
             if (scaleKey && (s.inventory[scaleKey] || 0) < 3) s.inventory[scaleKey] = (s.inventory[scaleKey] || 0) + 1;
             if (coreKey && (s.inventory[coreKey] || 0) < 2)   s.inventory[coreKey]  = (s.inventory[coreKey] || 0) + 1;
+
+            // 若擊敗的是火山首領或火山遺跡龍皇，確保所有火山龍皇擊殺旗標生效
+            if (ref && (ref.isBoss || (ref.name && ref.name.indexOf("龍皇") !== -1))) {
+              if (!s.bossesDefeated) s.bossesDefeated = {};
+              s.bossesDefeated.zone5_volcano = true;
+              const vMap = window.Aetheria.Data.Maps.getMap("zone5_volcano");
+              if (vMap && vMap.monsters) {
+                vMap.monsters.forEach(function(m) { if (m && m.isBoss) m.alive = false; });
+              }
+            }
           }
           window.Aetheria.State.save();
           if (window.Aetheria.UI) window.Aetheria.UI.updateAllHud();
@@ -2567,7 +2642,7 @@ window.Aetheria = window.Aetheria || {};
     if (Ren) {
       if (Ren.updateMinimap) {
         Ren.updateMinimap = function(mapObj, s) {
-          renderCompassMinimap(mapObj, s);
+          renderCompassMinimap(mapObj, s, false);
         };
       }
 
@@ -2612,8 +2687,12 @@ window.Aetheria = window.Aetheria || {};
             if (item.lbl) item.el.appendChild(item.lbl);
           }
         });
+
+        const s = window.Aetheria.State && window.Aetheria.State.data;
+        if (s) renderCompassMinimap(mapObj, s, true);
       };
 
+      // ★ 極速版 renderWorld：所有 DOM 屬性與圖片僅在狀態改變時才更新，完全消除每幀重繪卡頓！
       const origRender = Ren.renderWorld.bind(Ren);
       Ren.renderWorld = function() {
         origRender();
@@ -2625,8 +2704,7 @@ window.Aetheria = window.Aetheria || {};
           const cryptOpen = Boolean(s && s.unlockedCrypts && s.unlockedCrypts[s.currentZone]);
 
           if (mapObj) {
-            renderCompassMinimap(mapObj, s);
-            isZoneExplorePuzzleSolved(mapObj, s);
+            renderCompassMinimap(mapObj, s, false);
           }
 
           Object.keys(this.domPool.decos || {}).forEach(function(k) {
@@ -2635,44 +2713,63 @@ window.Aetheria = window.Aetheria || {};
             const d = item.data;
 
             if (d.isCliffLadderSpot) {
-              if (item.img && S) item.img.src = S.getDataURL(rigged ? "rope_ladder" : "cliff_stake");
+              const sprKey = rigged ? "rope_ladder" : "cliff_stake";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
               if (item.lbl) {
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label ladder-spot-lbl";
-                item.lbl.innerText = rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯";
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label ladder-spot-lbl");
+                setTextIfChanged(item.lbl, rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯");
               }
             } else if (d.isCryptEntrance) {
-              if (item.img && S) item.img.src = S.getDataURL(cryptOpen ? "crypt_door_open" : "crypt_door_locked");
+              const sprKey = cryptOpen ? "crypt_door_open" : "crypt_door_locked";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
               if (item.lbl) {
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label crypt-door-lbl";
-                item.lbl.innerText = cryptOpen ? "🏛️地底遺跡(已開)" : "🔒地底遺跡[需鑰匙]";
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label crypt-door-lbl");
+                setTextIfChanged(item.lbl, cryptOpen ? "🏛️地底遺跡(已開)" : "🔒地底遺跡[需鑰匙]");
               }
             } else if (d.isExplorePuzzleTablet && item.lbl) {
-              item.lbl.style.display = "block";
-              item.lbl.className = "dom-label puzzle-mech-lbl";
-              item.lbl.innerText = "📜古碑謎語";
+              setDisplayIfChanged(item.lbl, "block");
+              setClassIfChanged(item.lbl, "dom-label puzzle-mech-lbl");
+              setTextIfChanged(item.lbl, "📜古碑謎語");
             } else if (d.isPuzzleOrderBrazier) {
-              if (item.img && S) item.img.src = S.getDataURL(d.lit ? "brazier_on" : "brazier_off");
+              const sprKey = d.lit ? "brazier_on" : "brazier_off";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
               if (item.lbl) {
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label " + (d.lit ? "puzzle-mech-on" : "puzzle-mech-lbl");
-                item.lbl.innerText = (d.lit ? "🔥" : "") + d.brazierLabel;
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label " + (d.lit ? "puzzle-mech-on" : "puzzle-mech-lbl"));
+                setTextIfChanged(item.lbl, (d.lit ? "🔥" : "") + d.brazierLabel);
               }
             } else if (d.isPuzzleRotateStatue) {
-              if (item.img && S) item.img.src = S.getDataURL("ancient_statue");
+              if (item.img && S && item.img._lastSpr !== "ancient_statue") {
+                item.img._lastSpr = "ancient_statue";
+                item.img.src = S.getDataURL("ancient_statue");
+              }
               if (item.lbl) {
                 const matched = (d.curDir === d.targetDir);
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label " + (matched ? "puzzle-mech-on" : "puzzle-mech-lbl");
-                item.lbl.innerText = d.statueName + ":" + DIR_SYMBOLS[d.curDir || 0];
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label " + (matched ? "puzzle-mech-on" : "puzzle-mech-lbl"));
+                setTextIfChanged(item.lbl, d.statueName + ":" + DIR_SYMBOLS[d.curDir || 0]);
               }
             } else if (d.isPuzzleToggleLever) {
-              if (item.img && S) item.img.src = S.getDataURL(d.leverOn ? "lever_on" : "lever_off");
+              const sprKey = d.leverOn ? "lever_on" : "lever_off";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
               if (item.lbl) {
-                item.lbl.style.display = "block";
-                item.lbl.className = "dom-label " + (d.leverOn ? "puzzle-mech-on" : "puzzle-mech-lbl");
-                item.lbl.innerText = "拉桿" + (d.leverIdx + 1) + (d.leverOn ? "[🟢開]" : "[🔴關]");
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label " + (d.leverOn ? "puzzle-mech-on" : "puzzle-mech-lbl"));
+                setTextIfChanged(item.lbl, "拉桿" + (d.leverIdx + 1) + (d.leverOn ? "[🟢開]" : "[🔴關]"));
               }
             }
           });
@@ -2682,13 +2779,13 @@ window.Aetheria = window.Aetheria || {};
             if (!item || !item.data || !item.lbl) return;
             const n = item.data;
             if (n.opened || (n.isBuriedSpot && s.dugSpots && s.dugSpots[n.id])) {
-              item.el.style.display = "none";
-              item.lbl.style.display = "none";
+              setDisplayIfChanged(item.el, "none");
+              setDisplayIfChanged(item.lbl, "none");
               return;
             }
             if (n.type === "chest") return;
             const dist = Math.hypot((s.heroX || 0) - n.x, (s.heroY || 0) - n.y);
-            item.lbl.style.display = (dist < (n.isBuriedSpot ? 85 : 62)) ? "block" : "none";
+            setDisplayIfChanged(item.lbl, (dist < (n.isBuriedSpot ? 85 : 62)) ? "block" : "none");
           });
         } catch (e) {}
       };
@@ -2747,7 +2844,7 @@ window.Aetheria = window.Aetheria || {};
       const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
       if (Maps && Maps.getMap) {
         const camp = Maps.getMap("camp_hub");
-        if (camp) adjustCampTentsUpward(camp);
+        if (camp) { camp._campTentsAdjustedToken = null; adjustCampTentsUpward(camp); }
         Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
           const m = Maps.getMap(zId);
           if (m) { m._highlandInjectedToken = null; injectHighlandCliffIntoMap(m); }
@@ -2765,7 +2862,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG All-Maps Fix v11.7 init error:", err);
+      console.error("Survival RPG Performance & Volcano Boss v11.8 init error:", err);
     }
   }
 
