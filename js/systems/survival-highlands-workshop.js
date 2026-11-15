@@ -1,20 +1,19 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 羅盤圖層、機關開箱與帳篷入口修復模組 (survival-highlands-workshop.js - v11.6)
- * 實機截圖 3 大問題修正：
- *   1. 【修復圖1羅盤遮擋文字】：降低羅盤 z-index 至 18，並將底部對話/提示文字框提升至 z-index:95，文字 100% 完整顯示不被遮蓋
- *   2. 【修復圖2機關寶箱開唔到】：拉開石像/火盆間距並取消卡位，當機關全部變綠解開後，走近寶箱或外圍按 A 鍵即可直接開箱領獎
- *   3. 【修復圖3入唔到帳幕】：將營地北面三個帳篷門口對齊至踏墊 (y=86)，走到門口或按 A 鍵即可順暢進入帳篷
+ * Project J：艾瑟瑞亞的破曉 — 任務物資100%保底、羅盤大圖與機關解謎模組 (survival-highlands-workshop.js - v11.7)
+ * 核心修正與保障：
+ *   1. 【全任務物品 100% 保底途徑】：自動掃描全遊戲材料庫，確保「黑曜耐火磚、炎魔熔核、熔岩龍鱗、海妖核心、幽靈古帆布、強韌獸筋、聖碑殘片、遠古遺跡鑰匙」皆可在工坊合成，並於各區高台/打怪保底掉落！
+ *   2. 【修橋不倒退任務進度】：在河邊工程牌投入建材修橋後，自動保留主線任務所需的建材計數，不再出現修完橋反而變成 2/3 的問題
+ *   3. 【包含 v11.6 全部修復】：羅盤不遮擋底部對話文字、四方石像解開後按 A 鍵直接開寶箱、營地北面三個帳篷走到門口踏墊即可順暢進入
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
   // ================= 1. 注入羅盤圖層修正、橋樑對齊與格仔工坊 CSS =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v116-styles")) return;
+    if (document.getElementById("srpg-kenney-v117-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v116-styles";
+    style.id = "srpg-kenney-v117-styles";
     style.textContent = `
-      /* Kenney 16x16 像素地貌底圖 Canvas */
       .kenney-terrain-canvas {
         position: absolute !important;
         left: 0 !important;
@@ -36,7 +35,7 @@ window.Aetheria = window.Aetheria || {};
       #world-terrain-layer .dom-coast-sea   { z-index: 3 !important; }
       #world-terrain-layer .dom-wooden-pier { z-index: 4 !important; }
 
-      /* ★ 修復圖1：將圓形羅盤 z-index 設為 18，並強制所有底部對話框/Toast 提示框浮在羅盤上方 (z-index: 95)！ */
+      /* 左下角圓形羅盤設為 z-index: 18，確保底部對話框/古碑提示 (z-index: 95) 永遠浮在羅盤上方不被遮蓋 */
       #minimap-box, .srpg-compass-box {
         position: absolute !important;
         width: 76px !important;
@@ -57,7 +56,6 @@ window.Aetheria = window.Aetheria || {};
       #minimap-box:active, .srpg-compass-box:active {
         transform: scale(0.94) !important;
       }
-      /* 確保對話框、古碑提示框與 Toast 永遠在羅盤之上，絕不被遮蓋 */
       #toast-box, #dialog-box, #msg-box, #story-box,
       [id*="toast"], [class*="toast"], [id*="dialog"], [class*="dialog"] {
         z-index: 95 !important;
@@ -106,7 +104,6 @@ window.Aetheria = window.Aetheria || {};
         box-shadow: 0 1px 3px #000;
       }
 
-      /* 點擊放大「全區全貌大圖」檢視器 */
       .fullmap-stage-wrap {
         position: relative;
         width: 100%;
@@ -215,7 +212,6 @@ window.Aetheria = window.Aetheria || {};
           (r.width > 25 && r.width < 135 && r.height > 20 && r.height < 115 && (r.left - upperRect.left) < 40 && (upperRect.bottom - r.bottom) < 40)) {
         ch.style.display = "none";
       } else if (r.width >= 160 && (upperRect.bottom - r.bottom) < 60) {
-        // 若是底部長條形的對話/Toast 訊息框，強制設為高圖層 (z-index: 95) 壓在羅盤上方！
         ch.style.zIndex = "95";
       }
     });
@@ -798,10 +794,10 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 5. 素材、6大工具與工坊配方定義 =================
+  // ================= 5. 素材、6大工具與工坊配方（含全任務物品 100% 保底合成鏈） =================
   const CLEAN_SRPG_MATERIALS = {
-    cryptKey:    { id: "cryptKey",    name: "遠古遺跡鑰匙", tier: 2, desc: "【尋寶挖掘】用探險鐵鏟挖掘地面唯一「✖」藏寶記號獲得，可解鎖各區的【🔒遠古地底遺跡】！" },
-    coal:        { id: "coal",        name: "黑曜木炭",     tier: 1, desc: "【高台/山洞礦產】採集自懸崖高台與岩壁山洞，可用於配製高效炸彈。" },
+    cryptKey:    { id: "cryptKey",    name: "遠古遺跡鑰匙", tier: 2, desc: "【尋寶挖掘/工坊鍛造】用探險鐵鏟挖掘地面「✖」藏寶點或於工坊鍛造，可解鎖各區的【🔒遠古地底遺跡】！" },
+    coal:        { id: "coal",        name: "黑曜木炭",     tier: 1, desc: "【高台/山洞礦產】採集自懸崖高台與岩壁山洞，可用於配製高效炸彈與耐火建材。" },
     quartz:      { id: "quartz",      name: "透明石英砂",   tier: 2, desc: "【高台晶礦】採集自懸崖高台與山洞，可用於燒製藥水瓶與探礦照明。" },
     rockSalt:    { id: "rockSalt",    name: "結晶岩鹽",     tier: 1, desc: "【高台礦產】採集自懸崖高台，可醃製長效保存的岩鹽風乾肉脯。" },
     ropeLadder:  { id: "ropeLadder",  name: "攀岩繩梯",     tier: 1, desc: "【高低差開路工具】由麻繩與原木編織而成，可架設在各區南側懸崖壁上攀爬至高台礦區！" },
@@ -816,7 +812,7 @@ window.Aetheria = window.Aetheria || {};
   ];
 
   const REMOVED_BLOAT_RECIPE_IDS = [
-    "wk_crypt_key", "wk_gear_gasmask", "wk_gear_lantern", "wk_gear_goggles",
+    "wk_gear_gasmask", "wk_gear_lantern", "wk_gear_goggles",
     "wk_gear_diving", "wk_gear_furcoat", "wk_gear_heatshield", "wk_gear_skyaegis",
     "wk_charcoal", "wk_steel_ingot", "wk_cured_leather", "wk_bark_rope",
     "wk_elixir_atk", "wk_elixir_hp", "wk_elixir_def", "wk_cactus_ration"
@@ -878,11 +874,15 @@ window.Aetheria = window.Aetheria || {};
   };
 
   const COMPLETE_WORKSHOP_RECIPES = [
+    // --- 🧗 開路與照明 (explore) ---
     { id: "wk_rope_ladder",    name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",  toCount: 1, cost: { rope: 1, wood: 2 },          desc: "【★高低差開路必備】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！" },
+    { id: "wk_crypt_key",      name: "鍛造遺跡鑰匙 x1",       category: "explore",  toKey: "cryptKey",    toCount: 1, cost: { mithril: 1, coal: 1 },       desc: "【★地底遺跡開鎖保底】若地面「✖」藏寶點的鑰匙已用完，可用秘銀與黑木炭直接鍛造【遠古遺跡鑰匙】！" },
     { id: "wk_torch",          name: "松脂火把 x2",           category: "explore",  toKey: "torchItem",   toCount: 2, cost: { branch: 1, resin: 1 },       desc: "【地牢與黑夜照明】點燃後照亮黑霧地牢，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！" },
     { id: "wk_quartz_lantern", name: "石英探礦提燈 (火把x4)", category: "explore",  toKey: "torchItem",   toCount: 4, cost: { iron: 1, quartz: 1, coal: 1 }, desc: "【強光照明】以鐵礦、石英砂與木炭打造，一次產出相當於 4 支火把的長效照明！" },
     { id: "wk_bomb",           name: "爆破炸彈 x2",           category: "explore",  toKey: "bombItem",    toCount: 2, cost: { flint: 2, clay: 1, resin: 1 }, desc: "【秘境開路】可炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱！" },
     { id: "wk_coal_bomb",      name: "黑火藥重型炸彈 x3",     category: "explore",  toKey: "bombItem",    toCount: 3, cost: { coal: 2, flint: 1 },         desc: "【高效爆破】以高台黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！" },
+
+    // --- 🔥 建材加工與任務特殊物資保底 (smelt) ---
     { id: "wk_plank",          name: "加工厚木板 x1",         category: "smelt",    toKey: "plank",       toCount: 1, cost: { wood: 2 },                   desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋與升級大帆船。" },
     { id: "wk_rope",           name: "強化麻繩索 x1",         category: "smelt",    toKey: "rope",        toCount: 1, cost: { vine: 2 },                   desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】與吊橋的必備材料。" },
     { id: "wk_rope_hemp",      name: "亞麻編織繩 x2",         category: "smelt",    toKey: "rope",        toCount: 2, cost: { hemp: 2 },                   desc: "【高效製繩】以峽谷荒野亞麻一次編織出 2 條強韌麻繩索。" },
@@ -891,6 +891,8 @@ window.Aetheria = window.Aetheria || {};
     { id: "wk_steel_cable",    name: "秘銀強化鋼索 x1",       category: "smelt",    toKey: "steelCable",  toCount: 1, cost: { mithril: 1, rope: 1 },       desc: "【高階建材】融合流沙秘銀與麻繩索打造的超強韌鋼索。" },
     { id: "wk_heavy_sail",     name: "防風重帆布 x1",         category: "smelt",    toKey: "heavySail",   toCount: 1, cost: { sailCloth: 2, rope: 1 },     desc: "【遠航建材】縫合幽靈古帆布與麻繩，用於建造破浪遠洋大帆船。" },
     { id: "wk_warm_fur",       name: "禦寒獸毛氈 x1",         category: "smelt",    toKey: "warmFur",     toCount: 1, cost: { sinew: 2, hemp: 1 },         desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。" },
+
+    // --- 🍖 口糧補給 (survival) ---
     { id: "wk_ration_jerky",   name: "岩鹽風乾肉脯 x2",       category: "survival", toKey: "rationJerky", toCount: 2, cost: { fish: 1, rockSalt: 1 },      desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！" },
     { id: "wk_ration_herb",    name: "烘烤微光菇乾 x2",       category: "survival", toKey: "rationHerb",  toCount: 2, cost: { herb: 1, branch: 1 },        desc: "【基礎口糧】食用每份可恢復 +35% 飽食度與 +25 HP。" },
     { id: "wk_ration_fish",    name: "炭烤鮮魚乾 x2",         category: "survival", toKey: "rationFish",  toCount: 2, cost: { fish: 1, branch: 1 },        desc: "【進階口糧】食用每份可恢復 +60% 飽食度與 +60 HP。" },
@@ -900,6 +902,80 @@ window.Aetheria = window.Aetheria || {};
 
   const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
   const REMOVED_DUPLICATE_ARMOR_IDS  = ["a_srpg_leather", "a_srpg_steel_mail", "a_srpg_highland_plate"];
+
+  // ★ 核心新增：自動掃描全遊戲 Data.MATERIALS，為所有怪物掉落／Boss 核心／章節橋樑建材建立「工坊 100% 保底合成配方」！
+  let dynamicGuaranteedRecipes = [];
+  function buildGuaranteedQuestMaterialRecipes() {
+    const Data = window.Aetheria.Data;
+    if (!Data || !Data.MATERIALS) return;
+    const mats = Data.MATERIALS;
+    const existingOutKeys = {};
+
+    COMPLETE_WORKSHOP_RECIPES.forEach(function(r) { existingOutKeys[r.toKey] = true; });
+    const rawWks = Array.isArray(Data.WORKSHOP_RECIPES)
+      ? Data.WORKSHOP_RECIPES
+      : (Data.WORKSHOP_RECIPES && typeof Data.WORKSHOP_RECIPES === "object" ? Object.values(Data.WORKSHOP_RECIPES) : []);
+    rawWks.forEach(function(r) {
+      if (r) existingOutKeys[r.toKey || r.giveKey || r.outKey] = true;
+    });
+
+    dynamicGuaranteedRecipes = [];
+
+    Object.keys(mats).forEach(function(mKey) {
+      if (REMOVED_BLOAT_MATERIAL_IDS.indexOf(mKey) !== -1) return;
+      const mObj = mats[mKey];
+      if (!mObj || !mObj.name) return;
+      const mName = mObj.name;
+
+      // 針對所有可能卡任務的特殊材料（即使原版已有配方也會確保存在，若無配方則自動建立保底提煉配方）
+      let costMap = null;
+      let count = 1;
+      let descText = "";
+
+      if (mName.indexOf("耐火磚") !== -1 && !existingOutKeys[mKey]) {
+        costMap = { obsidian: 1, basalt: 1, clay: 1 };
+        descText = "【★六章拱橋建材】以熔岩黑曜石、玄武岩與黏土燒製的耐火石磚，用於鋪設火山石拱橋！";
+      } else if (mName.indexOf("龍鱗") !== -1 && !existingOutKeys[mKey]) {
+        costMap = { obsidian: 1, coal: 2 };
+        descText = "【★六章任務保底】除討伐火山魔物與採集高台獲得外，亦可用黑曜石與黑木炭直接提煉【" + mName + "】！";
+      } else if (mName.indexOf("熔核") !== -1 && !existingOutKeys[mKey]) {
+        costMap = { obsidian: 2, mithril: 1, coal: 2 };
+        descText = "【★六章任務保底】除擊敗火山精英/領主掉落外，亦可在工坊凝聚黑曜石與秘銀直接合成【" + mName + "】！";
+      } else if (mName.indexOf("海妖") !== -1 && !existingOutKeys[mKey]) {
+        costMap = { coral: 2, mithril: 1, quartz: 1 };
+        descText = "【★遠洋大帆船核心保底】除擊敗深海頭目與沉船墓地獲得外，亦可用深海珊瑚與秘銀共鳴合成【" + mName + "】！";
+      } else if (mName.indexOf("帆布") !== -1 && mKey !== "heavySail" && !existingOutKeys[mKey]) {
+        costMap = { hemp: 2, vine: 1 };
+        count = 2;
+        descText = "【★四章海岸建材保底】以荒野亞麻與藤蔓編織【" + mName + "】，不用再苦刷海岸怪物掉落！";
+      } else if (mName.indexOf("獸筋") !== -1 && !existingOutKeys[mKey]) {
+        costMap = { rope: 1, resin: 1 };
+        count = 2;
+        descText = "【★五章雪原建材保底】以強化麻繩浸潤琥珀松脂製成【" + mName + "】，輕鬆合成禦寒獸毛氈！";
+      } else if ((mName.indexOf("聖碑") !== -1 || mName.indexOf("殘片") !== -1) && !existingOutKeys[mKey]) {
+        costMap = { starIron: 1, obsidian: 1, quartz: 1 };
+        descText = "【★終章聖碑保底】除開啟各區地底遺跡石棺獲得外，亦可用星隕鐵與石英砂修復合成【" + mName + "】！";
+      } else if (mName.indexOf("浮空") !== -1 || mName.indexOf("天界") !== -1 || mName.indexOf("星輝") !== -1) {
+        if (!existingOutKeys[mKey]) {
+          costMap = { starIron: 1, quartz: 2 };
+          descText = "【★終章天界建材保底】以深淵星隕鐵與透明石英砂鍛造【" + mName + "】！";
+        }
+      }
+
+      if (costMap) {
+        existingOutKeys[mKey] = true;
+        dynamicGuaranteedRecipes.push({
+          id: "wk_auto_guarantee_" + mKey,
+          name: mName + (count > 1 ? (" x" + count) : " x1"),
+          category: "smelt",
+          toKey: mKey,
+          toCount: count,
+          cost: costMap,
+          desc: descText
+        });
+      }
+    });
+  }
 
   function registerSrpgDataIntoGame() {
     const Data = window.Aetheria.Data;
@@ -936,23 +1012,46 @@ window.Aetheria = window.Aetheria || {};
       if (s.equippedArmor && REMOVED_DUPLICATE_ARMOR_IDS.indexOf(s.equippedArmor) !== -1) {
         s.equippedArmor = (s.unlockedArmors && s.unlockedArmors.length > 0) ? s.unlockedArmors[s.unlockedArmors.length - 1] : "a_cloth";
       }
+
+      // ★ 自動修復：若玩家已修好第 5 區火山石拱橋 (proj_z5_bridge)，自動確保背包內至少有 3 塊「黑曜耐火磚」，徹底解決截圖中 2/3 卡任務的問題！
+      if (s.projectsBuilt && s.projectsBuilt.proj_z5_bridge && Data.MATERIALS) {
+        Object.keys(Data.MATERIALS).forEach(function(mk) {
+          const m = Data.MATERIALS[mk];
+          if (m && m.name && m.name.indexOf("耐火磚") !== -1) {
+            if ((s.inventory[mk] || 0) < 3) {
+              s.inventory[mk] = 3;
+            }
+          }
+        });
+      }
     }
+
+    buildGuaranteedQuestMaterialRecipes();
 
     if (Array.isArray(Data.WORKSHOP_RECIPES)) {
       Data.WORKSHOP_RECIPES = Data.WORKSHOP_RECIPES.filter(function(r) {
         return r && REMOVED_BLOAT_RECIPE_IDS.indexOf(r.id) === -1;
       });
-      COMPLETE_WORKSHOP_RECIPES.forEach(function(rec) {
+      COMPLETE_WORKSHOP_RECIPES.concat(dynamicGuaranteedRecipes).forEach(function(rec) {
         if (!Data.WORKSHOP_RECIPES.some(function(r) { return r.id === rec.id; })) {
           Data.WORKSHOP_RECIPES.push(rec);
         }
       });
     } else {
-      Data.WORKSHOP_RECIPES = COMPLETE_WORKSHOP_RECIPES.slice();
+      Data.WORKSHOP_RECIPES = COMPLETE_WORKSHOP_RECIPES.concat(dynamicGuaranteedRecipes);
     }
   }
 
-  // ================= 6. ★ 修復圖3：曙光營地三帳篷門口對齊踏墊 (y=86)，走到門口或按 A 鍵皆可順暢進入！ =================
+  // 輔助函式：按名稱關鍵字尋找 Data.MATERIALS 內的真實材料 key
+  function findMatKeyByNameKeyword(keyword, fallbackKey) {
+    const mats = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
+    const found = Object.keys(mats).find(function(k) {
+      return mats[k] && mats[k].name && mats[k].name.indexOf(keyword) !== -1;
+    });
+    return found || fallbackKey;
+  }
+
+  // ================= 6. 曙光營地三帳篷門口對齊踏墊 (y=86) =================
   function adjustCampTentsUpward(campMap) {
     if (!campMap || campMap.id !== "camp_hub") return campMap;
 
@@ -963,7 +1062,6 @@ window.Aetheria = window.Aetheria || {};
       return p.id !== "p_enter_museum";
     });
 
-    // 將北排三個帳篷外觀設於 y = 16，並取消帳篷門口下方的硬碰撞阻擋，讓玩家能走到門口踏墊上
     (campMap.decos || []).forEach(function(d) {
       const spr = String(d.sprite || "");
       if (d.id === "deco_hero_tent_ext" || spr.indexOf("tent") !== -1 || (d.y !== undefined && d.y <= 95 && (d.w >= 40 || d.h >= 36))) {
@@ -972,7 +1070,6 @@ window.Aetheria = window.Aetheria || {};
       }
     });
 
-    // 將三個帳篷的門口傳送點設在門口踏墊位置 (y = 86)，既遠離營地中央 (y > 140) 防誤入，走到門口又能立即進入！
     (campMap.portals || []).forEach(function(p) {
       if (p.targetZone === "tent_guild" || p.targetZone === "tent_hero" || p.targetZone === "tent_forge") {
         p.y = 86;
@@ -999,7 +1096,7 @@ window.Aetheria = window.Aetheria || {};
     return campMap;
   }
 
-  // ================= 7. ★ 修復圖2：拉開機關陣間距並取消卡位，解開後按 A 鍵立即開啟中央寶箱！ =================
+  // ================= 7. 現場機關陣（火盆順序、石像轉向、三連拉桿） =================
   const DIR_SYMBOLS = ["▲北", "▶東", "▼南", "◀西"];
 
   const ZONE_EXPLORE_PUZZLES = {
@@ -1049,7 +1146,6 @@ window.Aetheria = window.Aetheria || {};
     }
   };
 
-  // 動態檢查該地圖的現場機關是否已全部達成共鳴
   function isZoneExplorePuzzleSolved(mapObj, s) {
     if (!mapObj || !s) return false;
     if (s.solvedExplorePuzzles && s.solvedExplorePuzzles[mapObj.id]) return true;
@@ -1089,7 +1185,6 @@ window.Aetheria = window.Aetheria || {};
 
     mapObj.dirtBlobs.push({ cx: cx, cy: cy, rx: 105, ry: 90, isExpandedBlob: true });
 
-    // 古碑與機關設為 solid: false，確保主角能自由走入中央開啟寶箱，絕不卡位！
     mapObj.decos.push({
       id: "exp_puz_tablet_" + mapObj.id,
       x: cx - 72, y: cy - 62, sprite: "seal_pillar_on", w: 26, h: 30, solid: false,
@@ -1138,10 +1233,10 @@ window.Aetheria = window.Aetheria || {};
     zone1_forest:   { targetW: 1680, targetH: 1180, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"],   cryptName: "翠風古老樹根地窖", cryptBoss: "★遠古樹根守衛魔像" },
     cave1_mushroom: { targetW: 1580, targetH: 1140, ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "幽窟地底秘銀聖堂", cryptBoss: "★秘銀晶簇鎮守魔像" },
     zone2_canyon:   { targetW: 1680, targetH: 1180, ores: ["mithril", "quartz", "rockSalt", "coal"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "流沙埋沒法老王陵", cryptBoss: "★荒漠王陵黃金魔像" },
-    zone3_coast:    { targetW: 1680, targetH: 1180, ores: ["coral", "rockSalt", "quartz", "coal"],       grottoOres: ["coal", "coral", "rockSalt", "mithril"],cryptName: "海底亞特蘭蒂斯密室", cryptBoss: "★深海遺跡三叉戟魔像" },
-    zone4_snow:     { targetW: 1680, targetH: 1180, ores: ["obsidian", "rockSalt", "quartz", "mithril"], grottoOres: ["coal", "obsidian", "quartz", "mithril"],cryptName: "永凍冰河遠古神殿", cryptBoss: "★極寒永凍冰晶魔像" },
-    zone5_volcano:  { targetW: 1680, targetH: 1180, ores: ["starIron", "obsidian", "coal", "quartz"],    grottoOres: ["coal", "starIron", "obsidian", "quartz"],cryptName: "地心黑曜熔爐秘殿", cryptBoss: "★地心黑曜神鐵魔像" },
-    zone6_sky:      { targetW: 1680, targetH: 1180, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "obsidian", "quartz", "mithril"],cryptName: "星界破曉創世密室", cryptBoss: "★創世星隕守護神像" }
+    zone3_coast:    { targetW: 1680, targetH: 1180, ores: ["coral", "sailCloth", "rockSalt", "quartz"],  grottoOres: ["coral", "sailCloth", "rockSalt", "mithril"],cryptName: "海底亞特蘭蒂斯密室", cryptBoss: "★深海遺跡三叉戟魔像" },
+    zone4_snow:     { targetW: 1680, targetH: 1180, ores: ["obsidian", "sinew", "iceLotus", "quartz"],   grottoOres: ["obsidian", "sinew", "coal", "mithril"],cryptName: "永凍冰河遠古神殿", cryptBoss: "★極寒永凍冰晶魔像" },
+    zone5_volcano:  { targetW: 1680, targetH: 1180, ores: ["obsidian", "starIron", "coal", "quartz"],    grottoOres: ["obsidian", "starIron", "coal", "quartz"],cryptName: "地心黑曜熔爐秘殿", cryptBoss: "★地心黑曜神鐵魔像" },
+    zone6_sky:      { targetW: 1680, targetH: 1180, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "goldLeaf", "quartz", "obsidian"],cryptName: "星界破曉創世密室", cryptBoss: "★創世星隕守護神像" }
   };
 
   const grottoMapsCache = {};
@@ -1153,9 +1248,18 @@ window.Aetheria = window.Aetheria || {};
     const parentMap = (window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(parentZoneId)) || { recLv: 3 };
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
 
+    // 在第 5 區火山的岩壁礦洞內，直接額外放入「熔岩龍鱗」與「炎魔熔核」礦簇，保證玩家不靠運氣也能採集到！
+    const grottoPool = cfg.grottoOres.slice();
+    if (parentZoneId === "zone5_volcano") {
+      grottoPool.push(findMatKeyByNameKeyword("龍鱗", "obsidian"));
+      grottoPool.push(findMatKeyByNameKeyword("熔核", "starIron"));
+    } else if (parentZoneId === "zone3_coast") {
+      grottoPool.push(findMatKeyByNameKeyword("海妖", "coral"));
+    }
+
     const nodes = [];
     [{ x: 130, y: 110 }, { x: 240, y: 95 }, { x: 350, y: 110 }, { x: 145, y: 195 }, { x: 335, y: 195 }, { x: 240, y: 145 }].forEach(function(pt, idx) {
-      const giveKey = cfg.grottoOres[idx % cfg.grottoOres.length];
+      const giveKey = grottoPool[idx % grottoPool.length];
       const mInfo = matsDB[giveKey] || { name: giveKey };
       nodes.push({
         id: "grotto_node_" + parentZoneId + "_" + idx + "_" + Date.now(),
@@ -1311,8 +1415,15 @@ window.Aetheria = window.Aetheria || {};
       { id: "crypt_entrance_" + mapObj.id,     x: 935, y: 1015, sprite: cryptUnlocked ? "crypt_door_open" : "crypt_door_locked", w: 34, h: 34, solid: false, isHighlandElement: true, isCryptEntrance: true, zoneId: mapObj.id }
     );
 
+    // 高台礦簇（第 5 區火山高台直接包含「熔岩龍鱗」與「炎魔熔核」採集點！）
+    const plateauOres = cfg.ores.slice();
+    if (mapObj.id === "zone5_volcano") {
+      plateauOres[1] = findMatKeyByNameKeyword("龍鱗", "obsidian");
+      plateauOres[2] = findMatKeyByNameKeyword("熔核", "starIron");
+    }
+
     [{ x: 485, y: 845 }, { x: 655, y: 870 }, { x: 785, y: 940 }, { x: 785, y: 1015 }].forEach(function(pt, idx) {
-      const giveKey = cfg.ores[idx % cfg.ores.length];
+      const giveKey = plateauOres[idx % plateauOres.length];
       const mInfo = matsDB[giveKey] || { name: giveKey };
       mapObj.nodes.push({
         id: "hl_ore_" + mapObj.id + "_" + idx + "_" + token,
@@ -1493,7 +1604,7 @@ window.Aetheria = window.Aetheria || {};
     getRecipeSubCategory: function(rec) {
       if (rec.category) return rec.category;
       const id = String(rec.id || "");
-      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("lantern") !== -1) return "explore";
+      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("lantern") !== -1 || id.indexOf("key") !== -1) return "explore";
       if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1) return "survival";
       return "smelt";
     },
@@ -1708,7 +1819,10 @@ window.Aetheria = window.Aetheria || {};
 
       if (tab === "workshop") {
         const recipeMap = {}, seenNames = {};
-        COMPLETE_WORKSHOP_RECIPES.forEach(function(r) { recipeMap[r.id] = r; seenNames[r.name] = true; });
+        COMPLETE_WORKSHOP_RECIPES.concat(dynamicGuaranteedRecipes).forEach(function(r) {
+          recipeMap[r.id] = r;
+          seenNames[r.name] = true;
+        });
         const rawWks = Array.isArray(Data.WORKSHOP_RECIPES)
           ? Data.WORKSHOP_RECIPES
           : (Data.WORKSHOP_RECIPES && typeof Data.WORKSHOP_RECIPES === "object" ? Object.values(Data.WORKSHOP_RECIPES) : []);
@@ -1808,7 +1922,7 @@ window.Aetheria = window.Aetheria || {};
       if (tab === "workshop") {
         subFilters = [
           { id: "all", label: "全部(" + itemsList.length + ")" }, { id: "can", label: "✅可製作" },
-          { id: "explore", label: "🧗開路/照明" }, { id: "smelt", label: "🔥建材加工" }, { id: "survival", label: "🍖口糧補給" }
+          { id: "explore", label: "🧗開路/照明" }, { id: "smelt", label: "🔥建材/任務物資" }, { id: "survival", label: "🍖口糧補給" }
         ];
       } else if (tab === "weapons") {
         subFilters = [
@@ -1931,12 +2045,13 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 10. 掛載系統（含修復後的帳篷進入與機關寶箱優先開啟） =================
+  // ================= 10. 掛載系統（含任務掉落保底與修橋建材保留） =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
     const Exp  = window.Aetheria.Explore;
     const Ren  = window.Aetheria.Renderer;
+    const Bat  = window.Aetheria.Battle;
     const UI   = window.Aetheria.UI;
 
     if (St && St.recalcMaxHp) {
@@ -1988,7 +2103,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Exp) {
-      // ★ 修復圖3：放寬營地北面三個帳篷門口進入判定 (dist <= 26 且 heroY <= 104)，走到踏墊即可順暢進入！
       if (Exp.triggerPortal) {
         const origPortal = Exp.triggerPortal.bind(Exp);
         Exp.triggerPortal = function(portal) {
@@ -2050,7 +2164,6 @@ window.Aetheria = window.Aetheria || {};
         const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
 
         if (mapObj) {
-          // ★ 修復圖3：站在營地帳篷門口 (距離 < 44px) 按 A 鍵亦可直接進入帳篷！
           if (mapObj.id === "camp_hub" && mapObj.portals) {
             for (let pIdx = 0; pIdx < mapObj.portals.length; pIdx++) {
               const pt = mapObj.portals[pIdx];
@@ -2062,8 +2175,6 @@ window.Aetheria = window.Aetheria || {};
             }
           }
 
-          // ★ 修復圖2：優先檢查是否站在【古遺跡機關寶箱】或【遠古聖物石棺】旁 (< 62px)！
-          // 當四方石像/火盆/拉桿全部變綠共鳴後，按 A 鍵會直接優先打開寶箱，絕不會被外圍石像攔截！
           const puzzleDone = isZoneExplorePuzzleSolved(mapObj, s);
           if (mapObj.nodes) {
             for (let nIdx = 0; nIdx < mapObj.nodes.length; nIdx++) {
@@ -2175,7 +2286,7 @@ window.Aetheria = window.Aetheria || {};
               if (!s.unlockedCrypts[zId]) {
                 if ((s.inventory.cryptKey || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
-                  window.Aetheria.UI.showToast("🔒 古老的地底遺跡石門緊閉！請點擊左下角【羅盤小地圖】查看紅 ✖ 位置，用【探險鐵鏟】挖出【遠古遺跡鑰匙】！");
+                  window.Aetheria.UI.showToast("🔒 古老的地底遺跡石門緊閉！請點擊左下角【羅盤小地圖】查看紅 ✖ 位置，用【探險鐵鏟】挖出或於工坊鍛造【遠古遺跡鑰匙】！");
                   return;
                 }
                 s.inventory.cryptKey--;
@@ -2233,7 +2344,19 @@ window.Aetheria = window.Aetheria || {};
             }
           }
         }
+
+        // ★ 保護修橋建材：記錄呼叫 origInteract 前的耐火磚/建材數量，若此次互動建成了橋樑，自動補回任務檢查所需的建材！
+        const brickKey = findMatKeyByNameKeyword("耐火磚", null);
+        const beforeBrick = (brickKey && s.inventory) ? (s.inventory[brickKey] || 0) : 0;
+        const wasVolcanoBridgeBuilt = Boolean(s.projectsBuilt && s.projectsBuilt.proj_z5_bridge);
+
         origInteract();
+
+        if (brickKey && !wasVolcanoBridgeBuilt && s.projectsBuilt && s.projectsBuilt.proj_z5_bridge) {
+          s.inventory[brickKey] = Math.max(beforeBrick, 3);
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+        }
       };
 
       const origHint = Exp.updateContextHint.bind(Exp);
@@ -2409,6 +2532,35 @@ window.Aetheria = window.Aetheria || {};
         }
 
         origHarvest(node);
+      };
+    }
+
+    // ★ 戰鬥勝利保底掉落：在第 3/4/5/6 區打贏任何魔物時，若背包內缺少該區關鍵任務掉落物（海妖核心、古帆布、獸筋、熔岩龍鱗、炎魔熔核），100% 保底贈送！
+    if (Bat && Bat.winBattle) {
+      const origWin = Bat.winBattle.bind(Bat);
+      Bat.winBattle = function() {
+        const isCombat = (this.mode === "combat");
+        origWin();
+        if (isCombat) {
+          const s = window.Aetheria.State.data;
+          const z = String(s.currentZone || "");
+          if (z.indexOf("zone3_coast") !== -1) {
+            const clothKey = findMatKeyByNameKeyword("帆布", "sailCloth");
+            const sirenKey = findMatKeyByNameKeyword("海妖", null);
+            if ((s.inventory[clothKey] || 0) < 4) s.inventory[clothKey] = (s.inventory[clothKey] || 0) + 1;
+            if (sirenKey && (s.inventory[sirenKey] || 0) < 1) s.inventory[sirenKey] = 1;
+          } else if (z.indexOf("zone4_snow") !== -1) {
+            const sinewKey = findMatKeyByNameKeyword("獸筋", "sinew");
+            if ((s.inventory[sinewKey] || 0) < 4) s.inventory[sinewKey] = (s.inventory[sinewKey] || 0) + 1;
+          } else if (z.indexOf("zone5_volcano") !== -1) {
+            const scaleKey = findMatKeyByNameKeyword("龍鱗", null);
+            const coreKey  = findMatKeyByNameKeyword("熔核", null);
+            if (scaleKey && (s.inventory[scaleKey] || 0) < 3) s.inventory[scaleKey] = (s.inventory[scaleKey] || 0) + 1;
+            if (coreKey && (s.inventory[coreKey] || 0) < 2)   s.inventory[coreKey]  = (s.inventory[coreKey] || 0) + 1;
+          }
+          window.Aetheria.State.save();
+          if (window.Aetheria.UI) window.Aetheria.UI.updateAllHud();
+        }
       };
     }
 
@@ -2613,7 +2765,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG All-Maps Fix v11.6 init error:", err);
+      console.error("Survival RPG All-Maps Fix v11.7 init error:", err);
     }
   }
 
