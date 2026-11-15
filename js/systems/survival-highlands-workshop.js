@@ -1,18 +1,17 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 求生合成圖鑑、黑框小地圖移除與極速防Lag模組 (survival-highlands-workshop.js - v12.1)
- * 【Part 1 / 2：移除黑框小地圖、地貌Canvas快取池、像素圖示庫與求生合成圖鑑資料庫】
+ * Project J：艾瑟瑞亞的破曉 — 橋樑通行修復、RPG護盾戰鬥平衡與合成圖鑑模組 (survival-highlands-workshop.js - v12.2)
+ * 【Part 1 / 2：極速防抖、移除黑框小地圖、1~6區橋樑碰撞修復與求生合成圖鑑資料庫】
  * 核心修正：
- *   1. 【永久移除左下角黑框小地圖】：掃描並強制隱藏/移走所有非圓形羅盤的舊版黑框小地圖元素
- *   2. 【根治帳篷文字框與進出帳篷 Lag】：
- *      - 將營地三帳篷傳送門與文字框對齊回帳篷門口 (y=52)，不再懸掛在下方走道
- *      - 新增 terrainCanvasCache 與 spriteUrlCache，進出帳篷直接重用快取底圖，0毫秒切換！
- *      - 攔截 #a-btn-hint 的重複 innerText 寫入，徹底杜絕每秒 60 次觸發底層 MutationObserver
- *   3. 【新增 📖 求生合成圖鑑】：於日誌、背包與工坊頂部加入「📖 求生合成圖鑑」，隨時查閱全材料獲取途徑、配方與用途
+ *   1. 【100% 修復第1~6章過河木橋無法通過】：解決地圖高度擴大 (640➔1180) 導致底層河道放行座標偏移至 y=590 的問題，對準視覺木橋 (y:200~355) 即自動放行過河！
+ *   2. 【RPG 戰鬥平衡重製 (告別一招秒怪與4招秒Boss)】：
+ *      - 新增「護盾減傷機制」：敵人未破盾前減免 55% 傷害，破盾 (BREAK) 後承受 150% 弱點傷害
+ *      - 動態強化中後期小怪、精英與守關 Boss 血量與護盾，Boss 半血時觸發「二階段狂暴回血與護盾重鑄」
+ *   3. 【保留 v12.1 全部優化】：刪除左下角黑框小地圖、營地帳篷零 Lag、4大工具解謎障礙、Lv.3 連鎖採集與 📖求生合成圖鑑
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 0. 效能防抖與 DOM 屬性鎖（彻底杜絕每幀重複觸發 MutationObserver） =================
+  // ================= 0. 效能防抖與 DOM 屬性鎖 =================
   function setTextIfChanged(el, newText) {
     if (!el) return;
     if (el._lastTxt !== newText) {
@@ -37,7 +36,6 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // 為右下角 A 鍵提示文字加上原生屬性鎖：即使底層 v6.7 每幀寫入相同字串，也不會觸發瀏覽器 DOM 重繪！
   function lockHintElementSetter() {
     const hintEl = document.getElementById("a-btn-hint");
     if (!hintEl || hintEl._setterLocked) return;
@@ -57,11 +55,11 @@ window.Aetheria = window.Aetheria || {};
     } catch (e) {}
   }
 
-  // ================= 1. 注入樣式（強制隱藏黑框小地圖、圓形羅盤、圖鑑 UI 與格仔工坊） =================
+  // ================= 1. 注入樣式（隱藏黑框小地圖、圓形羅盤、圖鑑 UI 與格仔工坊） =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v121-styles")) return;
+    if (document.getElementById("srpg-kenney-v122-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v121-styles";
+    style.id = "srpg-kenney-v122-styles";
     style.textContent = `
       .kenney-terrain-canvas {
         position: absolute !important;
@@ -84,7 +82,7 @@ window.Aetheria = window.Aetheria || {};
       #world-terrain-layer .dom-coast-sea   { z-index: 3 !important; }
       #world-terrain-layer .dom-wooden-pier { z-index: 4 !important; }
 
-      /* ★ 修復1：徹底隱藏並移走原版黑框點陣小地圖，只保留圓形羅盤 (#srpg-compass-widget)！ */
+      /* 永久隱藏並移走原版黑框點陣小地圖 */
       #minimap-box, #minimap, #minimap-canvas, #hud-minimap, .minimap-box, .minimap-container {
         display: none !important;
         visibility: hidden !important;
@@ -254,7 +252,6 @@ window.Aetheria = window.Aetheria || {};
       .wk-mat-chip.ok    { color: #5ac54f; border-color: #5ac54f; background: rgba(45, 106, 79, 0.25); }
       .wk-mat-chip.lack  { color: #ff758f; border-color: #ff595e; background: rgba(157, 2, 8, 0.22); }
 
-      /* 📖 求生合成圖鑑卡片樣式 */
       .codex-card {
         background: linear-gradient(180deg, #1e171b 0%, #141013 100%);
         border: 1.5px solid #4a3e44;
@@ -288,7 +285,6 @@ window.Aetheria = window.Aetheria || {};
     if (!upper) return;
     const upperRect = upper.getBoundingClientRect();
 
-    // 掃描 #upper-screen 及 #hud-overlay 內所有位於左下角的小方框元素，只要不是圓形羅盤就徹底隱藏移走！
     const containers = [upper, document.getElementById("hud-overlay")].filter(Boolean);
     containers.forEach(function(parent) {
       Array.from(parent.children).forEach(function(ch) {
@@ -362,7 +358,7 @@ window.Aetheria = window.Aetheria || {};
     return canvas;
   }
 
-  // ================= 3. Kenney 16x16 自然地貌與「快取畫布池 (terrainCanvasCache)」 =================
+  // ================= 3. Kenney 16x16 自然地貌與「全地圖橋樑精準對齊＆放行系統」 =================
   const KENNEY_PALETTES = {
     forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e", river: "#2978d4", riverHi: "#8ce0ff", bank: "#d4b06a", bridge: "#9c6347", bridgeRail: "#d9a066" },
     cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d", river: "#1d3557", riverHi: "#38b6ff", bank: "#393246", bridge: "#64748b", bridgeRail: "#94a3b8" },
@@ -373,7 +369,6 @@ window.Aetheria = window.Aetheria || {};
     sky:     { bg1: "#487a6b", bg2: "#3d6b5d", bg3: "#568f7e", path: "#e8dfc5", pathEdge: "#c4b89b", cliffTop: "#f5eedc", rock1: "#6e7885", rock2: "#525b66", rockHi: "#8e99a8", rockDark: "#333940", river: "#191233", riverHi: "#e0aaff", bank: "#c4b89b", bridge: "#f5b700", bridgeRail: "#ffffff" }
   };
 
-  // ★ 快取每個區域的地貌 Canvas，進出帳篷或切換地圖時 0 毫秒直接掛載，不再重新跑幾千次 fillRect！
   const terrainCanvasCache = {};
   let cachedTerrainCanvas = null;
   let cachedTerrainZoneId = "";
@@ -414,33 +409,47 @@ window.Aetheria = window.Aetheria || {};
     return inTopWing || inRightWing;
   }
 
+  // ★ 全面兼容的橋樑解鎖判斷（支援工程完成、後續章節已解鎖、首領已擊敗或等級達標）
   function isMapBridgeBuilt(mapObj, s) {
-    if (!mapObj || !s || !s.projectsBuilt) return false;
+    if (!mapObj || !s) return false;
+    const pb = s.projectsBuilt || {};
+    const bd = s.bossesDefeated || {};
+    const uz = Array.isArray(s.unlockedZones) ? s.unlockedZones : [];
     const zId = mapObj.id;
-    if (zId === "zone1_forest")  return Boolean(s.projectsBuilt.proj_z1_bridge || (s.lv && s.lv >= 5));
-    if (zId === "zone2_canyon")  return Boolean(s.projectsBuilt.proj_z2_rope || s.projectsBuilt.proj_z2_bridge);
-    if (zId === "zone3_coast")   return Boolean(s.projectsBuilt.proj_z3_raft || (s.boatTier && s.boatTier >= 2));
-    if (zId === "zone5_volcano") return Boolean(s.projectsBuilt.proj_z5_bridge);
-    if (zId === "zone6_sky")     return Boolean(s.projectsBuilt.proj_z6_bridge);
+
+    if (zId === "zone1_forest") {
+      return Boolean(pb.proj_z1_bridge || bd.zone1_forest || uz.indexOf("zone2_canyon") !== -1 || (s.lv && s.lv >= 5));
+    }
+    if (zId === "zone2_canyon") {
+      return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon || uz.indexOf("zone3_coast") !== -1 || (s.lv && s.lv >= 10));
+    }
+    if (zId === "zone3_coast") {
+      return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast || uz.indexOf("zone4_snow") !== -1 || (s.boatTier && s.boatTier >= 2) || (s.lv && s.lv >= 15));
+    }
+    if (zId === "zone4_snow") {
+      return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow || uz.indexOf("zone5_volcano") !== -1 || (s.lv && s.lv >= 20));
+    }
+    if (zId === "zone5_volcano") {
+      return Boolean(pb.proj_z5_bridge || bd.zone5_volcano || uz.indexOf("zone6_sky") !== -1);
+    }
+    if (zId === "zone6_sky") {
+      return Boolean(pb.proj_z6_bridge || bd.zone6_sky);
+    }
+
     const projDeco = (mapObj.decos || []).find(function(d) { return d && d.isProjectSite && d.projectId; });
-    if (projDeco) return Boolean(s.projectsBuilt[projDeco.projectId]);
+    if (projDeco) return Boolean(pb[projDeco.projectId]);
     return true;
   }
 
+  // 取得過河主幹道的中心 Y 座標（涵蓋 y = 240 ~ 320 整個過河走廊，中心設為 y = 275）
   function getMapBridgeY(mapObj) {
-    if (!mapObj) return 240;
+    if (!mapObj) return 275;
     const rx = mapObj.riverX || 1030;
     const projDeco = (mapObj.decos || []).find(function(d) {
       return d && (d.isProjectSite || d.projectId) && Math.abs(d.x - rx) < 110;
     });
-    if (projDeco && projDeco.y) return projDeco.y;
-
-    const riverNpc = (mapObj.npcs || []).find(function(n) {
-      return n && Math.abs(n.x - rx) < 160;
-    });
-    if (riverNpc && riverNpc.y) return riverNpc.y;
-
-    return mapObj.bridgeY || 240;
+    if (projDeco && projDeco.y) return projDeco.y + 20;
+    return mapObj.bridgeY || 275;
   }
 
   function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
@@ -462,7 +471,6 @@ window.Aetheria = window.Aetheria || {};
       oldCanvas.remove();
     }
 
-    // ★ 若快取池已有該地圖畫布，0 毫秒直接掛載返回，消除進出帳篷 Lag！
     if (terrainCanvasCache[cacheKey]) {
       const cached = terrainCanvasCache[cacheKey];
       if (cached.parentNode !== terrainLayer) {
@@ -545,8 +553,8 @@ window.Aetheria = window.Aetheria || {};
       const bridgeY = getMapBridgeY(mapObj);
       const bx = rx - 10;
       const bw = 60;
-      const by = bridgeY - 22;
-      const bh = 44;
+      const by = bridgeY - 34;
+      const bh = 68;
 
       if (built) {
         ctx.fillStyle = "#141013";
@@ -656,9 +664,9 @@ window.Aetheria = window.Aetheria || {};
       terrainLayer.appendChild(bridgeEl);
     }
 
-    const bw = 56, bh = 42;
+    const bw = 58, bh = 68;
     bridgeEl.style.cssText =
-      "position:absolute; left:" + (rx - 8) + "px; top:" + (bridgeY - 21) + "px; " +
+      "position:absolute; left:" + (rx - 9) + "px; top:" + (bridgeY - 34) + "px; " +
       "width:" + bw + "px; height:" + bh + "px; z-index:6; pointer-events:none; box-sizing:border-box;";
 
     if (built) {
@@ -810,7 +818,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 4. 註冊像素圖示（加入全快取池 spriteDataUrlCache，防止重複調用 canvas.toDataURL 造成 Lag） =================
+  // ================= 4. 註冊像素圖示（含快取池 spriteDataUrlCache） =================
   const spriteDataUrlCache = {};
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
@@ -1058,9 +1066,7 @@ window.Aetheria = window.Aetheria || {};
     rationJerky:    { id: "rationJerky",    name: "風乾肉脯",       tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚，食用立即恢復 +80% 飽食度與 +90 HP！" }
   };
 
-  // ★ 【📖 求生合成圖鑑】完整資料庫（涵蓋全遊戲材料、獲取途徑、合成配方與用途）
   const SURVIVAL_CODEX_DATABASE = [
-    // 1. 基礎與高台裸露素材 (basic)
     { cat: "basic", key: "branch",    icon: "mat_branch",    name: "散落枯枝",   source: "0~6區地面徒手拾取",                   use: "修復熔爐、燒製黑曜木炭(x3➔x2)、松脂火把、Lv.1工具、烤魚乾/菇乾" },
     { cat: "basic", key: "flint",     icon: "mat_flint",     name: "尖銳燧石",   source: "0~6區地面徒手拾取",                   use: "修復熔爐、Lv.1手斧/十字鎬、爆破炸彈、打磨精密青銅齒輪" },
     { cat: "basic", key: "clay",      icon: "mat_clay",      name: "河畔黏土",   source: "水岸徒手拾取 / 釣魚點垂釣",           use: "修復熔爐、防水松脂膠、爆破炸彈、極寒急凍晶瓶、黑曜耐火磚" },
@@ -1071,7 +1077,6 @@ window.Aetheria = window.Aetheria || {};
     { cat: "basic", key: "rockSalt",  icon: "mat_rockSalt",  name: "結晶岩鹽",   source: "1~6區南側懸崖高台與岩壁礦洞開採",     use: "醃製岩鹽風乾肉脯、烹調香辛海陸燉肉" },
     { cat: "basic", key: "quartz",    icon: "mat_quartz",    name: "透明石英砂", source: "1~6區高台與山洞開採 / 鐵鏟挖寶",      use: "水晶鑑定放大鏡、深水打撈磁鉤、石英探礦提燈、急凍晶瓶、生命/洞察藥水" },
 
-    // 2. 階級採集素材 (tiered)
     { cat: "tiered", key: "wood",     icon: "mat_wood",     name: "翠風原木",     source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "裁切厚木板、攀岩繩梯、除荊鐮刀、Lv.1探險鐵鏟、建造近海木帆船" },
     { cat: "tiered", key: "vine",     icon: "mat_vine",     name: "堅韌藤蔓",     source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "編織強化麻繩索、Lv.1翠竹釣竿、建造近海木帆船" },
     { cat: "tiered", key: "herb",     icon: "mat_herb",     name: "紅傘微光菇",   source: "1.森林與蘑菇洞窟採集 (需 Lv.1 手斧)", use: "烘烤微光菇乾、提煉生命藥水、烹調香辛海陸燉肉" },
@@ -1087,7 +1092,6 @@ window.Aetheria = window.Aetheria || {};
     { cat: "tiered", key: "starIron", icon: "mat_starIron", name: "深淵星隕鐵",   source: "5~6區火山與天界開採 (需 Lv.3 十字鎬)",use: "Lv.3星隕考古神鏟、修復古文明聖碑殘片、鍛造 T9~T10 傳奇神裝" },
     { cat: "tiered", key: "goldLeaf", icon: "mat_goldLeaf", name: "黃金世界樹葉", source: "6.天界聖殿砍伐 (需 Lv.3 手斧)",       use: "鍛造 T10 艾瑟瑞亞破曉神刃/神聖鎧甲、共鳴遠古聖物" },
 
-    // 3. 工具解謎驅動與破障道具 (puzzle)
     { cat: "puzzle", key: "ropeLadder",     icon: "mat_ropeLadder",     name: "攀岩繩梯",       source: "工坊合成：強化麻繩索x1 + 翠風原木x2",       use: "【高低差開路】架設於 1~6 區南側懸崖壁，上下攀爬岩石高台礦區" },
     { cat: "puzzle", key: "briarSickle",    icon: "mat_briarSickle",    name: "除荊開路鐮刀",   source: "工坊合成：青銅合金錠x1 + 原木x2 + 麻繩x1",  use: "【永久工具】斬開各區【🌿千年荊棘魔藤】奪寶，且砍伐草木收穫 +1" },
     { cat: "puzzle", key: "salvageHook",    icon: "mat_salvageHook",    name: "深水打撈磁鉤",   source: "工坊合成：藍晶鐵礦x2 + 麻繩x2 + 石英砂x1",  use: "【永久工具】打撈各區水岸【⚓沉沒古寶箱】，且垂釣鮮魚收穫 +1" },
@@ -1098,7 +1102,6 @@ window.Aetheria = window.Aetheria || {};
     { cat: "puzzle", key: "cryptKey",       icon: "mat_cryptKey",       name: "遠古遺跡鑰匙",   source: "鐵鏟挖「✖」藏寶點 / 工坊青銅錠x1+木炭x1",   use: "【迷宮開鎖】開啟 1~6 區高台東側的【🔒地底遺跡石門】挑戰守衛魔像" },
     { cat: "puzzle", key: "bombItem",       icon: "mat_bombItem",       name: "爆破炸彈",       source: "工坊合成：燧石x2+黏土x1+松脂x1 (或木炭x2)", use: "【秘境開路】炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱" },
 
-    // 4. 冶煉合金、建材與章節任務物資 (smelt)
     { cat: "smelt", key: "bronzeIngot", icon: "mat_bronzeIngot", name: "青銅合金錠",     source: "工坊合成：赤銅礦x1 + 白錫礦x1 + 黑木炭x1", use: "打造除荊鐮刀、水晶放大鏡、精密青銅齒輪與遺跡鑰匙的核心合金" },
     { cat: "smelt", key: "plank",       icon: "mat_plank",       name: "加工厚木板",     source: "工坊合成：翠風原木x2",                     use: "修復第1區森林木橋、升級Lv.2秘銀鏟/Lv.3神斧、建造大帆船" },
     { cat: "smelt", key: "rope",        icon: "mat_rope",        name: "強化麻繩索",     source: "工坊合成：堅韌藤蔓x2 (或荒野亞麻x2➔2條)",  use: "製作攀岩繩梯、除荊鐮刀、打撈磁鉤、修復峽谷吊橋與造船" },
@@ -1107,7 +1110,6 @@ window.Aetheria = window.Aetheria || {};
     { cat: "smelt", key: "warmFur",     icon: "mat_warmFur",     name: "禦寒獸毛氈",     source: "工坊合成：強韌獸筋x2 + 荒野亞麻x1",         use: "搭建第4區雪原防風避難屋、升級 Lv.2 秘銀遠征袋" },
     { cat: "smelt", key: "tabletShard", icon: "crystal",         name: "古文明聖碑殘片", source: "開啟各區地底遺跡石棺 / 工坊星隕鐵+黑曜石",  use: "推進終章天界聖殿主線與共鳴遠古聖物" },
 
-    // 5. 增益料理、口糧與隨身藥水 (food)
     { cat: "food", key: "spicedStew",  icon: "mat_spicedStew",  name: "香辛海陸燉肉", source: "工坊烹調：銀鱗鮮魚x1 + 微光菇x2 + 岩鹽x1", use: "【極品料理】恢復 100% 飽食 + 150 HP，並永久提升最大生命 +15！" },
     { cat: "food", key: "rationJerky", icon: "mat_rationJerky", name: "岩鹽風乾肉脯", source: "工坊醃製：銀鱗鮮魚x1 + 結晶岩鹽x1 (產2份)", use: "【頂級口糧】每份立即恢復 +80% 飽食度 與 +90 HP" },
     { cat: "food", key: "rationFish",  icon: "mat_rationFish",  name: "炭烤鮮魚乾",   source: "工坊烘烤：銀鱗鮮魚x1 + 散落枯枝x1 (產2份)", use: "【進階口糧】每份立即恢復 +60% 飽食度 與 +60 HP" },
@@ -1116,7 +1118,6 @@ window.Aetheria = window.Aetheria || {};
     { cat: "food", key: "potionHint",  icon: "icon_potion",     name: "精煉洞察藥水", source: "工坊提煉：太陽花x1 + 松脂x1 + 石英砂x1",    use: "在知識詠唱問答中直接排除錯誤選項" }
   ];
 
-  // ================= 6. 定義《Survival RPG》素材、6大工具與工坊配方 =================
   const REMOVED_BLOAT_MATERIAL_IDS = [
     "ancientGem", "elixirAtk", "elixirHp", "elixirDef",
     "venomSac", "treeBark", "cactusFruit", "chitin", "rawHide", "thickPelt", "sulfur",
@@ -1313,6 +1314,20 @@ window.Aetheria = window.Aetheria || {};
       if (!s.clearedToolGates) s.clearedToolGates = {};
       if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
       if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
+      if (!s.projectsBuilt) s.projectsBuilt = {};
+
+      // ★ 自動回溯同步：若玩家已進入後續地圖或等級 >= 5，自動確保前期章節的橋樑工程旗標為 true！
+      if ((s.lv && s.lv >= 5) || (s.bossesDefeated && s.bossesDefeated.zone1_forest)) {
+        s.projectsBuilt.proj_z1_bridge = true;
+      }
+      if ((s.lv && s.lv >= 10) || (s.bossesDefeated && s.bossesDefeated.zone2_canyon)) {
+        s.projectsBuilt.proj_z2_rope = true;
+        s.projectsBuilt.proj_z2_bridge = true;
+      }
+      if ((s.lv && s.lv >= 15) || (s.bossesDefeated && s.bossesDefeated.zone3_coast)) {
+        s.projectsBuilt.proj_z3_raft = true;
+        s.projectsBuilt.proj_z3_bridge = true;
+      }
 
       if (Array.isArray(s.unlockedWeapons)) {
         s.unlockedWeapons = s.unlockedWeapons.filter(function(id) { return REMOVED_DUPLICATE_WEAPON_IDS.indexOf(id) === -1; });
@@ -1361,7 +1376,7 @@ window.Aetheria = window.Aetheria || {};
     return found || fallbackKey;
   }
 
-  // ================= 6. ★ 根治營地帳篷文字框與進入帳篷 Lag：將傳送點直接對齊帳篷棕色門口 (y=52)！ =================
+  // ================= 6. 曙光營地三帳篷調整（對齊棕色門口 y=52 防 Lag） =================
   function adjustCampTentsUpward(campMap) {
     if (!campMap || campMap.id !== "camp_hub") return campMap;
     const token = campMap._refreshToken || "init";
@@ -1383,8 +1398,6 @@ window.Aetheria = window.Aetheria || {};
       }
     });
 
-    // ★ 將三個帳篷的傳送點與文字框直接放在帳篷棕色門口 (y = 52)，不再懸掛在下方行道 (y=85)！
-    // 並且清除傳送門名稱內的 Emoji，防止底層 MutationObserver 每幀轉換圖片造成卡頓！
     (campMap.portals || []).forEach(function(p) {
       if (p.targetZone === "tent_guild") {
         p.y = 52;
@@ -1873,11 +1886,9 @@ window.Aetheria = window.Aetheria || {};
     savedScrollTop: 0,
     currentFilteredMap: {},
 
-    // ★ 新增：打開【📖 艾瑟瑞亞求生合成圖鑑】（可於日誌、背包、工坊一鍵開啟）
     openSurvivalCodexModal: function(catFilter) {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
-      const self = this;
 
       if (catFilter) this.curCodexFilter = catFilter;
       const curCat = this.curCodexFilter || "all";
@@ -1906,7 +1917,6 @@ window.Aetheria = window.Aetheria || {};
       });
       filterHtml += '</div>';
 
-      // 快速切換去工坊或返回日誌按鈕列
       const navHtml =
         '<div style="display:flex; gap:6px; margin-bottom:8px;">' +
           '<button class="na-btn highlight" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.UI.openForgeModal(\'workshop\')">🔨 前往隨身工坊合成</button>' +
@@ -2561,7 +2571,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 10. 掛載系統 =================
+  // ================= 10. 掛載系統（橋樑通行修復 + RPG 護盾減傷與戰鬥平衡 + 連鎖採集） =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -2621,11 +2631,31 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Exp) {
+      // ★ 關鍵修復2：解決地圖拉高後 (640➔1180) 底層河道放行座標偏移至 y=590 導致第一章與各章木橋無法通過的問題！
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const s = window.Aetheria.State.data;
         const prevX = s.heroX, prevY = s.heroY, prevZone = s.currentZone;
-        origUpdateStep();
+        const curMap = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
+
+        let bypassedRiverForBridge = false;
+        if (curMap && curMap.hasRiver && isMapBridgeBuilt(curMap, s)) {
+          const bY = getMapBridgeY(curMap);
+          // 當玩家走在視覺木橋走廊範圍 (y: 195 ~ 355) 時，暫時關閉底層錯誤的河道阻擋，讓玩家 100% 順暢過橋！
+          if (s.heroY >= Math.min(195, bY - 55) && s.heroY <= Math.max(355, bY + 55)) {
+            bypassedRiverForBridge = true;
+            curMap.hasRiver = false;
+          }
+        }
+
+        try {
+          origUpdateStep();
+        } finally {
+          if (bypassedRiverForBridge && curMap) {
+            curMap.hasRiver = true;
+          }
+        }
+
         if (s.currentZone !== prevZone || !HIGHLAND_ZONES[s.currentZone]) {
           s.onHighland = false;
           return;
@@ -3147,42 +3177,131 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    if (Bat && Bat.winBattle) {
-      const origWin = Bat.winBattle.bind(Bat);
-      Bat.winBattle = function() {
-        const isCombat = (this.mode === "combat");
-        const ref = this.mapMonsterRef;
-        origWin();
-        if (isCombat) {
-          const s = window.Aetheria.State.data;
-          const z = String(s.currentZone || "");
-          if (z.indexOf("zone3_coast") !== -1) {
-            const clothKey = findMatKeyByNameKeyword("帆布", "sailCloth");
-            const sirenKey = findMatKeyByNameKeyword("海妖", null);
-            if ((s.inventory[clothKey] || 0) < 4) s.inventory[clothKey] = (s.inventory[clothKey] || 0) + 1;
-            if (sirenKey && (s.inventory[sirenKey] || 0) < 1) s.inventory[sirenKey] = 1;
-          } else if (z.indexOf("zone4_snow") !== -1) {
-            const sinewKey = findMatKeyByNameKeyword("獸筋", "sinew");
-            if ((s.inventory[sinewKey] || 0) < 4) s.inventory[sinewKey] = (s.inventory[sinewKey] || 0) + 1;
-          } else if (z.indexOf("zone5_volcano") !== -1) {
-            const scaleKey = findMatKeyByNameKeyword("龍鱗", null);
-            const coreKey  = findMatKeyByNameKeyword("熔核", null);
-            if (scaleKey && (s.inventory[scaleKey] || 0) < 3) s.inventory[scaleKey] = (s.inventory[scaleKey] || 0) + 1;
-            if (coreKey && (s.inventory[coreKey] || 0) < 2)   s.inventory[coreKey]  = (s.inventory[coreKey] || 0) + 1;
+    // ================= ★ 關鍵修復1：RPG 戰鬥平衡、護盾減傷機制與首領二階段狂暴 =================
+    if (Bat) {
+      if (Bat.startBattle) {
+        const origStart = Bat.startBattle.bind(Bat);
+        Bat.startBattle = function(mapMonsterNode, customMode, customQuestionId) {
+          origStart(mapMonsterNode, customMode, customQuestionId);
 
-            if (ref && (ref.isBoss || (ref.name && ref.name.indexOf("龍皇") !== -1))) {
-              if (!s.bossesDefeated) s.bossesDefeated = {};
-              s.bossesDefeated.zone5_volcano = true;
-              const vMap = window.Aetheria.Data.Maps.getMap("zone5_volcano");
-              if (vMap && vMap.monsters) {
-                vMap.monsters.forEach(function(m) { if (m && m.isBoss) m.alive = false; });
+          const e = this.enemy;
+          if (!e || this.mode !== "combat") return;
+
+          const s = window.Aetheria.State.data;
+          const heroAtk = (window.Aetheria.State.getTotalAtk ? window.Aetheria.State.getTotalAtk() : 80);
+          const heroMaxHp = s.maxHp || 300;
+          const monLv = e.lv || 1;
+          const isElite = Boolean(mapMonsterNode && (mapMonsterNode.isCryptGuardian || mapMonsterNode.isVolcanoHelperSubBoss || mapMonsterNode.isShiny));
+
+          // 1. 根據區域等級與主角戰力，動態調整中後期小怪、精英與 Boss 的血量與護盾（防止一招秒怪、4招秒Boss）
+          if (e.isBoss) {
+            const minBossHp = Math.round(heroAtk * 10.5 + monLv * 180);
+            e.maxHp = Math.max(Math.round(e.maxHp * 3.5), minBossHp);
+            e.hp = e.maxHp;
+            e.maxShield = Math.max(5, (e.maxShield || 4) + (monLv >= 20 ? 3 : 2));
+            e.shield = e.maxShield;
+            e.atk = Math.max(Math.round((e.atk || 35) * 1.45), Math.round(heroMaxHp * 0.22));
+            e._enrageUsed = false;
+          } else if (isElite) {
+            const minEliteHp = Math.round(heroAtk * 5.2 + monLv * 95);
+            e.maxHp = Math.max(Math.round(e.maxHp * 2.4), minEliteHp);
+            e.hp = e.maxHp;
+            e.maxShield = Math.max(4, (e.maxShield || 3) + 1);
+            e.shield = e.maxShield;
+            e.atk = Math.max(Math.round((e.atk || 25) * 1.3), Math.round(heroMaxHp * 0.16));
+          } else if (monLv >= 8) {
+            // 中後期野外小怪：需先破盾或連續攻擊 2~3 回合才可擊敗
+            const minMobHp = Math.round(heroAtk * 2.3 + monLv * 45);
+            e.maxHp = Math.max(Math.round(e.maxHp * 1.8), minMobHp);
+            e.hp = e.maxHp;
+            e.maxShield = Math.max(monLv >= 20 ? 3 : 2, e.maxShield || 2);
+            e.shield = e.maxShield;
+            e.atk = Math.max(Math.round((e.atk || 20) * 1.25), Math.round(heroMaxHp * 0.12));
+          }
+
+          // 2. ★ 掛載「護盾減傷攔截器」：當敵人護盾尚未擊破 (shield > 0 && !broken) 時，受到的所有傷害自動減免 55%！
+          // 逼使玩家必須先答對題目或累積 BP 擊破護盾進入【⚡BREAK】狀態，才能打出全額弱點傷害！
+          let _internalHp = e.hp;
+          try {
+            Object.defineProperty(e, "hp", {
+              get: function() { return _internalHp; },
+              set: function(newVal) {
+                if (newVal < _internalHp) {
+                  const rawDmg = _internalHp - newVal;
+                  if (this.shield > 0 && !this.broken) {
+                    const mitigatedDmg = Math.max(1, Math.round(rawDmg * 0.45));
+                    _internalHp = Math.max(this.isBoss ? 1 : 0, _internalHp - mitigatedDmg);
+                    return;
+                  }
+                }
+                _internalHp = Math.max(0, newVal);
+              },
+              configurable: true
+            });
+          } catch (err) {}
+
+          if (this.updateBattleHUD) this.updateBattleHUD();
+        };
+      }
+
+      // 3. ★ 守關首領 (Boss) 半血時觸發【🔥二階段領主狂暴：回復 25% 血量並重鑄全滿護盾】
+      if (Bat.executeEnemyCounterPhase) {
+        const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
+        Bat.executeEnemyCounterPhase = function(answeredRight) {
+          const e = this.enemy;
+          if (e && e.isBoss && !e._enrageUsed && e.hp > 0 && e.hp <= e.maxHp * 0.50) {
+            e._enrageUsed = true;
+            e.broken = false;
+            e.shield = e.maxShield;
+            const healAmt = Math.round(e.maxHp * 0.25);
+            e.hp = Math.min(e.maxHp, e.hp + healAmt);
+            e.atk = Math.round(e.atk * 1.22);
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.spawnFloatingText("⚡領主狂暴・護盾重鑄!", "#ff595e", true);
+            window.Aetheria.UI.showToast("⚡ 首領進入二階段狂暴！恢復 25% 生命並重鑄 " + e.maxShield + " 層護盾，請善用 BP 破盾！");
+            if (this.updateBattleHUD) this.updateBattleHUD();
+          }
+          origCounter(answeredRight);
+        };
+      }
+
+      if (Bat.winBattle) {
+        const origWin = Bat.winBattle.bind(Bat);
+        Bat.winBattle = function() {
+          const isCombat = (this.mode === "combat");
+          const ref = this.mapMonsterRef;
+          origWin();
+          if (isCombat) {
+            const s = window.Aetheria.State.data;
+            const z = String(s.currentZone || "");
+            if (z.indexOf("zone3_coast") !== -1) {
+              const clothKey = findMatKeyByNameKeyword("帆布", "sailCloth");
+              const sirenKey = findMatKeyByNameKeyword("海妖", null);
+              if ((s.inventory[clothKey] || 0) < 4) s.inventory[clothKey] = (s.inventory[clothKey] || 0) + 1;
+              if (sirenKey && (s.inventory[sirenKey] || 0) < 1) s.inventory[sirenKey] = 1;
+            } else if (z.indexOf("zone4_snow") !== -1) {
+              const sinewKey = findMatKeyByNameKeyword("獸筋", "sinew");
+              if ((s.inventory[sinewKey] || 0) < 4) s.inventory[sinewKey] = (s.inventory[sinewKey] || 0) + 1;
+            } else if (z.indexOf("zone5_volcano") !== -1) {
+              const scaleKey = findMatKeyByNameKeyword("龍鱗", null);
+              const coreKey  = findMatKeyByNameKeyword("熔核", null);
+              if (scaleKey && (s.inventory[scaleKey] || 0) < 3) s.inventory[scaleKey] = (s.inventory[scaleKey] || 0) + 1;
+              if (coreKey && (s.inventory[coreKey] || 0) < 2)   s.inventory[coreKey]  = (s.inventory[coreKey] || 0) + 1;
+
+              if (ref && (ref.isBoss || (ref.name && ref.name.indexOf("龍皇") !== -1))) {
+                if (!s.bossesDefeated) s.bossesDefeated = {};
+                s.bossesDefeated.zone5_volcano = true;
+                const vMap = window.Aetheria.Data.Maps.getMap("zone5_volcano");
+                if (vMap && vMap.monsters) {
+                  vMap.monsters.forEach(function(m) { if (m && m.isBoss) m.alive = false; });
+                }
               }
             }
+            window.Aetheria.State.save();
+            if (window.Aetheria.UI) window.Aetheria.UI.updateAllHud();
           }
-          window.Aetheria.State.save();
-          if (window.Aetheria.UI) window.Aetheria.UI.updateAllHud();
-        }
-      };
+        };
+      }
     }
 
     if (Ren) {
@@ -3356,7 +3475,6 @@ window.Aetheria = window.Aetheria || {};
         WorkshopUIManager.renderGridWorkshopModal(activeTab || WorkshopUIManager.curTab || "workshop");
       };
 
-      // ★ 在【日誌】與【背包】頂部自動加上「📖 查閱求生合成圖鑑」按鈕！
       if (UI.openQuestLogModal) {
         const origQuestLog = UI.openQuestLogModal.bind(UI);
         UI.openQuestLogModal = function() {
@@ -3460,7 +3578,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG Codex & Anti-Lag v12.1 init error:", err);
+      console.error("Survival RPG Bridge & Combat Balance v12.2 init error:", err);
     }
   }
 
