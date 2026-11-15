@@ -1,20 +1,21 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 羅盤全貌地圖、木橋修復與多樣化機關模組 (survival-highlands-workshop.js - v11.3)
- * 【Part 1 / 2：自動掛載圓形羅盤小地圖、過河木橋像素繪製與圖層修復】
- * 修正重點：
- *   1. 【100% 生效的圓形羅盤與點擊放大全圖】：自動抓取 #upper-screen 內的原生小地圖 canvas，包上 N/E/S/W 圓形羅盤框並綁定點擊打開【全區全貌大圖】
- *   2. 【修復過河木橋消失】：將地貌 Canvas 設為 z-index:0 不遮擋原版木橋，並在河道過河處直接繪製 Kenney 像素木橋（含木板與護欄）
+ * Project J：艾瑟瑞亞的破曉 — 全地圖橋樑修復、羅盤全貌大圖與機關解謎模組 (survival-highlands-workshop.js - v11.4 單一完整版)
+ * 全地圖檢視修正重點：
+ *   1. 【修復 1~6 區所有橋樑移位消失】：修正因地圖高度擴大 (640➔1180) 導致原版 .dom-bridge (top:50%) 下移至 y=590 的問題，強制鎖回 y=320 道路中央！
+ *   2. 【左下角 N/E/S/W 圓形羅盤 + 點擊放大全區大圖】：自動替換左下角舊方框小地圖，點擊羅盤即彈出包含地形、橋樑、懸崖與紅叉(✖)的全區鳥瞰大圖！
+ *   3. 【修正全地圖機關陣座標衝突】：將火盆順序陣、石像轉向陣與三連拉桿陣移至西南開闊谷地 (x:230, y:880)，徹底避開 x=1030 河道！
+ *   4. 【各區河道主題色對齊】：火山繪製赤紅熔岩河、峽谷繪製深淵斷崖、雪原繪製冰封河道、森林/海岸繪製碧藍河水。
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入圓形羅盤、過河木橋圖層保護與全區放大地圖 CSS =================
+  // ================= 1. 注入全地圖橋樑定位修復、圓形羅盤、全區大圖與格仔工坊 CSS =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v113-styles")) return;
+    if (document.getElementById("srpg-kenney-v114-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v113-styles";
+    style.id = "srpg-kenney-v114-styles";
     style.textContent = `
-      /* Kenney 16x16 像素地貌底圖 Canvas：設為 z-index: 0，絕不遮擋原版木橋與物件 */
+      /* Kenney 16x16 像素地貌底圖 Canvas */
       .kenney-terrain-canvas {
         position: absolute !important;
         left: 0 !important;
@@ -29,18 +30,23 @@ window.Aetheria = window.Aetheria || {};
       #world-terrain-layer .dom-dirt-blob.ocean-atoll {
         opacity: 1 !important;
       }
-      /* 確保原版河流、木橋、沙灘與棧橋浮在 Kenney 底圖上方 */
+
+      /* ★ 關鍵修復：強制所有地圖的河流與過河橋樑 (.dom-bridge) 鎖定在原本 y=320 道路中央，絕不因地圖拉高而移位消失！ */
       #world-terrain-layer .dom-river {
-        z-index: 1 !important;
+        z-index: 2 !important;
       }
       #world-terrain-layer .dom-bridge,
-      #world-terrain-layer [class*="bridge"],
-      #world-terrain-layer .dom-wooden-pier {
-        z-index: 4 !important;
+      #world-terrain-layer [class*="bridge"] {
+        top: 320px !important;
+        transform: translateY(-50%) !important;
+        z-index: 6 !important;
       }
+      #world-terrain-layer .dom-coast-beach { z-index: 2 !important; }
+      #world-terrain-layer .dom-coast-sea   { z-index: 3 !important; }
+      #world-terrain-layer .dom-wooden-pier { z-index: 4 !important; }
 
-      /* ================= 圖1：左下角 N/E/S/W 圓形羅盤小地圖容器 ================= */
-      .srpg-compass-box {
+      /* 左下角 N/E/S/W 圓形羅盤小地圖 */
+      #minimap-box, .srpg-compass-box {
         position: absolute !important;
         width: 80px !important;
         height: 80px !important;
@@ -57,10 +63,10 @@ window.Aetheria = window.Aetheria || {};
         padding: 0 !important;
         margin: 0 !important;
       }
-      .srpg-compass-box:active {
+      #minimap-box:active, .srpg-compass-box:active {
         transform: scale(0.94) !important;
       }
-      .srpg-compass-canvas {
+      #minimap-canvas, .srpg-compass-canvas {
         width: 100% !important;
         height: 100% !important;
         border-radius: 50% !important;
@@ -103,7 +109,7 @@ window.Aetheria = window.Aetheria || {};
         box-shadow: 0 1px 3px #000;
       }
 
-      /* ================= 圖2：點擊放大「全區全貌大圖」檢視器 ================= */
+      /* 點擊放大「全區全貌大圖」檢視器 */
       .fullmap-stage-wrap {
         position: relative;
         width: 100%;
@@ -134,7 +140,6 @@ window.Aetheria = window.Aetheria || {};
         color: #cbd5e1;
       }
 
-      /* 採集敲擊時的搖晃與像素碎屑粒子 */
       @keyframes srpgHitShake {
         0%, 100% { transform: translate(0, 0) scale(1); }
         25% { transform: translate(-3px, 1px) scale(0.92); }
@@ -154,46 +159,15 @@ window.Aetheria = window.Aetheria || {};
         transition: transform 0.42s ease-out, opacity 0.42s ease-out;
       }
 
-      .dom-label.ladder-spot-lbl {
-        background: #4a2c11;
-        color: #ffd166;
-        border: 1.5px solid #f5b700;
-        font-weight: 900;
-      }
-      .dom-label.crypt-door-lbl {
-        background: #2d1442;
-        color: #ffd166;
-        border: 1.5px solid #e0aaff;
-        font-weight: 900;
-      }
-      .dom-label.dig-spot-lbl {
-        background: #3d2314;
-        color: #ffd166;
-        border: 1.5px solid #f5b700;
-        font-weight: 900;
-      }
-      .dom-label.puzzle-mech-lbl {
-        background: #102542;
-        color: #fff3b0;
-        border: 1.5px solid #38b6ff;
-        font-weight: 900;
-      }
-      .dom-label.puzzle-mech-on {
-        background: #1e3a2f;
-        color: #5ac54f;
-        border: 1.5px solid #5ac54f;
-        font-weight: 900;
-      }
+      .dom-label.ladder-spot-lbl { background: #4a2c11; color: #ffd166; border: 1.5px solid #f5b700; font-weight: 900; }
+      .dom-label.crypt-door-lbl  { background: #2d1442; color: #ffd166; border: 1.5px solid #e0aaff; font-weight: 900; }
+      .dom-label.dig-spot-lbl    { background: #3d2314; color: #ffd166; border: 1.5px solid #f5b700; font-weight: 900; }
+      .dom-label.puzzle-mech-lbl { background: #102542; color: #fff3b0; border: 1.5px solid #38b6ff; font-weight: 900; }
+      .dom-label.puzzle-mech-on  { background: #1e3a2f; color: #5ac54f; border: 1.5px solid #5ac54f; font-weight: 900; }
 
       /* 格仔分類工坊 UI */
-      #panel-modal #modal-body {
-        overflow-y: auto !important;
-        padding-bottom: 42px !important;
-      }
-      .wk-top-control-panel {
-        background: #141013;
-        padding-bottom: 4px;
-      }
+      #panel-modal #modal-body { overflow-y: auto !important; padding-bottom: 42px !important; }
+      .wk-top-control-panel { background: #141013; padding-bottom: 4px; }
       .wk-inspector-box {
         background: linear-gradient(180deg, #261c14 0%, #18120e 100%);
         border: 2px solid #f5b700;
@@ -202,220 +176,101 @@ window.Aetheria = window.Aetheria || {};
         margin-bottom: 6px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.8);
       }
-      .wk-subfilter-bar {
-        display: flex;
-        gap: 4px;
-        overflow-x: auto;
-        padding-bottom: 4px;
-        margin-bottom: 5px;
-      }
+      .wk-subfilter-bar { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 5px; }
       .wk-filter-pill {
-        background: #1c1619;
-        color: #cbd5e1;
-        border: 1.5px solid #594950;
-        border-radius: 14px;
-        padding: 3px 9px;
-        font-size: 11px;
-        font-weight: 900;
-        white-space: nowrap;
-        cursor: pointer;
+        background: #1c1619; color: #cbd5e1; border: 1.5px solid #594950;
+        border-radius: 14px; padding: 3px 9px; font-size: 11px; font-weight: 900; white-space: nowrap; cursor: pointer;
       }
-      .wk-filter-pill.active {
-        background: #1d3557;
-        color: #ffd166;
-        border-color: #38b6ff;
-      }
-      .wk-icon-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 6px;
-        padding: 2px 2px 44px 2px;
-      }
+      .wk-filter-pill.active { background: #1d3557; color: #ffd166; border-color: #38b6ff; }
+      .wk-icon-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 2px 2px 44px 2px; }
       .wk-grid-cell {
-        position: relative;
-        background: #181316;
-        border: 2px solid #4a3e44;
-        border-radius: 7px;
-        padding: 16px 4px 6px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: space-between;
-        text-align: center;
-        cursor: pointer;
-        min-height: 70px;
-        user-select: none;
-        transition: transform 0.1s ease, border-color 0.15s ease;
+        position: relative; background: #181316; border: 2px solid #4a3e44; border-radius: 7px;
+        padding: 16px 4px 6px; display: flex; flex-direction: column; align-items: center;
+        justify-content: space-between; text-align: center; cursor: pointer; min-height: 70px; user-select: none;
       }
-      .wk-grid-cell:active {
-        transform: scale(0.96);
-      }
-      .wk-grid-cell.can-craft {
-        border-color: #5ac54f;
-        background: linear-gradient(180deg, #18281c 0%, #141815 100%);
-      }
-      .wk-grid-cell.selected {
-        border-color: #ffd166 !important;
-        box-shadow: 0 0 9px rgba(245, 183, 0, 0.85);
-        background: linear-gradient(180deg, #332614 0%, #1c150c 100%);
-      }
-      .wk-cell-badge {
-        position: absolute;
-        top: 2px;
-        right: 3px;
-        font-size: 9.5px;
-        font-weight: 900;
-        padding: 0px 4px;
-        border-radius: 4px;
-        background: rgba(0,0,0,0.75);
-        color: #cbd5e1;
-        pointer-events: none;
-      }
-      .wk-cell-craft-dot {
-        position: absolute;
-        top: 2px;
-        left: 4px;
-        font-size: 9px;
-        font-weight: 900;
-        color: #5ac54f;
-        pointer-events: none;
-      }
-      .wk-cell-name {
-        font-size: 11px;
-        font-weight: 900;
-        color: #ffffff;
-        margin-top: 2px;
-        line-height: 1.15;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        pointer-events: none;
-      }
-      .wk-cell-quick-btn {
-        margin-top: 3px;
-        width: 92%;
-        background: #f5b700;
-        color: #141013;
-        border: 1px solid #000;
-        border-radius: 4px;
-        padding: 2px 0;
-        font-size: 10.5px;
-        font-weight: 900;
-        cursor: pointer;
-        box-shadow: 0 1px 0 #000;
-      }
-      .wk-mat-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 2px;
-        font-size: 11px;
-        font-weight: 900;
-        padding: 2px 6px;
-        border-radius: 4px;
-        margin: 2px 4px 2px 0;
-        background: #141013;
-        border: 1px solid #4a3e44;
-      }
-      .wk-mat-chip.ok {
-        color: #5ac54f;
-        border-color: #5ac54f;
-        background: rgba(45, 106, 79, 0.25);
-      }
-      .wk-mat-chip.lack {
-        color: #ff758f;
-        border-color: #ff595e;
-        background: rgba(157, 2, 8, 0.22);
-      }
+      .wk-grid-cell.can-craft { border-color: #5ac54f; background: linear-gradient(180deg, #18281c 0%, #141815 100%); }
+      .wk-grid-cell.selected  { border-color: #ffd166 !important; box-shadow: 0 0 9px rgba(245, 183, 0, 0.85); background: linear-gradient(180deg, #332614 0%, #1c150c 100%); }
+      .wk-cell-badge     { position: absolute; top: 2px; right: 3px; font-size: 9.5px; font-weight: 900; padding: 0 4px; border-radius: 4px; background: rgba(0,0,0,0.75); color: #cbd5e1; pointer-events: none; }
+      .wk-cell-craft-dot { position: absolute; top: 2px; left: 4px; font-size: 9px; font-weight: 900; color: #5ac54f; pointer-events: none; }
+      .wk-cell-name      { font-size: 11px; font-weight: 900; color: #ffffff; margin-top: 2px; line-height: 1.15; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+      .wk-cell-quick-btn { margin-top: 3px; width: 92%; background: #f5b700; color: #141013; border: 1px solid #000; border-radius: 4px; padding: 2px 0; font-size: 10.5px; font-weight: 900; cursor: pointer; }
+      .wk-mat-chip       { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 900; padding: 2px 6px; border-radius: 4px; margin: 2px 4px 2px 0; background: #141013; border: 1px solid #4a3e44; }
+      .wk-mat-chip.ok    { color: #5ac54f; border-color: #5ac54f; background: rgba(45, 106, 79, 0.25); }
+      .wk-mat-chip.lack  { color: #ff758f; border-color: #ff595e; background: rgba(157, 2, 8, 0.22); }
     `;
     document.head.appendChild(style);
-
-    ["srpg-field-campfire-btn", "srpg-hazard-banner"].forEach(function(id) {
-      const el = document.getElementById(id);
-      if (el && el.parentNode) el.parentNode.removeChild(el);
-    });
   }
 
-  // ★ 自動尋找 #upper-screen 內的原生小地圖 canvas 並改造成「可點擊的 N/E/S/W 圓形羅盤」
-  let detectedMinimapCanvas = null;
-  function ensureCompassMinimapDOM() {
-    if (detectedMinimapCanvas && document.body.contains(detectedMinimapCanvas)) {
-      return detectedMinimapCanvas;
-    }
+  // ================= 2. 強制掛載左下角「N/E/S/W 圓形羅盤小地圖」並綁定點擊放大全圖 =================
+  function mountGuaranteedCompassWidget() {
     const upper = document.getElementById("upper-screen");
     if (!upper) return null;
 
-    // 搜尋 #upper-screen 內任何非地貌、非全圖的原生小地圖 canvas
-    const candidates = upper.querySelectorAll("canvas:not(.kenney-terrain-canvas):not(#srpg-fullmap-canvas)");
-    let mmCanvas = document.getElementById("minimap-canvas") ||
-                   document.getElementById("minimap") ||
-                   document.getElementById("hud-minimap") ||
-                   (candidates.length > 0 ? candidates[0] : null);
-
-    if (!mmCanvas) return null;
-    detectedMinimapCanvas = mmCanvas;
-
-    let mmBox = mmCanvas.parentElement;
-    // 若 canvas 直接放在 #upper-screen 下（沒有獨立外框 div），自動建立羅盤外框包裹它！
-    if (!mmBox || mmBox.id === "upper-screen" || mmBox.id === "world-viewport") {
-      let wrap = document.getElementById("srpg-compass-auto-wrap");
-      if (!wrap) {
-        wrap = document.createElement("div");
-        wrap.id = "srpg-compass-auto-wrap";
-        mmCanvas.parentNode.insertBefore(wrap, mmCanvas);
-        wrap.appendChild(mmCanvas);
+    // 隱藏舊版黑底方框小地圖
+    const upperRect = upper.getBoundingClientRect();
+    Array.from(upper.children).forEach(function(ch) {
+      if (ch.id === "srpg-compass-widget" || ch.id === "world-viewport" ||
+          ch.id === "hud-overlay" || ch.id === "hud-hearts-box" ||
+          ch.id === "weather-fx-layer" || ch.id === "sleep-transition-overlay") {
+        return;
       }
-      mmBox = wrap;
-    }
+      const r = ch.getBoundingClientRect();
+      if (ch.id === "minimap-box" || ch.id === "minimap" ||
+          (r.width > 25 && r.width < 135 && r.height > 20 && r.height < 115 && (r.left - upperRect.left) < 40 && (upperRect.bottom - r.bottom) < 40)) {
+        ch.style.display = "none";
+      }
+    });
 
-    mmBox.classList.add("srpg-compass-box");
-    mmCanvas.classList.add("srpg-compass-canvas");
+    let widget = document.getElementById("srpg-compass-widget");
+    let canvas = document.getElementById("srpg-compass-canvas");
 
-    if (!mmBox._compassInitialized) {
-      mmBox._compassInitialized = true;
-      mmBox.title = "點擊放大檢視【全區全貌探索地圖】";
+    if (!widget) {
+      widget = document.createElement("div");
+      widget.id = "srpg-compass-widget";
+      widget.className = "srpg-compass-box";
+      widget.title = "點擊放大檢視【全區全貌探索地圖】";
+
+      canvas = document.createElement("canvas");
+      canvas.id = "srpg-compass-canvas";
+      canvas.className = "srpg-compass-canvas";
+      canvas.width = 96;
+      canvas.height = 96;
+      widget.appendChild(canvas);
 
       ["N", "S", "W", "E"].forEach(function(dir) {
         const span = document.createElement("span");
         span.className = "compass-dir-tag compass-dir-" + dir.toLowerCase();
         span.innerText = dir;
-        mmBox.appendChild(span);
+        widget.appendChild(span);
       });
 
       const hint = document.createElement("span");
       hint.className = "compass-zoom-hint";
       hint.innerText = "🔍全圖";
-      mmBox.appendChild(hint);
+      widget.appendChild(hint);
 
-      const openFullMapHandler = function(ev) {
-        if (ev) {
-          ev.stopPropagation();
-          ev.preventDefault();
-        }
-        if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) {
-          window.Aetheria.Audio.sfxTalkBlip();
-        }
-        if (window.Aetheria.HighlandsWorkshop) {
-          window.Aetheria.HighlandsWorkshop.openFullZoneMapModal();
-        }
+      const openMapFn = function(ev) {
+        if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+        if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) window.Aetheria.Audio.sfxTalkBlip();
+        if (window.Aetheria.HighlandsWorkshop) window.Aetheria.HighlandsWorkshop.openFullZoneMapModal();
       };
+      widget.onclick = openMapFn;
+      canvas.onclick = openMapFn;
 
-      mmBox.onclick = openFullMapHandler;
-      mmCanvas.onclick = openFullMapHandler;
+      upper.appendChild(widget);
     }
-
-    return mmCanvas;
+    return canvas;
   }
 
-  // ================= 2. Kenney (CC0) 16x16 自然像素地貌與過河木橋 Canvas 渲染器 =================
+  // ================= 3. Kenney 16x16 自然地貌與全地圖主題河道/橋樑渲染器 =================
   const KENNEY_PALETTES = {
-    forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e" },
-    cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d" },
-    canyon:  { bg1: "#c79452", bg2: "#ba8745", bg3: "#d4a260", path: "#e0b97d", pathEdge: "#ad7b3b", cliffTop: "#deb878", rock1: "#8f4b26", rock2: "#703819", rockHi: "#ab5e34", rockDark: "#45200b" },
-    coast:   { bg1: "#599140", bg2: "#4d8036", bg3: "#68a34d", path: "#e6c88c", pathEdge: "#c4a366", cliffTop: "#d9bc82", rock1: "#755233", rock2: "#593d24", rockHi: "#8f6743", rockDark: "#362312" },
-    snow:    { bg1: "#dce8f2", bg2: "#c9d9e8", bg3: "#edf4fa", path: "#9eb3c7", pathEdge: "#7e96ad", cliffTop: "#ffffff", rock1: "#5a718a", rock2: "#43566b", rockHi: "#7b93ad", rockDark: "#293645" },
-    volcano: { bg1: "#3b2321", bg2: "#301b19", bg3: "#4a2c29", path: "#633933", pathEdge: "#472723", cliffTop: "#73423b", rock1: "#52241d", rock2: "#381712", rockHi: "#8c382b", rockDark: "#1f0b08" },
-    sky:     { bg1: "#487a6b", bg2: "#3d6b5d", bg3: "#568f7e", path: "#e8dfc5", pathEdge: "#c4b89b", cliffTop: "#f5eedc", rock1: "#6e7885", rock2: "#525b66", rockHi: "#8e99a8", rockDark: "#333940" }
+    forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e", river: "#2978d4", riverHi: "#8ce0ff", bank: "#d4b06a", bridge: "#9c6347", bridgeRail: "#d9a066" },
+    cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d", river: "#1d3557", riverHi: "#38b6ff", bank: "#393246", bridge: "#64748b", bridgeRail: "#94a3b8" },
+    canyon:  { bg1: "#c79452", bg2: "#ba8745", bg3: "#d4a260", path: "#e0b97d", pathEdge: "#ad7b3b", cliffTop: "#deb878", rock1: "#8f4b26", rock2: "#703819", rockHi: "#ab5e34", rockDark: "#45200b", river: "#2b1508", riverHi: "#472411", bank: "#703819", bridge: "#9c6347", bridgeRail: "#f5b700" },
+    coast:   { bg1: "#599140", bg2: "#4d8036", bg3: "#68a34d", path: "#e6c88c", pathEdge: "#c4a366", cliffTop: "#d9bc82", rock1: "#755233", rock2: "#593d24", rockHi: "#8f6743", rockDark: "#362312", river: "#1d5eb8", riverHi: "#8ce0ff", bank: "#e6c88c", bridge: "#9c6347", bridgeRail: "#ffffff" },
+    snow:    { bg1: "#dce8f2", bg2: "#c9d9e8", bg3: "#edf4fa", path: "#9eb3c7", pathEdge: "#7e96ad", cliffTop: "#ffffff", rock1: "#5a718a", rock2: "#43566b", rockHi: "#7b93ad", rockDark: "#293645", river: "#3898ff", riverHi: "#ffffff", bank: "#9eb3c7", bridge: "#64748b", bridgeRail: "#e2e8f0" },
+    volcano: { bg1: "#3b2321", bg2: "#301b19", bg3: "#4a2c29", path: "#633933", pathEdge: "#472723", cliffTop: "#73423b", rock1: "#52241d", rock2: "#381712", rockHi: "#8c382b", rockDark: "#1f0b08", river: "#e03c4b", riverHi: "#ffd166", bank: "#1f0b08", bridge: "#475569", bridgeRail: "#94a3b8" },
+    sky:     { bg1: "#487a6b", bg2: "#3d6b5d", bg3: "#568f7e", path: "#e8dfc5", pathEdge: "#c4b89b", cliffTop: "#f5eedc", rock1: "#6e7885", rock2: "#525b66", rockHi: "#8e99a8", rockDark: "#333940", river: "#191233", riverHi: "#e0aaff", bank: "#c4b89b", bridge: "#f5b700", bridgeRail: "#ffffff" }
   };
 
   let cachedTerrainCanvas = null;
@@ -454,6 +309,31 @@ window.Aetheria = window.Aetheria || {};
     return inTopWing || inRightWing;
   }
 
+  // 檢查某地圖的過河橋樑工程是否已修復完成
+  function isMapBridgeBuilt(mapObj, s) {
+    if (!mapObj || !s || !s.projectsBuilt) return false;
+    const zId = mapObj.id;
+    if (zId === "zone1_forest")  return Boolean(s.projectsBuilt.proj_z1_bridge);
+    if (zId === "zone2_canyon")  return Boolean(s.projectsBuilt.proj_z2_rope || s.projectsBuilt.proj_z2_bridge);
+    if (zId === "zone3_coast")   return Boolean(s.projectsBuilt.proj_z3_raft || (s.boatTier && s.boatTier >= 2));
+    if (zId === "zone5_volcano") return Boolean(s.projectsBuilt.proj_z5_bridge);
+    if (zId === "zone6_sky")     return Boolean(s.projectsBuilt.proj_z6_bridge);
+    const projDeco = (mapObj.decos || []).find(function(d) { return d && d.isProjectSite && d.projectId; });
+    if (projDeco) return Boolean(s.projectsBuilt[projDeco.projectId]);
+    return true;
+  }
+
+  // 取得該地圖過河道路與橋樑的精準 Y 座標（預設 y=320）
+  function getMapBridgeY(mapObj) {
+    if (!mapObj) return 320;
+    const rx = mapObj.riverX || 1030;
+    const projDeco = (mapObj.decos || []).find(function(d) {
+      return d && d.isProjectSite && Math.abs(d.x - rx) < 85;
+    });
+    if (projDeco && projDeco.y) return projDeco.y;
+    return mapObj.bridgeY || 320;
+  }
+
   function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
     if (!mapObj || !terrainLayer) return;
     if (mapObj.id === "ocean_sea") {
@@ -484,7 +364,6 @@ window.Aetheria = window.Aetheria || {};
         const px = tx * 16;
         const py = ty * 16;
         const r = seededHash(tx, ty, 11);
-
         ctx.fillStyle = (r < 0.45) ? pal.bg1 : (r < 0.80) ? pal.bg2 : pal.bg3;
         ctx.fillRect(px, py, 16, 16);
 
@@ -523,70 +402,39 @@ window.Aetheria = window.Aetheria || {};
         if (nDown)  ctx.fillRect(x0, y0 + 13, 16, 3);
         if (nLeft)  ctx.fillRect(x0, y0, 3, 16);
         if (nRight) ctx.fillRect(x0 + 13, y0, 3, 16);
-
-        const r = seededHash(tx, ty, 37);
-        if (r < 0.25) {
-          ctx.fillStyle = pal.pathEdge;
-          ctx.fillRect(x0 + 5, y0 + 6, 3, 2);
-          ctx.fillRect(x0 + 10, y0 + 11, 2, 2);
-        }
       }
     }
 
-    // ★ 修正2：繪製河流，並在過河處直接畫出清晰的「Kenney 像素木橋（含木板、欄杆與橋墩）」！
+    // ★ 按各區主題色繪製河道（森林藍水、峽谷深淵、火山赤紅熔岩河）與過河橋樑
     if (mapObj.hasRiver) {
       const rx = mapObj.riverX || 1030;
-      ctx.fillStyle = "#d4b06a";
+      ctx.fillStyle = pal.bank;
       ctx.fillRect(rx - 6, 0, 52, H);
-      ctx.fillStyle = "#2978d4";
+      ctx.fillStyle = pal.river;
       ctx.fillRect(rx, 0, 40, H);
-      ctx.fillStyle = "#8ce0ff";
-      ctx.fillRect(rx + 5, 0, 3, H);
+      ctx.fillStyle = pal.riverHi;
+      ctx.fillRect(rx + 6, 0, 4, H);
 
-      // 偵測過河木橋的 Y 座標（根據河畔工程木牌位置或預設 y=315）
-      let bridgeCenterY = mapObj.bridgeY || 315;
-      const projDeco = (mapObj.decos || []).find(function(d) {
-        return d && (d.isProjectSite || (d.projectId && d.projectId.indexOf("bridge") !== -1)) && Math.abs(d.x - rx) < 90;
-      });
-      if (projDeco && projDeco.y) {
-        bridgeCenterY = projDeco.y;
-      }
-
+      const bridgeY = getMapBridgeY(mapObj);
       const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
-      const bridgeBuilt = Boolean(
-        !projDeco ||
-        (projDeco.projectId && s.projectsBuilt && s.projectsBuilt[projDeco.projectId]) ||
-        (s.lv && s.lv >= 5)
-      );
-
+      const built = isMapBridgeBuilt(mapObj, s);
       const bx = rx - 10;
       const bw = 60;
-      const by = bridgeCenterY - 22;
+      const by = bridgeY - 22;
       const bh = 44;
 
-      if (bridgeBuilt) {
-        // 已修復的完整過河木橋
-        ctx.fillStyle = "#2b1508";
-        ctx.fillRect(bx, by - 4, bw, bh + 8);
-        ctx.fillStyle = "#5c3824";
+      if (built) {
+        ctx.fillStyle = "#141013";
+        ctx.fillRect(bx, by - 3, bw, bh + 6);
+        ctx.fillStyle = pal.bridge;
         ctx.fillRect(bx + 2, by, bw - 4, bh);
-
-        // 垂直排列的橋面厚木板
-        for (let px = bx + 4; px < bx + bw - 6; px += 8) {
-          ctx.fillStyle = "#9c6347";
-          ctx.fillRect(px, by + 4, 6, bh - 8);
-          ctx.fillStyle = "#d9a066";
-          ctx.fillRect(px + 1, by + 6, 4, bh - 12);
-        }
-        // 上下木製橋欄杆
-        ctx.fillStyle = "#8f563b";
+        ctx.fillStyle = pal.bridgeRail;
         ctx.fillRect(bx, by - 2, bw, 5);
         ctx.fillRect(bx, by + bh - 3, bw, 5);
       } else {
-        // 尚未修復的斷橋兩端橋頭
-        ctx.fillStyle = "#5c3824";
-        ctx.fillRect(bx, by, 16, bh);
-        ctx.fillRect(bx + bw - 16, by, 16, bh);
+        ctx.fillStyle = pal.bridge;
+        ctx.fillRect(bx, by, 14, bh);
+        ctx.fillRect(bx + bw - 14, by, 14, bh);
       }
     }
 
@@ -610,16 +458,8 @@ window.Aetheria = window.Aetheria || {};
 
           const x0 = tx * 16;
           const y0 = ty * 16;
-
           ctx.fillStyle = pal.cliffTop;
           ctx.fillRect(x0, y0, 16, 16);
-
-          const r = seededHash(tx, ty, 73);
-          if (r < 0.28) {
-            ctx.fillStyle = pal.pathEdge;
-            ctx.fillRect(x0 + 4, y0 + 5, 4, 2);
-            ctx.fillRect(x0 + 9, y0 + 10, 3, 2);
-          }
 
           const pUp    = isNaturalPlateauTile(px, py - 16, true);
           const pDown  = isNaturalPlateauTile(px, py + 16, true);
@@ -634,21 +474,16 @@ window.Aetheria = window.Aetheria || {};
           if (!pDown) {
             ctx.fillStyle = pal.rockDark;
             ctx.fillRect(x0, y0 + 13, 16, 3);
-
-            const wallHeightTiles = 3;
-            for (let wy = 1; wy <= wallHeightTiles; wy++) {
+            for (let wy = 1; wy <= 3; wy++) {
               const wy0 = y0 + wy * 16;
               ctx.fillStyle = (wy % 2 === 1) ? pal.rock1 : pal.rock2;
               ctx.fillRect(x0, wy0, 16, 16);
-
               ctx.fillStyle = pal.rockHi;
               ctx.fillRect(x0 + 2, wy0 + 2, 5, 6);
               ctx.fillRect(x0 + 9, wy0 + 6, 5, 6);
-
               ctx.fillStyle = pal.rockDark;
               ctx.fillRect(x0, wy0, 2, 16);
-              ctx.fillRect(x0 + 7, wy0 + 2, 2, 12);
-              if (wy === wallHeightTiles) {
+              if (wy === 3) {
                 ctx.fillRect(x0, wy0 + 13, 16, 3);
                 ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
                 ctx.fillRect(x0, wy0 + 16, 16, 8);
@@ -658,21 +493,66 @@ window.Aetheria = window.Aetheria || {};
         }
       }
 
-      const cx = 472;
-      const cy = 920;
+      const cx = 472, cy = 920;
       ctx.fillStyle = pal.rockDark;
       ctx.fillRect(cx - 4, cy - 4, 56, 48);
       ctx.fillStyle = pal.rock2;
       ctx.fillRect(cx, cy, 48, 44);
       ctx.fillStyle = "#09060a";
       ctx.fillRect(cx + 6, cy + 8, 36, 36);
-      ctx.fillStyle = "#1c131f";
-      ctx.fillRect(cx + 10, cy + 4, 28, 6);
     }
 
     cachedTerrainCanvas = canvas;
     cachedTerrainZoneId = mapObj.id;
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
+  }
+
+  // ★ 在 #world-terrain-layer 同步確保原版 .dom-bridge 固定於 y=320，並補上高圖層實體橋面
+  function syncDomRiverBridge(mapObj, terrainLayer) {
+    if (!mapObj || !terrainLayer || !mapObj.hasRiver) return;
+    const bridgeY = getMapBridgeY(mapObj);
+    const rx = mapObj.riverX || 1030;
+    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+    const built = isMapBridgeBuilt(mapObj, s);
+    const pal = KENNEY_PALETTES[mapObj.theme] || KENNEY_PALETTES.forest;
+
+    // 1. 修正原版 .dom-bridge 的 Y 座標至道路中央 (y=320)
+    const nativeBridges = terrainLayer.querySelectorAll(".dom-bridge, [class*='bridge']");
+    nativeBridges.forEach(function(nb) {
+      if (!nb.classList.contains("srpg-dom-river-bridge")) {
+        nb.style.top = bridgeY + "px";
+        nb.style.zIndex = "6";
+      }
+    });
+
+    // 2. 掛載保證可見的實體像素過河橋面 (z-index: 6)
+    let bridgeEl = terrainLayer.querySelector(".srpg-dom-river-bridge");
+    if (!bridgeEl) {
+      bridgeEl = document.createElement("div");
+      bridgeEl.className = "srpg-dom-river-bridge";
+      terrainLayer.appendChild(bridgeEl);
+    }
+
+    const bw = 56, bh = 42;
+    bridgeEl.style.cssText =
+      "position:absolute; left:" + (rx - 8) + "px; top:" + (bridgeY - 21) + "px; " +
+      "width:" + bw + "px; height:" + bh + "px; z-index:6; pointer-events:none; box-sizing:border-box;";
+
+    if (built) {
+      bridgeEl.style.background =
+        "repeating-linear-gradient(90deg, " + pal.bridge + " 0px, " + pal.bridge + " 6px, #2b1508 6px, #2b1508 9px)";
+      bridgeEl.style.borderTop = "4px solid " + pal.bridgeRail;
+      bridgeEl.style.borderBottom = "4px solid " + pal.bridgeRail;
+      bridgeEl.style.outline = "2px solid #141013";
+      bridgeEl.style.boxShadow = "0 4px 8px rgba(0,0,0,0.6)";
+    } else {
+      bridgeEl.style.background =
+        "linear-gradient(90deg, " + pal.bridge + " 0%, " + pal.bridge + " 22%, transparent 22%, transparent 78%, " + pal.bridge + " 78%, " + pal.bridge + " 100%)";
+      bridgeEl.style.borderTop = "3px dashed " + pal.bridgeRail;
+      bridgeEl.style.borderBottom = "3px dashed " + pal.bridgeRail;
+      bridgeEl.style.outline = "none";
+      bridgeEl.style.boxShadow = "none";
+    }
   }
 
   function drawTreasureXMarkerOnCanvas(ctx, x, y, radius) {
@@ -697,19 +577,13 @@ window.Aetheria = window.Aetheria || {};
     ctx.restore();
   }
 
-  // ★ 圖1：即時在偵測到的原生小地圖 canvas 上繪製「圓形羅盤真實地形」
+  // 即時繪製左下角圓形羅盤小地圖
   function renderCompassMinimap(mapObj, s) {
-    const mmCanvas = ensureCompassMinimapDOM();
+    const mmCanvas = mountGuaranteedCompassWidget();
     if (!mmCanvas || !mapObj || !s) return;
-
-    if (mmCanvas.width !== 96 || mmCanvas.height !== 96) {
-      mmCanvas.width = 96;
-      mmCanvas.height = 96;
-    }
 
     const ctx = mmCanvas.getContext("2d");
     ctx.clearRect(0, 0, 96, 96);
-
     ctx.fillStyle = "#1d5eb8";
     ctx.fillRect(0, 0, 96, 96);
 
@@ -725,13 +599,9 @@ window.Aetheria = window.Aetheria || {};
         const bx = ((b.cx || 0) - sx) * scale;
         const by = ((b.cy || 0) - sy) * scale;
         ctx.fillStyle = "#e6c88c";
-        ctx.beginPath();
-        ctx.arc(bx, by, (b.rx || 80) * scale, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(bx, by, (b.rx || 80) * scale, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = "#599140";
-        ctx.beginPath();
-        ctx.arc(bx, by, (b.rx || 80) * scale * 0.65, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(bx, by, (b.rx || 80) * scale * 0.65, 0, Math.PI * 2); ctx.fill();
       });
     }
 
@@ -749,7 +619,6 @@ window.Aetheria = window.Aetheria || {};
       const nx = (n.x - sx) * scale;
       const ny = (n.y - sy) * scale;
       if (nx < -6 || nx > 102 || ny < -6 || ny > 102) return;
-
       if (n.isBuriedSpot && !(s.dugSpots && s.dugSpots[n.id])) {
         drawTreasureXMarkerOnCanvas(ctx, nx, ny, 4.5);
       } else if (n.type === "chest") {
@@ -761,7 +630,7 @@ window.Aetheria = window.Aetheria || {};
     (mapObj.portals || []).forEach(function(p) {
       const px = (p.x - sx) * scale;
       const py = (p.y - sy) * scale;
-      if (px >= -4 && px <= 100 && py >= -4 && py <= 100) {
+      if (px >= -4 && px <= 100 && ty >= -4 && py <= 100) {
         ctx.fillStyle = "#38b6ff";
         ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
       }
@@ -779,7 +648,6 @@ window.Aetheria = window.Aetheria || {};
   function spawnHarvestParticles(nodeX, nodeY, colorHex) {
     const entityLayer = document.getElementById("world-entity-layer");
     if (!entityLayer) return;
-
     for (let i = 0; i < 6; i++) {
       const p = document.createElement("div");
       p.className = "srpg-particle";
@@ -787,154 +655,24 @@ window.Aetheria = window.Aetheria || {};
       p.style.top = (nodeY - 8) + "px";
       p.style.background = colorHex || "#ffd166";
       entityLayer.appendChild(p);
-
       const angle = (Math.PI * 2 * i) / 6 + (Math.random() * 0.5 - 0.25);
       const dist = 14 + Math.random() * 16;
-      const dx = Math.cos(angle) * dist;
-      const dy = Math.sin(angle) * dist - 6;
-
       requestAnimationFrame(function() {
-        p.style.transform = "translate(" + dx.toFixed(1) + "px, " + dy.toFixed(1) + "px)";
+        p.style.transform = "translate(" + (Math.cos(angle) * dist).toFixed(1) + "px, " + (Math.sin(angle) * dist - 6).toFixed(1) + "px)";
         p.style.opacity = "0";
       });
-
-      setTimeout(function() {
-        if (p.parentNode) p.parentNode.removeChild(p);
-      }, 430);
+      setTimeout(function() { if (p.parentNode) p.parentNode.removeChild(p); }, 430);
     }
   }
 
-  // ===== Part 1 結束位置（請緊接在此行下方貼上 Part 2 代碼） =====
-  // ★ 強制掛載左下角「圓形羅盤小地圖 Canvas」並隱藏舊版黑底方框小地圖
-  function mountGuaranteedCompassWidget() {
-    const upper = document.getElementById("upper-screen");
-    if (!upper) return;
-
-    // 隱藏舊版方框點陣小地圖（若存在且非羅盤容器）
-    const oldMinis = upper.querySelectorAll("[id*='mini'], [class*='mini'], [id*='radar'], [class*='radar']");
-    oldMinis.forEach(function(el) {
-      if (el.id !== "minimap-box" && el.id !== "minimap-canvas" && el.id !== "srpg-compass-auto-wrap") {
-        el.style.display = "none";
-      }
-    });
-
-    // 額外檢查 #upper-screen 左下角是否有未命名的小方框並隱藏
-    const upperRect = upper.getBoundingClientRect();
-    Array.from(upper.children).forEach(function(ch) {
-      if (ch.id === "minimap-box" || ch.id === "srpg-compass-auto-wrap" || ch.id === "world-viewport" ||
-          ch.id === "hud-overlay" || ch.id === "hud-hearts-box" || ch.id === "weather-fx-layer" ||
-          ch.id === "sleep-transition-overlay") {
-        return;
-      }
-      const r = ch.getBoundingClientRect();
-      if (r.width > 30 && r.width < 130 && r.height > 25 && r.height < 110 &&
-          (r.left - upperRect.left) < 35 && (upperRect.bottom - r.bottom) < 35) {
-        ch.style.display = "none";
-      }
-    });
-
-    // 建立保證存在的圓形羅盤容器與 Canvas
-    let box = document.getElementById("minimap-box");
-    let canvas = document.getElementById("minimap-canvas");
-
-    if (!box) {
-      box = document.createElement("div");
-      box.id = "minimap-box";
-      box.className = "srpg-compass-box";
-      upper.appendChild(box);
-    } else {
-      box.className = "srpg-compass-box";
-      box.style.display = "block";
-      // 清除舊版方框內的圓點 div
-      Array.from(box.children).forEach(function(c) {
-        if (c.tagName !== "CANVAS" && !c.classList.contains("compass-dir-tag") && !c.classList.contains("compass-zoom-hint")) {
-          c.style.display = "none";
-        }
-      });
-    }
-
-    if (!canvas) {
-      canvas = document.createElement("canvas");
-      canvas.id = "minimap-canvas";
-      canvas.className = "srpg-compass-canvas";
-      canvas.width = 96;
-      canvas.height = 96;
-      box.appendChild(canvas);
-    }
-
-    ensureCompassMinimapDOM();
-  }
-
-  // ★ 在 #world-terrain-layer 河道上方直接掛載高圖層 (z-index: 6) 的實體像素木橋，確保過河木橋 100% 清晰顯示！
-  function ensureVisibleDomBridge(mapObj, terrainLayer) {
-    if (!mapObj || !terrainLayer || !mapObj.hasRiver) return;
-    const oldBridge = terrainLayer.querySelector(".srpg-dom-river-bridge");
-    if (oldBridge) oldBridge.remove();
-
-    const rx = mapObj.riverX || 1030;
-    let bridgeY = mapObj.bridgeY || 240;
-
-    // 自動對齊河畔工程牌或過河道路的 Y 座標
-    const projDeco = (mapObj.decos || []).find(function(d) {
-      return d && (d.isProjectSite || (d.projectId && d.projectId.indexOf("bridge") !== -1) || Math.abs(d.x - rx) < 65);
-    });
-    if (projDeco && projDeco.y) {
-      bridgeY = projDeco.y;
-    }
-
-    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
-    const isBuilt = Boolean(
-      !projDeco ||
-      !projDeco.projectId ||
-      (s.projectsBuilt && s.projectsBuilt[projDeco.projectId]) ||
-      (s.lv && s.lv >= 5)
-    );
-
-    const bridgeEl = document.createElement("div");
-    bridgeEl.className = "srpg-dom-river-bridge";
-    const bw = 56;
-    const bh = 42;
-    bridgeEl.style.cssText =
-      "position:absolute; left:" + (rx - 8) + "px; top:" + (bridgeY - 21) + "px; " +
-      "width:" + bw + "px; height:" + bh + "px; z-index:6; pointer-events:none; box-sizing:border-box;";
-
-    if (isBuilt) {
-      bridgeEl.style.background =
-        "repeating-linear-gradient(90deg, #9c6347 0px, #9c6347 6px, #5c3824 6px, #5c3824 9px)";
-      bridgeEl.style.borderTop = "4px solid #d9a066";
-      bridgeEl.style.borderBottom = "4px solid #d9a066";
-      bridgeEl.style.outline = "2px solid #2b1508";
-      bridgeEl.style.boxShadow = "0 4px 8px rgba(0,0,0,0.55)";
-    } else {
-      // 未修復時顯示斷橋兩端木樁
-      bridgeEl.style.background =
-        "linear-gradient(90deg, #8f563b 0%, #8f563b 22%, transparent 22%, transparent 78%, #8f563b 78%, #8f563b 100%)";
-      bridgeEl.style.borderTop = "3px dashed #5c3824";
-      bridgeEl.style.borderBottom = "3px dashed #5c3824";
-    }
-
-    terrainLayer.appendChild(bridgeEl);
-
-    // 同步將木橋畫入 cachedTerrainCanvas，讓羅盤小地圖與放大全圖也能看到這座橋
-    if (cachedTerrainCanvas && cachedTerrainZoneId === mapObj.id) {
-      const ctx = cachedTerrainCanvas.getContext("2d");
-      ctx.fillStyle = "#5c3824";
-      ctx.fillRect(rx - 8, bridgeY - 20, 56, 40);
-      ctx.fillStyle = "#d9a066";
-      ctx.fillRect(rx - 8, bridgeY - 20, 56, 4);
-      ctx.fillRect(rx - 8, bridgeY + 16, 56, 4);
-    }
-  }
-
-  // ================= 3. 註冊像素圖示（含石像轉向、機關拉桿、鐵鏟、紅叉藏寶點） =================
+  // ================= 4. 註冊像素圖示 =================
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
 
     function buildGridDataUrl(grid, palette) {
       const c = document.createElement("canvas");
-      c.width = 16;
-      c.height = 16;
+      c.width = 16; c.height = 16;
       const ctx = c.getContext("2d");
       for (let y = 0; y < 16; y++) {
         const row = grid[y] || "";
@@ -949,347 +687,111 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    const ancientStatueUrl = buildGridDataUrl([
-      ".....KKKKKK.....",
-      "....KGGGGGGK....",
-      "...KGGYYYYGGK...",
-      "...KGYKKKKYGK...",
-      "...KGGYYYYGGK...",
-      "....KGGGGGGK....",
-      "..KKKKDDDDKKKK..",
-      ".KGGGGDDDDGGGGK.",
-      ".KGGDDDDDDDDGGK.",
-      "..KKKKDDDDKKKK..",
-      "....KDDDDDDK....",
-      "...KGGGGGGGGK...",
-      "..KDDDDDDDDDDK..",
-      "..KKKKKKKKKKKK..",
-      "................",
-      "................"
-    ], { K: "#141013", G: "#94a3b8", D: "#475569", Y: "#ffd166" });
-
-    const leverOffUrl = buildGridDataUrl([
-      "................",
-      "..KKKK..........",
-      ".KRRRRK.........",
-      ".KRRRRK.........",
-      "..KKLLK.........",
-      "....KLLK........",
-      ".....KLLK.......",
-      "......KLLK......",
-      ".......KLLK.....",
-      "....KKKKKKKK....",
-      "...KGGGGGGGGK...",
-      "..KDDDDDDDDDDK..",
-      "..KKKKKKKKKKKK..",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", R: "#ff595e", L: "#d9a066", G: "#94a3b8", D: "#334155" });
-
-    const leverOnUrl = buildGridDataUrl([
-      "................",
-      "..........KKKK..",
-      ".........KGGGGK.",
-      ".........KGGGGK.",
-      ".........KLLKK..",
-      "........KLLK....",
-      ".......KLLK.....",
-      "......KLLK......",
-      ".....KLLK.......",
-      "....KKKKKKKK....",
-      "...KYYYYYYYYK...",
-      "..KDDDDDDDDDDK..",
-      "..KKKKKKKKKKKK..",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", G: "#5ac54f", L: "#d9a066", Y: "#ffd166", D: "#334155" });
-
-    const shovelIconUrl = buildGridDataUrl([
-      "...........KKKK.",
-      "..........KLLLLK",
-      ".........KLDDDDK",
-      ".........KLLLLK.",
-      "........KKLKK...",
-      ".......KLLK.....",
-      "......KLLK......",
-      ".....KLLK.......",
-      "....KKKK........",
-      "..KKCCCCKK......",
-      ".KCCWWWWCCK.....",
-      "KCCWWWWWWCCK....",
-      "KCCWWWWCCCCK....",
-      ".KCCCCCCCCK.....",
-      "..KKKKKKKK......",
-      "................"
-    ], { K: "#141013", L: "#d9a066", D: "#8f563b", C: "#94a3b8", W: "#ffffff" });
-
-    const buriedXSpotUrl = buildGridDataUrl([
-      "....KKKKKKKK....",
-      "..KKYYYYYYYYKK..",
-      ".KYYRRRRYYYYRRK.",
-      "KYYRRRRRRYYRRRYK",
-      "KYYRYYYYRRRRYYYK",
-      "KYYYYRRRRRRRRYYK",
-      "KYYYYYRRRRRRYYYK",
-      "KYYYYRRRRRRRRYYK",
-      "KYYRYYYYRRRRYYYK",
-      "KYYRRRRRRYYRRRYK",
-      ".KYYRRRRYYYYRRK.",
-      "..KKYYYYYYYYKK..",
-      "....KKKKKKKK....",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", Y: "#ffd166", R: "#e03c4b" });
-
-    const cryptKeyUrl = buildGridDataUrl([
-      "....KKKKKK......",
-      "...KYYYYYYK.....",
-      "..KYYKKKKYYK....",
-      "..KYYK..KYYK....",
-      "..KYYKKKKYYK....",
-      "...KYYYYYYK.....",
-      "....KKYYKK......",
-      ".....KYYK.......",
-      ".....KYYK.......",
-      ".....KYYKKKK....",
-      ".....KYYYYYK....",
-      ".....KYYKKKK....",
-      ".....KYYK.......",
-      ".....KYYYYYK....",
-      ".....KKKKKKK....",
-      "................"
-    ], { K: "#141013", Y: "#ffd166" });
-
-    const cryptDoorLockedUrl = buildGridDataUrl([
-      "....KKKKKKKK....",
-      "..KKGGGGGGGGKK..",
-      ".KGGDDDDDDDDGGK.",
-      "KGGDKKKKKKKKDGGK",
-      "KGDKPPPPPPPPKDGK",
-      "KGDKPYYYYYYPKDGK",
-      "KGDKPYKKKKYPKDGK",
-      "KGDKPYKYYKYPKDGK",
-      "KGDKPYKKKKYPKDGK",
-      "KGDKPPPYYPPPPDGK",
-      "KGDKPPPYYPPPPDGK",
-      "KGDKPPPPPPPPKDGK",
-      "KGGDKKKKKKKKDGGK",
-      "KGGGGGGGGGGGGGGK",
-      "KKKKKKKKKKKKKKKK",
-      "................"
-    ], { K: "#141013", G: "#64748b", D: "#334155", P: "#2d1442", Y: "#f5b700" });
-
-    const cryptDoorOpenUrl = buildGridDataUrl([
-      "....KKKKKKKK....",
-      "..KKGGGGGGGGKK..",
-      ".KGGDDDDDDDDGGK.",
-      "KGGDKKKKKKKKDGGK",
-      "KGDKOOOOOOOOODGK",
-      "KGDKOOOOOOOOODGK",
-      "KGDKOOCCCCCCODGK",
-      "KGDKOOOOOOOOODGK",
-      "KGDKOOCCCCCCODGK",
-      "KGDKOOOOOOOOODGK",
-      "KGDKOOCCCCCCODGK",
-      "KGDKOOOOOOOOODGK",
-      "KGGDKKKKKKKKDGGK",
-      "KGGGGGGGGGGGGGGK",
-      "KKKKKKKKKKKKKKKK",
-      "................"
-    ], { K: "#141013", G: "#64748b", D: "#334155", O: "#090608", C: "#5ac54f" });
-
-    const clusterBoulderUrl = buildGridDataUrl([
-      "....KKKKKK......",
-      "...KLLLLLLK.....",
-      "..KLGGGGGGGK....",
-      "..KLGGGGGGGK....",
-      ".KKKKGGGGKKKKKK.",
-      "KLLLLKGGKLLLLLLK",
-      "KLGGGKGGKLGGGGGK",
-      "KLGGGGGGKLGGGGGK",
-      "KGGGGGGGGGGGGGGK",
-      "KDDDDGGGGDDDDDDK",
-      ".KDDDDDDDDDDDDK.",
-      "..KKKKKKKKKKKK..",
-      "................",
-      "................",
-      "................",
-      "................"
-    ], { K: "#2b2623", L: "#9ca3af", G: "#6b7280", D: "#4b5563" });
-
-    const cliffStakeUrl = buildGridDataUrl([
-      ".......YY.......",
-      "......YYYY......",
-      ".....YYKKYY.....",
-      "....YYKYYKYY....",
-      "......KYYK......",
-      "..KK..KYYK..KK..",
-      ".KLLK.KYYK.KLLK.",
-      ".KDDK..KK..KDDK.",
-      ".KDDKYYYYYYKDDK.",
-      ".KDDKDDDDDDKDDK.",
-      ".KDDK......KDDK.",
-      ".KDDK......KDDK.",
-      ".KDDK......KDDK.",
-      "..KK........KK..",
-      "................",
-      "................"
-    ], { K: "#141013", Y: "#ffd166", L: "#d9a066", D: "#8f563b" });
-
-    const ropeLadderUrl = buildGridDataUrl([
-      "..KK........KK..",
-      "..KRK......KRK..",
-      "..KWWWWWWWWWWK..",
-      "..KDDDDDDDDDDK..",
-      "..KRK......KRK..",
-      "..KRK......KRK..",
-      "..KWWWWWWWWWWK..",
-      "..KDDDDDDDDDDK..",
-      "..KRK......KRK..",
-      "..KRK......KRK..",
-      "..KWWWWWWWWWWK..",
-      "..KDDDDDDDDDDK..",
-      "..KRK......KRK..",
-      "..KRK......KRK..",
-      "..KWWWWWWWWWWK..",
-      "..KK........KK.."
-    ], { K: "#141013", R: "#d9a066", W: "#f5b700", D: "#8f563b" });
-
-    const torchSpriteUrl = buildGridDataUrl([
-      ".......YY.......",
-      "......YYYY......",
-      ".....YYRRYY.....",
-      "....YYRRRRYY....",
-      "....YRRRRRRY....",
-      ".....YYYYYY.....",
-      "......KKKK......",
-      "......KDDK......",
-      "......KDDK......",
-      "......KLLK......",
-      "......KDDK......",
-      "......KDDK......",
-      "......KLLK......",
-      "......KDDK......",
-      "......KKKK......",
-      "................"
-    ], { K: "#141013", Y: "#ffd166", R: "#ff595e", D: "#8f563b", L: "#d9a066" });
-
-    const bombSpriteUrl = buildGridDataUrl([
-      ".........YY.....",
-      "........YYYY....",
-      ".......KK.......",
-      "......KLLK......",
-      "....KKKKKKKK....",
-      "...KDDDDDDDDK...",
-      "..KDDWWWWDDDDK..",
-      "..KDDWDDDDDDDK..",
-      "..KDDDDDDDDDDK..",
-      "..KDDDDDDDDDDK..",
-      "..KDDDDDDDDDDK..",
-      "...KDDDDDDDDK...",
-      "....KKKKKKKK....",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", Y: "#ffd166", L: "#d9a066", D: "#334155", W: "#ffffff" });
-
-    const coalUrl = buildGridDataUrl([
-      "................",
-      ".....KKKKKK.....",
-      "...KKDDDDDDKK...",
-      "..KDDGGGGGGDDK..",
-      ".KDDGKKKKKKGDDK.",
-      ".KDGKKKKKKKKGDK.",
-      "KDDGKKRRRRKKGDDK",
-      "KDGKKRYYYYRKKGDK",
-      "KDGKKRRRRRRKKGDK",
-      ".KDGKKKKKKKKGDK.",
-      ".KDDGGGGGGGGDDK.",
-      "..KKDDDDDDDDKK..",
-      "....KKKKKKKK....",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", D: "#2b2623", G: "#475569", R: "#e03c4b", Y: "#ffd166" });
-
-    const rockSaltUrl = buildGridDataUrl([
-      ".......KK.......",
-      "......KWWK......",
-      ".....KWWWWK.....",
-      "...KKWCCCCWKK...",
-      "..KWWCCCCCCWWK..",
-      ".KWWCCCCCCCCWWK.",
-      ".KWCCWWWWWWCCWK.",
-      "KWWCWWWWWWWWCWWK",
-      "KCCCCCCCCCCCCCCK",
-      ".KCCCCCCCCCCCCK.",
-      "..KKCCCCCCCCKK..",
-      "....KKKKKKKK....",
-      "................",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", W: "#ffffff", C: "#cbd5e1" });
-
-    const quartzUrl = buildGridDataUrl([
-      ".......KK.......",
-      "......KCCK......",
-      ".....KCWWCK.....",
-      "..KK.KCWWCK.KK..",
-      ".KCCKKCWWCKKCCK.",
-      ".KCWWCWWWWCWWCK.",
-      "KCCWWWWWWWWWWCCK",
-      ".KCCWWWWWWWWCCK.",
-      "..KCCCCCCCCCCK..",
-      "...KKKKKKKKKK...",
-      "................",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", C: "#8ce0ff", W: "#ffffff" });
-
-    const jerkyUrl = buildGridDataUrl([
-      "................",
-      "....KKKKKKKK....",
-      "..KKRRRRRRRRKK..",
-      ".KRRWWWWWWWWRRK.",
-      ".KRRDDDDDDDDRRK.",
-      "KRRDDDDDDDDDDRRK",
-      "KRRDDWWDDDDDDRRK",
-      ".KRRDDDDDDDDRRK.",
-      "..KKRRRRRRRRKK..",
-      "....KKKKKKKK....",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................",
-      "................"
-    ], { K: "#141013", R: "#9d0208", D: "#6a040f", W: "#f8fafc" });
-
     const customUrls = {
-      ancient_statue: ancientStatueUrl,
-      lever_off: leverOffUrl,
-      lever_on: leverOnUrl,
-      icon_shovel: shovelIconUrl,
-      buried_x_spot: buriedXSpotUrl,
-      crypt_door_locked: cryptDoorLockedUrl,
-      crypt_door_open: cryptDoorOpenUrl,
-      mat_cryptKey: cryptKeyUrl,
-      cluster_boulder: clusterBoulderUrl,
-      cliff_stake: cliffStakeUrl,
-      rope_ladder: ropeLadderUrl,
-      mat_ropeLadder: ropeLadderUrl,
-      mat_torchItem: torchSpriteUrl,
-      mat_bombItem: bombSpriteUrl,
-      mat_coal: coalUrl,
-      mat_rockSalt: rockSaltUrl,
-      mat_quartz: quartzUrl,
-      mat_rationJerky: jerkyUrl
+      ancient_statue: buildGridDataUrl([
+        ".....KKKKKK.....","....KGGGGGGK....","...KGGYYYYGGK...","...KGYKKKKYGK...",
+        "...KGGYYYYGGK...","....KGGGGGGK....","..KKKKDDDDKKKK..",".KGGGGDDDDGGGGK.",
+        ".KGGDDDDDDDDGGK.","..KKKKDDDDKKKK..","....KDDDDDDK....","...KGGGGGGGGK...",
+        "..KDDDDDDDDDDK..","..KKKKKKKKKKKK..","................","................"
+      ], { K: "#141013", G: "#94a3b8", D: "#475569", Y: "#ffd166" }),
+      lever_off: buildGridDataUrl([
+        "................","..KKKK..........",".KRRRRK.........",".KRRRRK.........",
+        "..KKLLK.........","....KLLK........",".....KLLK.......","......KLLK......",
+        ".......KLLK.....","....KKKKKKKK....","...KGGGGGGGGK...","..KDDDDDDDDDDK..",
+        "..KKKKKKKKKKKK..","................","................","................"
+      ], { K: "#141013", R: "#ff595e", L: "#d9a066", G: "#94a3b8", D: "#334155" }),
+      lever_on: buildGridDataUrl([
+        "................","..........KKKK..",".........KGGGGK.",".........KGGGGK.",
+        ".........KLLKK..","........KLLK....",".......KLLK.....","......KLLK......",
+        ".....KLLK.......","....KKKKKKKK....","...KYYYYYYYYK...","..KDDDDDDDDDDK..",
+        "..KKKKKKKKKKKK..","................","................","................"
+      ], { K: "#141013", G: "#5ac54f", L: "#d9a066", Y: "#ffd166", D: "#334155" }),
+      icon_shovel: buildGridDataUrl([
+        "...........KKKK.","..........KLLLLK",".........KLDDDDK",".........KLLLLK.",
+        "........KKLKK...",".......KLLK.....","......KLLK......",".....KLLK.......",
+        "....KKKK........","..KKCCCCKK......",".KCCWWWWCCK.....","KCCWWWWWWCCK....",
+        "KCCWWWWCCCCK....",".KCCCCCCCCK.....","..KKKKKKKK......","................"
+      ], { K: "#141013", L: "#d9a066", D: "#8f563b", C: "#94a3b8", W: "#ffffff" }),
+      buried_x_spot: buildGridDataUrl([
+        "....KKKKKKKK....","..KKYYYYYYYYKK..",".KYYRRRRYYYYRRK.","KYYRRRRRRYYRRRYK",
+        "KYYRYYYYRRRRYYYK","KYYYYRRRRRRRRYYK","KYYYYYRRRRRRYYYK","KYYYYRRRRRRRRYYK",
+        "KYYRYYYYRRRRYYYK","KYYRRRRRRYYRRRYK",".KYYRRRRYYYYRRK.","..KKYYYYYYYYKK..",
+        "....KKKKKKKK....","................","................","................"
+      ], { K: "#141013", Y: "#ffd166", R: "#e03c4b" }),
+      mat_cryptKey: buildGridDataUrl([
+        "....KKKKKK......","...KYYYYYYK.....","..KYYKKKKYYK....","..KYYK..KYYK....",
+        "..KYYKKKKYYK....","...KYYYYYYK.....","....KKYYKK......",".....KYYK.......",
+        ".....KYYK.......",".....KYYKKKK....",".....KYYYYYK....",".....KYYKKKK....",
+        ".....KYYK.......",".....KYYYYYK....",".....KKKKKKK....","................"
+      ], { K: "#141013", Y: "#ffd166" }),
+      crypt_door_locked: buildGridDataUrl([
+        "....KKKKKKKK....","..KKGGGGGGGGKK..",".KGGDDDDDDDDGGK.","KGGDKKKKKKKKDGGK",
+        "KGDKPPPPPPPPKDGK","KGDKPYYYYYYPKDGK","KGDKPYKKKKYPKDGK","KGDKPYKYYKYPKDGK",
+        "KGDKPYKKKKYPKDGK","KGDKPPPYYPPPPDGK","KGDKPPPYYPPPPDGK","KGDKPPPPPPPPKDGK",
+        "KGGDKKKKKKKKDGGK","KGGGGGGGGGGGGGGK","KKKKKKKKKKKKKKKK","................"
+      ], { K: "#141013", G: "#64748b", D: "#334155", P: "#2d1442", Y: "#f5b700" }),
+      crypt_door_open: buildGridDataUrl([
+        "....KKKKKKKK....","..KKGGGGGGGGKK..",".KGGDDDDDDDDGGK.","KGGDKKKKKKKKDGGK",
+        "KGDKOOOOOOOOODGK","KGDKOOOOOOOOODGK","KGDKOOCCCCCCODGK","KGDKOOOOOOOOODGK",
+        "KGDKOOCCCCCCODGK","KGDKOOOOOOOOODGK","KGDKOOCCCCCCODGK","KGDKOOOOOOOOODGK",
+        "KGGDKKKKKKKKDGGK","KGGGGGGGGGGGGGGK","KKKKKKKKKKKKKKKK","................"
+      ], { K: "#141013", G: "#64748b", D: "#334155", O: "#090608", C: "#5ac54f" }),
+      cluster_boulder: buildGridDataUrl([
+        "....KKKKKK......","...KLLLLLLK.....","..KLGGGGGGGK....","..KLGGGGGGGK....",
+        ".KKKKGGGGKKKKKK.","KLLLLKGGKLLLLLLK","KLGGGKGGKLGGGGGK","KLGGGGGGKLGGGGGK",
+        "KGGGGGGGGGGGGGGK","KDDDDGGGGDDDDDDK",".KDDDDDDDDDDDDK.","..KKKKKKKKKKKK..",
+        "................","................","................","................"
+      ], { K: "#2b2623", L: "#9ca3af", G: "#6b7280", D: "#4b5563" }),
+      cliff_stake: buildGridDataUrl([
+        ".......YY.......","......YYYY......",".....YYKKYY.....","....YYKYYKYY....",
+        "......KYYK......","..KK..KYYK..KK..",".KLLK.KYYK.KLLK.",".KDDK..KK..KDDK.",
+        ".KDDKYYYYYYKDDK.",".KDDKDDDDDDKDDK.",".KDDK......KDDK.",".KDDK......KDDK.",
+        ".KDDK......KDDK.","..KK........KK..","................","................"
+      ], { K: "#141013", Y: "#ffd166", L: "#d9a066", D: "#8f563b" }),
+      rope_ladder: buildGridDataUrl([
+        "..KK........KK..","..KRK......KRK..","..KWWWWWWWWWWK..","..KDDDDDDDDDDK..",
+        "..KRK......KRK..","..KRK......KRK..","..KWWWWWWWWWWK..","..KDDDDDDDDDDK..",
+        "..KRK......KRK..","..KRK......KRK..","..KWWWWWWWWWWK..","..KDDDDDDDDDDK..",
+        "..KRK......KRK..","..KRK......KRK..","..KWWWWWWWWWWK..","..KK........KK.."
+      ], { K: "#141013", R: "#d9a066", W: "#f5b700", D: "#8f563b" }),
+      mat_torchItem: buildGridDataUrl([
+        ".......YY.......","......YYYY......",".....YYRRYY.....","....YYRRRRYY....",
+        "....YRRRRRRY....",".....YYYYYY.....","......KKKK......","......KDDK......",
+        "......KDDK......","......KLLK......","......KDDK......","......KDDK......",
+        "......KLLK......","......KDDK......","......KKKK......","................"
+      ], { K: "#141013", Y: "#ffd166", R: "#ff595e", D: "#8f563b", L: "#d9a066" }),
+      mat_bombItem: buildGridDataUrl([
+        ".........YY.....","........YYYY....",".......KK.......","......KLLK......",
+        "....KKKKKKKK....","...KDDDDDDDDK...","..KDDWWWWDDDDK..","..KDDWDDDDDDDK..",
+        "..KDDDDDDDDDDK..","..KDDDDDDDDDDK..","..KDDDDDDDDDDK..","...KDDDDDDDDK...",
+        "....KKKKKKKK....","................","................","................"
+      ], { K: "#141013", Y: "#ffd166", L: "#d9a066", D: "#334155", W: "#ffffff" }),
+      mat_coal: buildGridDataUrl([
+        "................",".....KKKKKK.....","...KKDDDDDDKK...","..KDDGGGGGGDDK..",
+        ".KDDGKKKKKKGDDK.",".KDGKKKKKKKKGDK.","KDDGKKRRRRKKGDDK","KDGKKRYYYYRKKGDK",
+        "KDGKKRRRRRRKKGDK",".KDGKKKKKKKKGDK.",".KDDGGGGGGGGDDK.","..KKDDDDDDDDKK..",
+        "....KKKKKKKK....","................","................","................"
+      ], { K: "#141013", D: "#2b2623", G: "#475569", R: "#e03c4b", Y: "#ffd166" }),
+      mat_rockSalt: buildGridDataUrl([
+        ".......KK.......","......KWWK......",".....KWWWWK.....","...KKWCCCCWKK...",
+        "..KWWCCCCCCWWK..",".KWWCCCCCCCCWWK.",".KWCCWWWWWWCCWK.","KWWCWWWWWWWWCWWK",
+        "KCCCCCCCCCCCCCCK",".KCCCCCCCCCCCCK.","..KKCCCCCCCCKK..","....KKKKKKKK....",
+        "................","................","................","................"
+      ], { K: "#141013", W: "#ffffff", C: "#cbd5e1" }),
+      mat_quartz: buildGridDataUrl([
+        ".......KK.......","......KCCK......",".....KCWWCK.....","..KK.KCWWCK.KK..",
+        ".KCCKKCWWCKKCCK.",".KCWWCWWWWCWWCK.","KCCWWWWWWWWWWCCK",".KCCWWWWWWWWCCK.",
+        "..KCCCCCCCCCCK..","...KKKKKKKKKK...","................","................",
+        "................","................","................","................"
+      ], { K: "#141013", C: "#8ce0ff", W: "#ffffff" }),
+      mat_rationJerky: buildGridDataUrl([
+        "................","....KKKKKKKK....","..KKRRRRRRRRKK..",".KRRWWWWWWWWRRK.",
+        ".KRRDDDDDDDDRRK.","KRRDDDDDDDDDDRRK","KRRDDWWDDDDDDRRK",".KRRDDDDDDDDRRK.",
+        "..KKRRRRRRRRKK..","....KKKKKKKK....","................","................",
+        "................","................","................","................"
+      ], { K: "#141013", R: "#9d0208", D: "#6a040f", W: "#f8fafc" })
     };
+    customUrls.mat_ropeLadder = customUrls.rope_ladder;
 
     const origGetDataURL = S.getDataURL.bind(S);
     S.getDataURL = function(key) {
@@ -1299,7 +801,7 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 4. 精簡純淨版素材、6大工具與工坊配方 =================
+  // ================= 5. 素材、6大工具與工坊配方定義 =================
   const CLEAN_SRPG_MATERIALS = {
     cryptKey:    { id: "cryptKey",    name: "遠古遺跡鑰匙", tier: 2, desc: "【尋寶挖掘】用探險鐵鏟挖掘地面唯一「✖」藏寶記號獲得，可解鎖各區的【🔒遠古地底遺跡】！" },
     coal:        { id: "coal",        name: "黑曜木炭",     tier: 1, desc: "【高台/山洞礦產】採集自懸崖高台與岩壁山洞，可用於配製高效炸彈。" },
@@ -1325,9 +827,7 @@ window.Aetheria = window.Aetheria || {};
 
   const BUILTIN_TOOLS_DB = {
     axe: {
-      id: "axe",
-      name: "伐木手斧",
-      iconKey: "icon_axe",
+      id: "axe", name: "伐木手斧", iconKey: "icon_axe",
       tiers: {
         0: { name: "徒手拾荒", desc: "尚未裝備手斧，僅能拾取散落枯枝。" },
         1: { name: "Lv.1 燧石手斧", cost: { branch: 2, flint: 2 }, gold: 0, desc: "可砍伐 1 階翠風原木、堅韌藤蔓、微光菇與琥珀松脂。" },
@@ -1336,9 +836,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
     pickaxe: {
-      id: "pickaxe",
-      name: "採礦十字鎬",
-      iconKey: "icon_pickaxe",
+      id: "pickaxe", name: "採礦十字鎬", iconKey: "icon_pickaxe",
       tiers: {
         0: { name: "徒手拾荒", desc: "尚未裝備十字鎬，僅能拾取燧石、黏土與高台裸露礦脈。" },
         1: { name: "Lv.1 燧石十字鎬", cost: { branch: 2, flint: 2 }, gold: 0, desc: "可開採 1 階藍晶鐵礦脈。" },
@@ -1347,9 +845,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
     shovel: {
-      id: "shovel",
-      name: "探險鐵鏟",
-      iconKey: "icon_shovel",
+      id: "shovel", name: "探險鐵鏟", iconKey: "icon_shovel",
       tiers: {
         0: { name: "尚未持有鐵鏟", desc: "製作鐵鏟後，可對照【全區放大地圖】挖掘地面唯一「✖ 藏寶記號」獲取遺跡鑰匙！" },
         1: { name: "Lv.1 精鐵探險鏟", cost: { wood: 2, iron: 1 }, gold: 0, desc: "【★尋寶必備】可挖掘全大陸地面唯一「✖」藏寶點，挖出【遠古遺跡鑰匙】與稀有礦石！" },
@@ -1358,9 +854,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
     rod: {
-      id: "rod",
-      name: "垂釣魚竿",
-      iconKey: "fishing_spot",
+      id: "rod", name: "垂釣魚竿", iconKey: "fishing_spot",
       tiers: {
         0: { name: "尚未持有魚竿", desc: "製作魚竿後可於各區水波釣魚點進行看準時機垂釣。" },
         1: { name: "Lv.1 翠竹釣魚竿", cost: { wood: 2, vine: 2 }, gold: 0, desc: "解鎖水波釣魚點垂釣功能，可釣起銀鱗鮮魚與河畔黏土。" },
@@ -1369,9 +863,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
     hook: {
-      id: "hook",
-      name: "飛索鉤爪",
-      iconKey: "icon_compass",
+      id: "hook", name: "飛索鉤爪", iconKey: "icon_compass",
       tiers: {
         0: { name: "尚未持有鉤爪", desc: "用於跨越峽谷斷崖與險峻地形的輔助工具。" },
         1: { name: "Lv.1 精鐵飛索鉤", cost: { iron: 2, rope: 2 }, gold: 100, desc: "裝備後可快速跨越險峻地形，採集暴擊率 +10%。" },
@@ -1379,9 +871,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
     pouch: {
-      id: "pouch",
-      name: "探險行囊",
-      iconKey: "icon_bag",
+      id: "pouch", name: "探險行囊", iconKey: "icon_bag",
       tiers: {
         0: { name: "標準隨身行囊", desc: "基礎探險背包。" },
         1: { name: "Lv.1 亞麻擴容袋", cost: { hemp: 2, rope: 1 }, gold: 100, desc: "強化負重與體魄，永久提升最大生命值 +30！" },
@@ -1391,168 +881,24 @@ window.Aetheria = window.Aetheria || {};
   };
 
   const COMPLETE_WORKSHOP_RECIPES = [
-    {
-      id: "wk_rope_ladder",
-      name: "攀岩繩梯 x1",
-      category: "explore",
-      toKey: "ropeLadder",
-      toCount: 1,
-      cost: { rope: 1, wood: 2 },
-      desc: "【★高低差開路必備】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！"
-    },
-    {
-      id: "wk_torch",
-      name: "松脂火把 x2",
-      category: "explore",
-      toKey: "torchItem",
-      toCount: 2,
-      cost: { branch: 1, resin: 1 },
-      desc: "【地牢與黑夜照明】點燃後照亮黑霧地牢，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！"
-    },
-    {
-      id: "wk_quartz_lantern",
-      name: "石英探礦提燈 (火把x4)",
-      category: "explore",
-      toKey: "torchItem",
-      toCount: 4,
-      cost: { iron: 1, quartz: 1, coal: 1 },
-      desc: "【強光照明】以鐵礦、石英砂與木炭打造，一次產出相當於 4 支火把的長效照明！"
-    },
-    {
-      id: "wk_bomb",
-      name: "爆破炸彈 x2",
-      category: "explore",
-      toKey: "bombItem",
-      toCount: 2,
-      cost: { flint: 2, clay: 1, resin: 1 },
-      desc: "【秘境開路】可炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱！"
-    },
-    {
-      id: "wk_coal_bomb",
-      name: "黑火藥重型炸彈 x3",
-      category: "explore",
-      toKey: "bombItem",
-      toCount: 3,
-      cost: { coal: 2, flint: 1 },
-      desc: "【高效爆破】以高台黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！"
-    },
-    {
-      id: "wk_plank",
-      name: "加工厚木板 x1",
-      category: "smelt",
-      toKey: "plank",
-      toCount: 1,
-      cost: { wood: 2 },
-      desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋與升級大帆船。"
-    },
-    {
-      id: "wk_rope",
-      name: "強化麻繩索 x1",
-      category: "smelt",
-      toKey: "rope",
-      toCount: 1,
-      cost: { vine: 2 },
-      desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】與吊橋的必備材料。"
-    },
-    {
-      id: "wk_rope_hemp",
-      name: "亞麻編織繩 x2",
-      category: "smelt",
-      toKey: "rope",
-      toCount: 2,
-      cost: { hemp: 2 },
-      desc: "【高效製繩】以峽谷荒野亞麻一次編織出 2 條強韌麻繩索。"
-    },
-    {
-      id: "wk_pitch",
-      name: "防水松脂膠 x1",
-      category: "smelt",
-      toKey: "pitch",
-      toCount: 1,
-      cost: { resin: 2, clay: 1 },
-      desc: "【造船建材】混合琥珀松脂與河畔黏土熬製的防水塗料。"
-    },
-    {
-      id: "wk_nails",
-      name: "鍛造鐵釘 x2",
-      category: "smelt",
-      toKey: "nails",
-      toCount: 2,
-      cost: { iron: 1 },
-      desc: "【工程建材】將藍晶鐵礦鍛打為工程鐵釘。"
-    },
-    {
-      id: "wk_steel_cable",
-      name: "秘銀強化鋼索 x1",
-      category: "smelt",
-      toKey: "steelCable",
-      toCount: 1,
-      cost: { mithril: 1, rope: 1 },
-      desc: "【高階建材】融合流沙秘銀與麻繩索打造的超強韌鋼索。"
-    },
-    {
-      id: "wk_heavy_sail",
-      name: "防風重帆布 x1",
-      category: "smelt",
-      toKey: "heavySail",
-      toCount: 1,
-      cost: { sailCloth: 2, rope: 1 },
-      desc: "【遠航建材】縫合幽靈古帆布與麻繩，用於建造破浪遠洋大帆船。"
-    },
-    {
-      id: "wk_warm_fur",
-      name: "禦寒獸毛氈 x1",
-      category: "smelt",
-      toKey: "warmFur",
-      toCount: 1,
-      cost: { sinew: 2, hemp: 1 },
-      desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。"
-    },
-    {
-      id: "wk_ration_jerky",
-      name: "岩鹽風乾肉脯 x2",
-      category: "survival",
-      toKey: "rationJerky",
-      toCount: 2,
-      cost: { fish: 1, rockSalt: 1 },
-      desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！"
-    },
-    {
-      id: "wk_ration_herb",
-      name: "烘烤微光菇乾 x2",
-      category: "survival",
-      toKey: "rationHerb",
-      toCount: 2,
-      cost: { herb: 1, branch: 1 },
-      desc: "【基礎口糧】食用每份可恢復 +35% 飽食度與 +25 HP。"
-    },
-    {
-      id: "wk_ration_fish",
-      name: "炭烤鮮魚乾 x2",
-      category: "survival",
-      toKey: "rationFish",
-      toCount: 2,
-      cost: { fish: 1, branch: 1 },
-      desc: "【進階口糧】食用每份可恢復 +60% 飽食度與 +60 HP。"
-    },
-    {
-      id: "wk_alchemy_heal",
-      name: "精煉生命藥水 x2",
-      category: "survival",
-      toKey: "potionHeal",
-      toCount: 2,
-      cost: { herb: 2, quartz: 1 },
-      desc: "【隨身提煉】以微光菇 x2 與高台石英砂燒製的玻璃瓶，免費提煉 2 瓶生命藥水！"
-    },
-    {
-      id: "wk_alchemy_hint",
-      name: "精煉洞察藥水 x2",
-      category: "survival",
-      toKey: "potionHint",
-      toCount: 2,
-      cost: { flower: 1, resin: 1, quartz: 1 },
-      desc: "【隨身提煉】以太陽花、松脂與高台石英砂提煉 2 瓶洞察藥水！"
-    }
+    { id: "wk_rope_ladder",    name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",  toCount: 1, cost: { rope: 1, wood: 2 },          desc: "【★高低差開路必備】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！" },
+    { id: "wk_torch",          name: "松脂火把 x2",           category: "explore",  toKey: "torchItem",   toCount: 2, cost: { branch: 1, resin: 1 },       desc: "【地牢與黑夜照明】點燃後照亮黑霧地牢，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！" },
+    { id: "wk_quartz_lantern", name: "石英探礦提燈 (火把x4)", category: "explore",  toKey: "torchItem",   toCount: 4, cost: { iron: 1, quartz: 1, coal: 1 }, desc: "【強光照明】以鐵礦、石英砂與木炭打造，一次產出相當於 4 支火把的長效照明！" },
+    { id: "wk_bomb",           name: "爆破炸彈 x2",           category: "explore",  toKey: "bombItem",    toCount: 2, cost: { flint: 2, clay: 1, resin: 1 }, desc: "【秘境開路】可炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱！" },
+    { id: "wk_coal_bomb",      name: "黑火藥重型炸彈 x3",     category: "explore",  toKey: "bombItem",    toCount: 3, cost: { coal: 2, flint: 1 },         desc: "【高效爆破】以高台黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！" },
+    { id: "wk_plank",          name: "加工厚木板 x1",         category: "smelt",    toKey: "plank",       toCount: 1, cost: { wood: 2 },                   desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋與升級大帆船。" },
+    { id: "wk_rope",           name: "強化麻繩索 x1",         category: "smelt",    toKey: "rope",        toCount: 1, cost: { vine: 2 },                   desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】與吊橋的必備材料。" },
+    { id: "wk_rope_hemp",      name: "亞麻編織繩 x2",         category: "smelt",    toKey: "rope",        toCount: 2, cost: { hemp: 2 },                   desc: "【高效製繩】以峽谷荒野亞麻一次編織出 2 條強韌麻繩索。" },
+    { id: "wk_pitch",          name: "防水松脂膠 x1",         category: "smelt",    toKey: "pitch",       toCount: 1, cost: { resin: 2, clay: 1 },         desc: "【造船建材】混合琥珀松脂與河畔黏土熬製的防水塗料。" },
+    { id: "wk_nails",          name: "鍛造鐵釘 x2",           category: "smelt",    toKey: "nails",       toCount: 2, cost: { iron: 1 },                   desc: "【工程建材】將藍晶鐵礦鍛打為工程鐵釘。" },
+    { id: "wk_steel_cable",    name: "秘銀強化鋼索 x1",       category: "smelt",    toKey: "steelCable",  toCount: 1, cost: { mithril: 1, rope: 1 },       desc: "【高階建材】融合流沙秘銀與麻繩索打造的超強韌鋼索。" },
+    { id: "wk_heavy_sail",     name: "防風重帆布 x1",         category: "smelt",    toKey: "heavySail",   toCount: 1, cost: { sailCloth: 2, rope: 1 },     desc: "【遠航建材】縫合幽靈古帆布與麻繩，用於建造破浪遠洋大帆船。" },
+    { id: "wk_warm_fur",       name: "禦寒獸毛氈 x1",         category: "smelt",    toKey: "warmFur",     toCount: 1, cost: { sinew: 2, hemp: 1 },         desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。" },
+    { id: "wk_ration_jerky",   name: "岩鹽風乾肉脯 x2",       category: "survival", toKey: "rationJerky", toCount: 2, cost: { fish: 1, rockSalt: 1 },      desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！" },
+    { id: "wk_ration_herb",    name: "烘烤微光菇乾 x2",       category: "survival", toKey: "rationHerb",  toCount: 2, cost: { herb: 1, branch: 1 },        desc: "【基礎口糧】食用每份可恢復 +35% 飽食度與 +25 HP。" },
+    { id: "wk_ration_fish",    name: "炭烤鮮魚乾 x2",         category: "survival", toKey: "rationFish",  toCount: 2, cost: { fish: 1, branch: 1 },        desc: "【進階口糧】食用每份可恢復 +60% 飽食度與 +60 HP。" },
+    { id: "wk_alchemy_heal",   name: "精煉生命藥水 x2",       category: "survival", toKey: "potionHeal",  toCount: 2, cost: { herb: 2, quartz: 1 },        desc: "【隨身提煉】以微光菇 x2 與高台石英砂燒製的玻璃瓶，免費提煉 2 瓶生命藥水！" },
+    { id: "wk_alchemy_hint",   name: "精煉洞察藥水 x2",       category: "survival", toKey: "potionHint",  toCount: 2, cost: { flower: 1, resin: 1, quartz: 1 }, desc: "【隨身提煉】以太陽花、松脂與高台石英砂提煉 2 瓶洞察藥水！" }
   ];
 
   const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
@@ -1563,23 +909,14 @@ window.Aetheria = window.Aetheria || {};
     if (!Data) return;
 
     if (Data.MATERIALS) {
-      REMOVED_BLOAT_MATERIAL_IDS.forEach(function(k) {
-        delete Data.MATERIALS[k];
-      });
-      Object.keys(CLEAN_SRPG_MATERIALS).forEach(function(k) {
-        Data.MATERIALS[k] = CLEAN_SRPG_MATERIALS[k];
-      });
+      REMOVED_BLOAT_MATERIAL_IDS.forEach(function(k) { delete Data.MATERIALS[k]; });
+      Object.keys(CLEAN_SRPG_MATERIALS).forEach(function(k) { Data.MATERIALS[k] = CLEAN_SRPG_MATERIALS[k]; });
     }
-
     if (Data.WEAPONS) {
-      REMOVED_DUPLICATE_WEAPON_IDS.forEach(function(wid) {
-        delete Data.WEAPONS[wid];
-      });
+      REMOVED_DUPLICATE_WEAPON_IDS.forEach(function(wid) { delete Data.WEAPONS[wid]; });
     }
     if (Data.ARMORS) {
-      REMOVED_DUPLICATE_ARMOR_IDS.forEach(function(aid) {
-        delete Data.ARMORS[aid];
-      });
+      REMOVED_DUPLICATE_ARMOR_IDS.forEach(function(aid) { delete Data.ARMORS[aid]; });
     }
 
     const s = window.Aetheria.State && window.Aetheria.State.data;
@@ -1589,27 +926,6 @@ window.Aetheria = window.Aetheria || {};
       if (!s.dugSpots) s.dugSpots = {};
       if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
       if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
-
-      if (Array.isArray(s.unlockedWeapons)) {
-        s.unlockedWeapons = s.unlockedWeapons.filter(function(id) {
-          return REMOVED_DUPLICATE_WEAPON_IDS.indexOf(id) === -1;
-        });
-      }
-      if (s.equippedWeapon && REMOVED_DUPLICATE_WEAPON_IDS.indexOf(s.equippedWeapon) !== -1) {
-        s.equippedWeapon = (s.unlockedWeapons && s.unlockedWeapons.length > 0)
-          ? s.unlockedWeapons[s.unlockedWeapons.length - 1]
-          : "w_wood";
-      }
-      if (Array.isArray(s.unlockedArmors)) {
-        s.unlockedArmors = s.unlockedArmors.filter(function(id) {
-          return REMOVED_DUPLICATE_ARMOR_IDS.indexOf(id) === -1;
-        });
-      }
-      if (s.equippedArmor && REMOVED_DUPLICATE_ARMOR_IDS.indexOf(s.equippedArmor) !== -1) {
-        s.equippedArmor = (s.unlockedArmors && s.unlockedArmors.length > 0)
-          ? s.unlockedArmors[s.unlockedArmors.length - 1]
-          : "a_cloth";
-      }
     }
 
     if (Array.isArray(Data.WORKSHOP_RECIPES)) {
@@ -1626,7 +942,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 5. 曙光營地三個帳篷往上移（防止誤入） =================
+  // ================= 6. 營地三帳篷上移防誤入 ＆ 全地圖西南谷地機關陣 (cx: 230, cy: 880) =================
   function adjustCampTentsUpward(campMap) {
     if (!campMap || campMap.id !== "camp_hub") return campMap;
 
@@ -1639,11 +955,7 @@ window.Aetheria = window.Aetheria || {};
 
     (campMap.decos || []).forEach(function(d) {
       const spr = String(d.sprite || "");
-      const isTentDeco =
-        d.id === "deco_hero_tent_ext" ||
-        spr.indexOf("tent") !== -1 ||
-        (d.y !== undefined && d.y <= 95 && (d.w >= 40 || d.h >= 36));
-      if (isTentDeco) {
+      if (d.id === "deco_hero_tent_ext" || spr.indexOf("tent") !== -1 || (d.y !== undefined && d.y <= 95 && (d.w >= 40 || d.h >= 36))) {
         d.y = 18;
       }
     });
@@ -1656,10 +968,7 @@ window.Aetheria = window.Aetheria || {};
 
     if (campMap.trees) {
       campMap.trees = campMap.trees.filter(function(t) {
-        if (t.y < 78 && ((t.x >= 60 && t.x <= 185) || (t.x >= 255 && t.x <= 365) || (t.x >= 435 && t.x <= 565))) {
-          return false;
-        }
-        return true;
+        return !(t.y < 78 && ((t.x >= 60 && t.x <= 185) || (t.x >= 255 && t.x <= 365) || (t.x >= 435 && t.x <= 565)));
       });
     }
 
@@ -1669,78 +978,60 @@ window.Aetheria = window.Aetheria || {};
         const tm = Maps.getMap(tZone);
         if (tm && tm.portals) {
           tm.portals.forEach(function(ep) {
-            if (ep.targetZone === "camp_hub") {
-              ep.targetY = 108;
-            }
+            if (ep.targetZone === "camp_hub") ep.targetY = 108;
           });
         }
       });
     }
-
     return campMap;
   }
 
-  // ================= 6. 探索時的 3 大全新現場機關解謎（火盆順序陣、石像轉向陣、三連連動拉桿） =================
+  // ★ 修正全地圖機關陣座標：統一設於西南側開闊谷地 (cx: 230, cy: 880)，100% 避開 x=1030 河道與 x=390 懸崖！
   const DIR_SYMBOLS = ["▲北", "▶東", "▼南", "◀西"];
 
   const ZONE_EXPLORE_PUZZLES = {
     zone1_forest: {
-      type: "brazier_order",
-      cx: 1120, cy: 840,
+      type: "brazier_order", cx: 230, cy: 880,
       riddle: "📜【森林古碑謎語】：「依日出至星夜之序點燃四方聖火：先點『東之晨(1)』➔ 次燃『南之日(2)』➔ 再亮『西之霞(3)』➔ 終耀『北之星(4)』！」",
       items: [
-        { dx: 52,  dy: 0,   order: 1, label: "東之晨" },
-        { dx: 0,   dy: 48,  order: 2, label: "南之日" },
-        { dx: -52, dy: 0,   order: 3, label: "西之霞" },
-        { dx: 0,   dy: -48, order: 4, label: "北之星" }
+        { dx: 52, dy: 0, order: 1, label: "東之晨" }, { dx: 0, dy: 48, order: 2, label: "南之日" },
+        { dx: -52, dy: 0, order: 3, label: "西之霞" }, { dx: 0, dy: -48, order: 4, label: "北之星" }
       ]
     },
     cave1_mushroom: {
-      type: "lever_toggle",
-      cx: 1080, cy: 820,
+      type: "lever_toggle", cx: 230, cy: 860,
       riddle: "📜【礦洞機關銘文】：「三座連動機括（①動①②、②動①②③、③動②③）。令三座拉桿同時處於【🟢開啟】即可解開秘寶！」"
     },
     zone2_canyon: {
-      type: "statue_rotate",
-      cx: 1120, cy: 840,
+      type: "statue_rotate", cx: 230, cy: 880,
       riddle: "📜【法老方位碑】：「令四方石像共鳴：『西衛望東(▶東)』、『東衛望西(◀西)』、『北衛俯視南境(▼南)』、『南衛仰望北辰(▲北)』！」",
       statues: [
-        { dx: -52, dy: 0,   initDir: 0, targetDir: 1, name: "西衛" },
-        { dx: 52,  dy: 0,   initDir: 1, targetDir: 3, name: "東衛" },
-        { dx: 0,   dy: -48, initDir: 3, targetDir: 2, name: "北衛" },
-        { dx: 0,   dy: 48,  initDir: 2, targetDir: 0, name: "南衛" }
+        { dx: -52, dy: 0, initDir: 0, targetDir: 1, name: "西衛" }, { dx: 52, dy: 0, initDir: 1, targetDir: 3, name: "東衛" },
+        { dx: 0, dy: -48, initDir: 3, targetDir: 2, name: "北衛" }, { dx: 0, dy: 48, initDir: 2, targetDir: 0, name: "南衛" }
       ]
     },
     zone3_coast: {
-      type: "lever_toggle",
-      cx: 1120, cy: 840,
+      type: "lever_toggle", cx: 230, cy: 880,
       riddle: "📜【沉船水閘銘文】：「三座連動水閘（①動①②、②動①②③、③動②③）。令三座水閘同時處於【🟢開啟】即可浮起海神秘寶！」"
     },
     zone4_snow: {
-      type: "brazier_order",
-      cx: 1120, cy: 840,
+      type: "brazier_order", cx: 230, cy: 880,
       riddle: "📜【冰原融霜碑】：「逆風點燃四聖火：先燃『北之極光(1)』➔ 次點『西之寒星(2)』➔ 再亮『南之暖陽(3)』➔ 終耀『東之破曉(4)』！」",
       items: [
-        { dx: 0,   dy: -48, order: 1, label: "北之極光" },
-        { dx: -52, dy: 0,   order: 2, label: "西之寒星" },
-        { dx: 0,   dy: 48,  order: 3, label: "南之暖陽" },
-        { dx: 52,  dy: 0,   order: 4, label: "東之破曉" }
+        { dx: 0, dy: -48, order: 1, label: "北之極光" }, { dx: -52, dy: 0, order: 2, label: "西之寒星" },
+        { dx: 0, dy: 48, order: 3, label: "南之暖陽" },  { dx: 52, dy: 0, order: 4, label: "東之破曉" }
       ]
     },
     zone5_volcano: {
-      type: "lever_toggle",
-      cx: 1120, cy: 840,
+      type: "lever_toggle", cx: 230, cy: 880,
       riddle: "📜【熔岩閥門銘文】：「三座連動熔岩閥（①動①②、②動①②③、③動②③）。令三座閥門同時處於【🟢開啟】即可冷卻秘寶箱！」"
     },
     zone6_sky: {
-      type: "statue_rotate",
-      cx: 1120, cy: 840,
+      type: "statue_rotate", cx: 230, cy: 880,
       riddle: "📜【天界星象碑】：「四聖像背心向外守護八方：『北像朝北(▲北)』、『東像朝東(▶東)』、『南像朝南(▼南)』、『西像朝西(◀西)』！」",
       statues: [
-        { dx: 0,   dy: -48, initDir: 2, targetDir: 0, name: "北像" },
-        { dx: 52,  dy: 0,   initDir: 3, targetDir: 1, name: "東像" },
-        { dx: 0,   dy: 48,  initDir: 0, targetDir: 2, name: "南像" },
-        { dx: -52, dy: 0,   initDir: 1, targetDir: 3, name: "西像" }
+        { dx: 0, dy: -48, initDir: 2, targetDir: 0, name: "北像" }, { dx: 52, dy: 0, initDir: 3, targetDir: 1, name: "東像" },
+        { dx: 0, dy: 48, initDir: 0, targetDir: 2, name: "南像" },  { dx: -52, dy: 0, initDir: 1, targetDir: 3, name: "西像" }
       ]
     }
   };
@@ -1751,36 +1042,20 @@ window.Aetheria = window.Aetheria || {};
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
     const solved = Boolean(s.solvedExplorePuzzles && s.solvedExplorePuzzles[mapObj.id]);
     const chestClaimed = Boolean(s.claimedExplorePuzzleChests && s.claimedExplorePuzzleChests[mapObj.id]);
+    const cx = pCfg.cx, cy = pCfg.cy;
 
-    const cx = pCfg.cx;
-    const cy = pCfg.cy;
-
-    mapObj.dirtBlobs.push({ cx: cx, cy: cy, rx: 105, ry: 85, isExpandedBlob: true });
+    mapObj.dirtBlobs.push({ cx: cx, cy: cy, rx: 95, ry: 80, isExpandedBlob: true });
 
     mapObj.decos.push({
       id: "exp_puz_tablet_" + mapObj.id,
-      x: cx - 72,
-      y: cy - 52,
-      sprite: "seal_pillar_on",
-      w: 26,
-      h: 30,
-      solid: true,
-      isHighlandElement: true,
-      isExplorePuzzleTablet: true,
-      riddleText: pCfg.riddle,
-      zoneId: mapObj.id
+      x: cx - 64, y: cy - 52, sprite: "seal_pillar_on", w: 26, h: 30, solid: true,
+      isHighlandElement: true, isExplorePuzzleTablet: true, riddleText: pCfg.riddle, zoneId: mapObj.id
     });
 
     mapObj.nodes.push({
       id: "exp_puz_chest_" + mapObj.id,
-      x: cx,
-      y: cy,
-      type: "chest",
-      name: "古遺跡機關寶箱",
-      isHighlandOre: true,
-      isExplorePuzzleChest: true,
-      zoneId: mapObj.id,
-      opened: chestClaimed
+      x: cx, y: cy, type: "chest", name: "古遺跡機關寶箱",
+      isHighlandOre: true, isExplorePuzzleChest: true, zoneId: mapObj.id, opened: chestClaimed
     });
 
     if (pCfg.type === "brazier_order") {
@@ -1788,18 +1063,8 @@ window.Aetheria = window.Aetheria || {};
       pCfg.items.forEach(function(it, idx) {
         mapObj.decos.push({
           id: "exp_puz_brazier_" + mapObj.id + "_" + idx,
-          x: cx + it.dx,
-          y: cy + it.dy,
-          sprite: solved ? "brazier_on" : "brazier_off",
-          w: 26,
-          h: 28,
-          solid: true,
-          isHighlandElement: true,
-          isPuzzleOrderBrazier: true,
-          lit: solved,
-          orderNum: it.order,
-          brazierLabel: it.label,
-          zoneId: mapObj.id
+          x: cx + it.dx, y: cy + it.dy, sprite: solved ? "brazier_on" : "brazier_off", w: 26, h: 28, solid: true,
+          isHighlandElement: true, isPuzzleOrderBrazier: true, lit: solved, orderNum: it.order, brazierLabel: it.label, zoneId: mapObj.id
         });
       });
     } else if (pCfg.type === "statue_rotate") {
@@ -1807,18 +1072,8 @@ window.Aetheria = window.Aetheria || {};
         const curDir = solved ? st.targetDir : st.initDir;
         mapObj.decos.push({
           id: "exp_puz_statue_" + mapObj.id + "_" + idx,
-          x: cx + st.dx,
-          y: cy + st.dy,
-          sprite: "ancient_statue",
-          w: 28,
-          h: 30,
-          solid: true,
-          isHighlandElement: true,
-          isPuzzleRotateStatue: true,
-          curDir: curDir,
-          targetDir: st.targetDir,
-          statueName: st.name,
-          zoneId: mapObj.id
+          x: cx + st.dx, y: cy + st.dy, sprite: "ancient_statue", w: 28, h: 30, solid: true,
+          isHighlandElement: true, isPuzzleRotateStatue: true, curDir: curDir, targetDir: st.targetDir, statueName: st.name, zoneId: mapObj.id
         });
       });
     } else if (pCfg.type === "lever_toggle") {
@@ -1827,17 +1082,8 @@ window.Aetheria = window.Aetheria || {};
         const isOn = initStates[idx];
         mapObj.decos.push({
           id: "exp_puz_lever_" + mapObj.id + "_" + idx,
-          x: cx + dx,
-          y: cy + 48,
-          sprite: isOn ? "lever_on" : "lever_off",
-          w: 26,
-          h: 26,
-          solid: true,
-          isHighlandElement: true,
-          isPuzzleToggleLever: true,
-          leverIdx: idx,
-          leverOn: isOn,
-          zoneId: mapObj.id
+          x: cx + dx, y: cy + 48, sprite: isOn ? "lever_on" : "lever_off", w: 26, h: 26, solid: true,
+          isHighlandElement: true, isPuzzleToggleLever: true, leverIdx: idx, leverOn: isOn, zoneId: mapObj.id
         });
       });
     }
@@ -1845,55 +1091,13 @@ window.Aetheria = window.Aetheria || {};
 
   // ================= 7. 各區高低差懸崖、山洞 (grotto_*) 與隱藏地底遺跡 (crypt_*) =================
   const HIGHLAND_ZONES = {
-    zone1_forest: {
-      targetW: 1680, targetH: 1180,
-      ores: ["iron", "rockSalt", "quartz", "coal"],
-      grottoOres: ["coal", "iron", "rockSalt", "quartz"],
-      cryptName: "翠風古老樹根地窖",
-      cryptBoss: "★遠古樹根守衛魔像"
-    },
-    cave1_mushroom: {
-      targetW: 1580, targetH: 1140,
-      ores: ["coal", "mithril", "quartz", "rockSalt"],
-      grottoOres: ["coal", "mithril", "quartz", "basalt"],
-      cryptName: "幽窟地底秘銀聖堂",
-      cryptBoss: "★秘銀晶簇鎮守魔像"
-    },
-    zone2_canyon: {
-      targetW: 1680, targetH: 1180,
-      ores: ["mithril", "quartz", "rockSalt", "coal"],
-      grottoOres: ["coal", "mithril", "quartz", "basalt"],
-      cryptName: "流沙埋沒法老王陵",
-      cryptBoss: "★荒漠王陵黃金魔像"
-    },
-    zone3_coast: {
-      targetW: 1680, targetH: 1180,
-      ores: ["coral", "rockSalt", "quartz", "coal"],
-      grottoOres: ["coal", "coral", "rockSalt", "mithril"],
-      cryptName: "海底亞特蘭蒂斯密室",
-      cryptBoss: "★深海遺跡三叉戟魔像"
-    },
-    zone4_snow: {
-      targetW: 1680, targetH: 1180,
-      ores: ["obsidian", "rockSalt", "quartz", "mithril"],
-      grottoOres: ["coal", "obsidian", "quartz", "mithril"],
-      cryptName: "永凍冰河遠古神殿",
-      cryptBoss: "★極寒永凍冰晶魔像"
-    },
-    zone5_volcano: {
-      targetW: 1680, targetH: 1180,
-      ores: ["starIron", "obsidian", "coal", "quartz"],
-      grottoOres: ["coal", "starIron", "obsidian", "quartz"],
-      cryptName: "地心黑曜熔爐秘殿",
-      cryptBoss: "★地心黑曜神鐵魔像"
-    },
-    zone6_sky: {
-      targetW: 1680, targetH: 1180,
-      ores: ["starIron", "goldLeaf", "quartz", "obsidian"],
-      grottoOres: ["starIron", "obsidian", "quartz", "mithril"],
-      cryptName: "星界破曉創世密室",
-      cryptBoss: "★創世星隕守護神像"
-    }
+    zone1_forest:   { targetW: 1680, targetH: 1180, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"],   cryptName: "翠風古老樹根地窖", cryptBoss: "★遠古樹根守衛魔像" },
+    cave1_mushroom: { targetW: 1580, targetH: 1140, ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "幽窟地底秘銀聖堂", cryptBoss: "★秘銀晶簇鎮守魔像" },
+    zone2_canyon:   { targetW: 1680, targetH: 1180, ores: ["mithril", "quartz", "rockSalt", "coal"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "流沙埋沒法老王陵", cryptBoss: "★荒漠王陵黃金魔像" },
+    zone3_coast:    { targetW: 1680, targetH: 1180, ores: ["coral", "rockSalt", "quartz", "coal"],       grottoOres: ["coal", "coral", "rockSalt", "mithril"],cryptName: "海底亞特蘭蒂斯密室", cryptBoss: "★深海遺跡三叉戟魔像" },
+    zone4_snow:     { targetW: 1680, targetH: 1180, ores: ["obsidian", "rockSalt", "quartz", "mithril"], grottoOres: ["coal", "obsidian", "quartz", "mithril"],cryptName: "永凍冰河遠古神殿", cryptBoss: "★極寒永凍冰晶魔像" },
+    zone5_volcano:  { targetW: 1680, targetH: 1180, ores: ["starIron", "obsidian", "coal", "quartz"],    grottoOres: ["coal", "starIron", "obsidian", "quartz"],cryptName: "地心黑曜熔爐秘殿", cryptBoss: "★地心黑曜神鐵魔像" },
+    zone6_sky:      { targetW: 1680, targetH: 1180, ores: ["starIron", "goldLeaf", "quartz", "obsidian"],grottoOres: ["starIron", "obsidian", "quartz", "mithril"],cryptName: "星界破曉創世密室", cryptBoss: "★創世星隕守護神像" }
   };
 
   const grottoMapsCache = {};
@@ -1902,82 +1106,36 @@ window.Aetheria = window.Aetheria || {};
   function buildCliffGrottoMap(parentZoneId) {
     const cfg = HIGHLAND_ZONES[parentZoneId] || HIGHLAND_ZONES.zone1_forest;
     const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
-    const parentMap = (window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(parentZoneId)) || { recLv: 3, name: "野外" };
+    const parentMap = (window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(parentZoneId)) || { recLv: 3 };
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
 
     const nodes = [];
-    const orePositions = [
-      { x: 130, y: 110 }, { x: 240, y: 95 },  { x: 350, y: 110 },
-      { x: 145, y: 195 }, { x: 335, y: 195 }, { x: 240, y: 145 }
-    ];
-
-    orePositions.forEach(function(pt, idx) {
+    [{ x: 130, y: 110 }, { x: 240, y: 95 }, { x: 350, y: 110 }, { x: 145, y: 195 }, { x: 335, y: 195 }, { x: 240, y: 145 }].forEach(function(pt, idx) {
       const giveKey = cfg.grottoOres[idx % cfg.grottoOres.length];
       const mInfo = matsDB[giveKey] || { name: giveKey };
       nodes.push({
         id: "grotto_node_" + parentZoneId + "_" + idx + "_" + Date.now(),
-        x: pt.x,
-        y: pt.y,
-        type: "crystal",
-        giveKey: giveKey,
-        reqTool: "pickaxe",
-        reqToolLv: 0,
-        perfect: true,
-        isClusterBoulder: true,
-        name: mInfo.name,
-        opened: false
+        x: pt.x, y: pt.y, type: "crystal", giveKey: giveKey, reqTool: "pickaxe", reqToolLv: 0,
+        perfect: true, isClusterBoulder: true, name: mInfo.name, opened: false
       });
     });
 
     const grottoDigId = "dig_perm_grotto_" + parentZoneId;
     if (!(s.dugSpots && s.dugSpots[grottoDigId])) {
       nodes.push({
-        id: grottoDigId,
-        x: 240,
-        y: 205,
-        type: "crystal",
-        giveKey: "cryptKey",
-        isBuriedSpot: true,
-        reqToolLv: 0,
-        name: "✖藏寶點",
-        opened: false
+        id: grottoDigId, x: 240, y: 205, type: "crystal", giveKey: "cryptKey",
+        isBuriedSpot: true, reqToolLv: 0, name: "✖藏寶點", opened: false
       });
     }
 
     return {
-      id: "grotto_" + parentZoneId,
-      parentZoneId: parentZoneId,
-      _refreshToken: Date.now(),
-      name: "岩壁礦洞",
-      recLv: parentMap.recLv || 3,
-      bgm: "cave",
-      theme: "cave",
-      rain: false,
-      fog: false,
-      hasRiver: false,
-      width: 480,
-      height: 320,
-      dirtBlobs: [{ cx: 240, cy: 155, rx: 185, ry: 110 }],
-      trees: [],
-      decos: [
-        { x: 185, y: 78, sprite: "brazier_on", w: 24, h: 26, solid: true },
-        { x: 295, y: 78, sprite: "brazier_on", w: 24, h: 26, solid: true }
-      ],
-      nodes: nodes,
-      npcs: [],
-      monsters: [],
-      portals: [
-        {
-          id: "p_exit_grotto_" + parentZoneId,
-          name: "離開山洞 ▾",
-          x: 240,
-          y: 278,
-          targetZone: parentZoneId,
-          targetX: 495,
-          targetY: 995,
-          icon: "stairs"
-        }
-      ]
+      id: "grotto_" + parentZoneId, parentZoneId: parentZoneId, _refreshToken: Date.now(),
+      name: "岩壁礦洞", recLv: parentMap.recLv || 3, bgm: "cave", theme: "cave",
+      rain: false, fog: false, hasRiver: false, width: 480, height: 320,
+      dirtBlobs: [{ cx: 240, cy: 155, rx: 185, ry: 110 }], trees: [],
+      decos: [{ x: 185, y: 78, sprite: "brazier_on", w: 24, h: 26, solid: true }, { x: 295, y: 78, sprite: "brazier_on", w: 24, h: 26, solid: true }],
+      nodes: nodes, npcs: [], monsters: [],
+      portals: [{ id: "p_exit_grotto_" + parentZoneId, name: "離開山洞 ▾", x: 240, y: 278, targetZone: parentZoneId, targetX: 495, targetY: 995, icon: "stairs" }]
     };
   }
 
@@ -1988,95 +1146,40 @@ window.Aetheria = window.Aetheria || {};
     const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
     const vaultClaimed = Boolean(s.claimedCryptVaults && s.claimedCryptVaults[parentZoneId]);
 
-    const nodes = [
-      {
-        id: "crypt_vault_" + parentZoneId,
-        x: 280,
-        y: 85,
-        type: "chest",
-        name: "遠古聖物石棺",
-        isCryptVaultChest: true,
-        parentZoneId: parentZoneId,
-        opened: vaultClaimed
-      }
-    ];
+    const nodes = [{
+      id: "crypt_vault_" + parentZoneId, x: 280, y: 85, type: "chest",
+      name: "遠古聖物石棺", isCryptVaultChest: true, parentZoneId: parentZoneId, opened: vaultClaimed
+    }];
 
-    const cryptOrePos = [
-      { x: 115, y: 115 }, { x: 445, y: 115 },
-      { x: 115, y: 245 }, { x: 445, y: 245 }
-    ];
-    cryptOrePos.forEach(function(pt, idx) {
+    [{ x: 115, y: 115 }, { x: 445, y: 115 }, { x: 115, y: 245 }, { x: 445, y: 245 }].forEach(function(pt, idx) {
       const giveKey = cfg.ores[idx % cfg.ores.length];
       const mInfo = matsDB[giveKey] || { name: giveKey };
       nodes.push({
         id: "crypt_ore_" + parentZoneId + "_" + idx + "_" + Date.now(),
-        x: pt.x,
-        y: pt.y,
-        type: "crystal",
-        giveKey: giveKey,
-        reqTool: "pickaxe",
-        reqToolLv: 0,
-        perfect: true,
-        isClusterBoulder: true,
-        name: "遺跡" + mInfo.name,
-        opened: false
+        x: pt.x, y: pt.y, type: "crystal", giveKey: giveKey, reqTool: "pickaxe", reqToolLv: 0,
+        perfect: true, isClusterBoulder: true, name: "遺跡" + mInfo.name, opened: false
       });
     });
 
     const bossLv = Math.max(4, (parentMap.recLv || 3) + 2);
-    const monsters = [
-      {
-        id: "crypt_guardian_" + parentZoneId + "_" + Date.now(),
-        name: cfg.cryptBoss || "★遠古遺跡守衛魔像",
-        lv: bossLv,
-        x: 280,
-        y: 165,
-        homeX: 280,
-        homeY: 165,
-        type: "boss",
-        isBoss: false,
-        isShiny: true,
-        isCryptGuardian: true,
-        alive: true
-      }
-    ];
-
     return {
-      id: "crypt_" + parentZoneId,
-      parentZoneId: parentZoneId,
-      _refreshToken: Date.now(),
-      name: cfg.cryptName || "遠古地底遺跡",
-      recLv: bossLv,
-      bgm: "cave",
-      theme: "cave",
-      rain: false,
-      fog: false,
-      hasRiver: false,
-      width: 560,
-      height: 360,
-      dirtBlobs: [{ cx: 280, cy: 175, rx: 220, ry: 135 }],
-      trees: [],
+      id: "crypt_" + parentZoneId, parentZoneId: parentZoneId, _refreshToken: Date.now(),
+      name: cfg.cryptName || "遠古地底遺跡", recLv: bossLv, bgm: "cave", theme: "cave",
+      rain: false, fog: false, hasRiver: false, width: 560, height: 360,
+      dirtBlobs: [{ cx: 280, cy: 175, rx: 220, ry: 135 }], trees: [],
       decos: [
-        { x: 205, y: 82,  sprite: "brazier_on",     w: 26, h: 28, solid: true },
-        { x: 355, y: 82,  sprite: "brazier_on",     w: 26, h: 28, solid: true },
+        { x: 205, y: 82, sprite: "brazier_on", w: 26, h: 28, solid: true },
+        { x: 355, y: 82, sprite: "brazier_on", w: 26, h: 28, solid: true },
         { x: 205, y: 175, sprite: "seal_pillar_on", w: 28, h: 32, solid: true },
         { x: 355, y: 175, sprite: "seal_pillar_on", w: 28, h: 32, solid: true }
       ],
-      nodes: nodes,
-      npcs: [],
-      monsters: [],
-      portals: [
-        {
-          id: "p_exit_crypt_" + parentZoneId,
-          name: "離開地底遺跡 ▾",
-          x: 280,
-          y: 318,
-          targetZone: parentZoneId,
-          targetX: 935,
-          targetY: 1055,
-          icon: "stairs"
-        }
-      ]
+      nodes: nodes, npcs: [],
+      monsters: [{
+        id: "crypt_guardian_" + parentZoneId + "_" + Date.now(),
+        name: cfg.cryptBoss || "★遠古遺跡守衛魔像", lv: bossLv, x: 280, y: 165, homeX: 280, homeY: 165,
+        type: "boss", isBoss: false, isShiny: true, isCryptGuardian: true, alive: true
+      }],
+      portals: [{ id: "p_exit_crypt_" + parentZoneId, name: "離開地底遺跡 ▾", x: 280, y: 318, targetZone: parentZoneId, targetX: 935, targetY: 1055, icon: "stairs" }]
     };
   }
 
@@ -2117,45 +1220,34 @@ window.Aetheria = window.Aetheria || {};
         if (t.isExpandedPerimeterTree) return false;
         if (t.y >= oldH - 72) return false;
         if (t.x >= oldW - 68) return false;
-        if (t.x >= 180 && t.x <= 1250 && t.y >= 740 && t.y <= 1120) return false;
+        if (t.x >= 130 && t.x <= 1010 && t.y >= 740 && t.y <= 1120) return false;
         return true;
       });
 
       for (let bx = 20; bx < mapObj.width - 20; bx += 42) {
         if (mapObj.hasRiver && Math.abs(bx - (mapObj.riverX || 1030)) < 52) continue;
         mapObj.trees.push({ x: bx, y: mapObj.height - 42, isExpandedPerimeterTree: true });
-        if (bx >= oldW - 40) {
-          mapObj.trees.push({ x: bx, y: 18, isExpandedPerimeterTree: true });
-        }
+        if (bx >= oldW - 40) mapObj.trees.push({ x: bx, y: 18, isExpandedPerimeterTree: true });
       }
       for (let by = 58; by < mapObj.height - 42; by += 42) {
         mapObj.trees.push({ x: mapObj.width - 42, y: by, isExpandedPerimeterTree: true });
-        if (by >= oldH - 40) {
-          mapObj.trees.push({ x: 18, y: by, isExpandedPerimeterTree: true });
-        }
+        if (by >= oldH - 40) mapObj.trees.push({ x: 18, y: by, isExpandedPerimeterTree: true });
       }
-      mapObj.trees.push(
-        { x: 345, y: 1065, isExpandedPerimeterTree: true },
-        { x: 405, y: 1080, isExpandedPerimeterTree: true }
-      );
     }
 
     if (mapObj.monsters) {
       mapObj.monsters.forEach(function(m) {
         if (!m.isBoss && isBlockedByCliffFromLowland(m.x, m.y)) {
-          m.x = 240;
-          m.y = 920;
-          m.homeX = 240;
-          m.homeY = 920;
+          m.x = 240; m.y = 720; m.homeX = 240; m.homeY = 720;
         }
       });
     }
 
     mapObj.dirtBlobs = (mapObj.dirtBlobs || []).filter(function(b) { return !b.isExpandedBlob; });
     mapObj.dirtBlobs.push(
-      { cx: 280,  cy: 820,  rx: 95,  ry: 210, isExpandedBlob: true },
+      { cx: 230,  cy: 780,  rx: 105, ry: 220, isExpandedBlob: true },
       { cx: 520,  cy: 1025, rx: 195, ry: 75,  isExpandedBlob: true },
-      { cx: 955,  cy: 1025, rx: 85,  ry: 70,  isExpandedBlob: true },
+      { cx: 945,  cy: 1025, rx: 75,  ry: 65,  isExpandedBlob: true },
       { cx: 1360, cy: 420,  rx: 155, ry: 220, isExpandedBlob: true },
       { cx: 1320, cy: 900,  rx: 165, ry: 150, isExpandedBlob: true }
     );
@@ -2165,142 +1257,62 @@ window.Aetheria = window.Aetheria || {};
     mapObj.portals = (mapObj.portals || []).filter(function(p) { return !p.isCliffCavePortal; });
 
     mapObj.portals.push({
-      id: "p_cliff_cave_" + mapObj.id,
-      name: "山洞",
-      x: 495,
-      y: 948,
-      targetZone: "grotto_" + mapObj.id,
-      targetX: 240,
-      targetY: 235,
-      icon: "abyss",
-      isCliffCavePortal: true
+      id: "p_cliff_cave_" + mapObj.id, name: "山洞", x: 495, y: 948,
+      targetZone: "grotto_" + mapObj.id, targetX: 240, targetY: 235, icon: "abyss", isCliffCavePortal: true
     });
 
     mapObj.decos.push(
-      {
-        id: "cliff_ladder_north_" + mapObj.id,
-        x: 560,
-        y: 800,
-        sprite: rigged ? "rope_ladder" : "cliff_stake",
-        w: 30,
-        h: 38,
-        solid: false,
-        isHighlandElement: true,
-        isCliffLadderSpot: true,
-        ladderSide: "north",
-        zoneId: mapObj.id
-      },
-      {
-        id: "cliff_ladder_south_" + mapObj.id,
-        x: 625,
-        y: 940,
-        sprite: rigged ? "rope_ladder" : "cliff_stake",
-        w: 30,
-        h: 46,
-        solid: false,
-        isHighlandElement: true,
-        isCliffLadderSpot: true,
-        ladderSide: "south",
-        zoneId: mapObj.id
-      },
-      {
-        id: "crypt_entrance_" + mapObj.id,
-        x: 935,
-        y: 1015,
-        sprite: cryptUnlocked ? "crypt_door_open" : "crypt_door_locked",
-        w: 34,
-        h: 34,
-        solid: false,
-        isHighlandElement: true,
-        isCryptEntrance: true,
-        zoneId: mapObj.id
-      }
+      { id: "cliff_ladder_north_" + mapObj.id, x: 560, y: 800, sprite: rigged ? "rope_ladder" : "cliff_stake", w: 30, h: 38, solid: false, isHighlandElement: true, isCliffLadderSpot: true, ladderSide: "north", zoneId: mapObj.id },
+      { id: "cliff_ladder_south_" + mapObj.id, x: 625, y: 940, sprite: rigged ? "rope_ladder" : "cliff_stake", w: 30, h: 46, solid: false, isHighlandElement: true, isCliffLadderSpot: true, ladderSide: "south", zoneId: mapObj.id },
+      { id: "crypt_entrance_" + mapObj.id,     x: 935, y: 1015, sprite: cryptUnlocked ? "crypt_door_open" : "crypt_door_locked", w: 34, h: 34, solid: false, isHighlandElement: true, isCryptEntrance: true, zoneId: mapObj.id }
     );
 
-    const plateauOreCoords = [
-      { x: 485, y: 845 },
-      { x: 655, y: 870 },
-      { x: 785, y: 940 },
-      { x: 785, y: 1015 }
-    ];
-
-    plateauOreCoords.forEach(function(pt, idx) {
+    [{ x: 485, y: 845 }, { x: 655, y: 870 }, { x: 785, y: 940 }, { x: 785, y: 1015 }].forEach(function(pt, idx) {
       const giveKey = cfg.ores[idx % cfg.ores.length];
       const mInfo = matsDB[giveKey] || { name: giveKey };
       mapObj.nodes.push({
         id: "hl_ore_" + mapObj.id + "_" + idx + "_" + token,
-        x: pt.x,
-        y: pt.y,
-        type: "crystal",
-        giveKey: giveKey,
-        reqTool: "pickaxe",
-        reqToolLv: 0,
-        perfect: true,
-        isHighlandOre: true,
-        isClusterBoulder: true,
-        reqHighland: true,
-        name: "高台" + mInfo.name,
-        opened: false
+        x: pt.x, y: pt.y, type: "crystal", giveKey: giveKey, reqTool: "pickaxe", reqToolLv: 0,
+        perfect: true, isHighlandOre: true, isClusterBoulder: true, reqHighland: true, name: "高台" + mInfo.name, opened: false
       });
     });
 
-    const buriedSpotsCoords = [
+    // 固定唯一挖寶點（全遊戲只限挖一次）
+    [
       { x: 265,  y: 625,  reqHighland: false },
       { x: 585,  y: 1045, reqHighland: false },
       { x: 565,  y: 865,  reqHighland: true  },
       { x: 1380, y: 620,  reqHighland: false }
-    ];
-    buriedSpotsCoords.forEach(function(bpt, idx) {
+    ].forEach(function(bpt, idx) {
       const permDigId = "dig_perm_" + mapObj.id + "_" + idx;
       if (s.dugSpots && s.dugSpots[permDigId]) return;
       mapObj.nodes.push({
-        id: permDigId,
-        x: bpt.x,
-        y: bpt.y,
-        type: "crystal",
-        giveKey: "cryptKey",
-        reqToolLv: 0,
-        isHighlandOre: true,
-        isBuriedSpot: true,
-        reqHighland: bpt.reqHighland,
-        name: "✖藏寶點",
-        opened: false
+        id: permDigId, x: bpt.x, y: bpt.y, type: "crystal", giveKey: "cryptKey", reqToolLv: 0,
+        isHighlandOre: true, isBuriedSpot: true, reqHighland: bpt.reqHighland, name: "✖藏寶點", opened: false
       });
     });
 
-    const extraExpansionCoords = [
-      { x: 210,  y: 860,  key: "coal",     type: "crystal" },
-      { x: 260,  y: 1020, key: "rockSalt", type: "crystal" },
-      { x: 1240, y: 260,  key: "quartz",   type: "crystal" },
-      { x: 1380, y: 440,  key: "coal",     type: "crystal" },
-      { x: 1320, y: 760,  key: "rockSalt", type: "crystal" },
-      { x: 1220, y: 960,  key: "quartz",   type: "crystal" }
-    ];
-    extraExpansionCoords.forEach(function(ec, idx) {
+    [
+      { x: 150,  y: 690, key: "coal",     type: "crystal" },
+      { x: 310,  y: 710, key: "rockSalt", type: "crystal" },
+      { x: 1240, y: 260, key: "quartz",   type: "crystal" },
+      { x: 1380, y: 440, key: "coal",     type: "crystal" },
+      { x: 1320, y: 760, key: "rockSalt", type: "crystal" },
+      { x: 1220, y: 960, key: "quartz",   type: "crystal" }
+    ].forEach(function(ec, idx) {
       const mInfo = matsDB[ec.key] || { name: ec.key };
       mapObj.nodes.push({
         id: "exp_srpg_node_" + mapObj.id + "_" + idx + "_" + token,
-        x: ec.x,
-        y: ec.y,
-        type: ec.type,
-        giveKey: ec.key,
-        reqTool: "pickaxe",
-        reqToolLv: 0,
-        perfect: false,
-        isHighlandOre: true,
-        isClusterBoulder: true,
-        reqHighland: false,
-        name: mInfo.name,
-        opened: false
+        x: ec.x, y: ec.y, type: ec.type, giveKey: ec.key, reqTool: "pickaxe", reqToolLv: 0,
+        perfect: false, isHighlandOre: true, isClusterBoulder: true, reqHighland: false, name: mInfo.name, opened: false
       });
     });
 
     injectExplorationPuzzlesIntoMap(mapObj);
-
     return mapObj;
   }
 
-  // ================= 8. 圖2「全區全貌放大地圖」與格仔工坊管理系統 =================
+  // ================= 8. 全區全貌放大地圖與格仔工坊管理系統 =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -2346,13 +1358,9 @@ window.Aetheria = window.Aetheria || {};
       } else if (mapObj.id === "ocean_sea") {
         (mapObj.dirtBlobs || []).forEach(function(b) {
           ctx.fillStyle = "#e6c88c";
-          ctx.beginPath();
-          ctx.arc((b.cx || 0) * scaleX, (b.cy || 0) * scaleY, (b.rx || 80) * scaleX, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc((b.cx || 0) * scaleX, (b.cy || 0) * scaleY, (b.rx || 80) * scaleX, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = "#599140";
-          ctx.beginPath();
-          ctx.arc((b.cx || 0) * scaleX, (b.cy || 0) * scaleY, (b.rx || 80) * scaleX * 0.68, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc((b.cx || 0) * scaleX, (b.cy || 0) * scaleY, (b.rx || 80) * scaleX * 0.68, 0, Math.PI * 2); ctx.fill();
         });
       }
 
@@ -2362,8 +1370,7 @@ window.Aetheria = window.Aetheria || {};
       });
 
       (mapObj.portals || []).forEach(function(p) {
-        const px = p.x * scaleX;
-        const py = p.y * scaleY;
+        const px = p.x * scaleX, py = p.y * scaleY;
         ctx.fillStyle = p.isCliffCavePortal ? "#09060a" : "#38b6ff";
         ctx.fillRect(px - 5, py - 5, 10, 10);
         ctx.strokeStyle = "#ffffff";
@@ -2372,8 +1379,7 @@ window.Aetheria = window.Aetheria || {};
       });
 
       (mapObj.decos || []).forEach(function(d) {
-        const dx = d.x * scaleX;
-        const dy = d.y * scaleY;
+        const dx = d.x * scaleX, dy = d.y * scaleY;
         if (d.isCryptEntrance) {
           ctx.fillStyle = "#9d4edd";
           ctx.fillRect(dx - 5, dy - 5, 10, 10);
@@ -2381,16 +1387,13 @@ window.Aetheria = window.Aetheria || {};
           ctx.strokeRect(dx - 5, dy - 5, 10, 10);
         } else if (d.isExplorePuzzleTablet) {
           ctx.fillStyle = "#38b6ff";
-          ctx.beginPath();
-          ctx.arc(dx, dy, 5.5, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(dx, dy, 5.5, 0, Math.PI * 2); ctx.fill();
         }
       });
 
       (mapObj.nodes || []).forEach(function(n) {
         if (n.opened) return;
-        const nx = n.x * scaleX;
-        const ny = n.y * scaleY;
+        const nx = n.x * scaleX, ny = n.y * scaleY;
         if (n.isBuriedSpot && !(s.dugSpots && s.dugSpots[n.id])) {
           drawTreasureXMarkerOnCanvas(ctx, nx, ny, 7.5);
         } else if (n.type === "chest") {
@@ -2403,39 +1406,25 @@ window.Aetheria = window.Aetheria || {};
       });
 
       (mapObj.monsters || []).forEach(function(m) {
-        if (m.alive === false) return;
-        const mx = m.x * scaleX;
-        const my = m.y * scaleY;
-        if (m.isBoss) {
-          ctx.beginPath();
-          ctx.arc(mx, my, 6.5, 0, Math.PI * 2);
-          ctx.fillStyle = "#e03c4b";
-          ctx.fill();
-          ctx.strokeStyle = "#ffd166";
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
+        if (m.alive === false || !m.isBoss) return;
+        const mx = m.x * scaleX, my = m.y * scaleY;
+        ctx.beginPath(); ctx.arc(mx, my, 6.5, 0, Math.PI * 2);
+        ctx.fillStyle = "#e03c4b"; ctx.fill();
+        ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 1.5; ctx.stroke();
       });
 
-      const hx = (s.heroX || 300) * scaleX;
-      const hy = (s.heroY || 240) * scaleY;
-      ctx.beginPath();
-      ctx.arc(hx, hy, 7.5, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(56, 182, 255, 0.45)";
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
-      ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#141013";
-      ctx.stroke();
+      const hx = (s.heroX || 300) * scaleX, hy = (s.heroY || 240) * scaleY;
+      ctx.beginPath(); ctx.arc(hx, hy, 7.5, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 182, 255, 0.45)"; ctx.fill();
+      ctx.beginPath(); ctx.arc(hx, hy, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff"; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "#141013"; ctx.stroke();
 
       const legend = document.createElement("div");
       legend.className = "fullmap-legend-bar";
       legend.innerHTML =
         '<span>⚪ <b>你的位置</b></span>' +
-        '<span><b style="color:#e03c4b; background:#ffd166; padding:0 3px; border-radius:50%;">✖</b> <b>藏寶挖掘點(鐵鏟)</b></span>' +
+        '<span><b style="color:#e03c4b; background:#ffd166; padding:0 3px; border-radius:50%;">✖</b> <b>唯一藏寶點(鐵鏟)</b></span>' +
         '<span>🟨 <b>秘寶箱/機關陣</b></span>' +
         '<span>🟪 <b>地底遺跡門</b></span>' +
         '<span>🟦 <b>山洞/傳送口</b></span>' +
@@ -2461,29 +1450,20 @@ window.Aetheria = window.Aetheria || {};
     getRecipeSubCategory: function(rec) {
       if (rec.category) return rec.category;
       const id = String(rec.id || "");
-      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("lantern") !== -1) {
-        return "explore";
-      }
-      if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1) {
-        return "survival";
-      }
+      if (id.indexOf("torch") !== -1 || id.indexOf("bomb") !== -1 || id.indexOf("ladder") !== -1 || id.indexOf("lantern") !== -1) return "explore";
+      if (id.indexOf("ration") !== -1 || id.indexOf("heal") !== -1 || id.indexOf("hint") !== -1 || id.indexOf("jerky") !== -1) return "survival";
       return "smelt";
     },
 
     switchTab: function(tabId) {
       if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) window.Aetheria.Audio.sfxTalkBlip();
-      this.curTab = tabId;
-      this.curSubFilter = "all";
-      this.selectedItemId = null;
-      this.savedScrollTop = 0;
+      this.curTab = tabId; this.curSubFilter = "all"; this.selectedItemId = null; this.savedScrollTop = 0;
       this.renderGridWorkshopModal(tabId);
     },
 
     switchFilter: function(filterId) {
       if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) window.Aetheria.Audio.sfxTalkBlip();
-      this.curSubFilter = filterId;
-      this.selectedItemId = null;
-      this.savedScrollTop = 0;
+      this.curSubFilter = filterId; this.selectedItemId = null; this.savedScrollTop = 0;
       this.renderGridWorkshopModal(this.curTab);
     },
 
@@ -2506,25 +1486,18 @@ window.Aetheria = window.Aetheria || {};
     executeCraftRecipe: function(rec) {
       const s = window.Aetheria.State.data;
       if (!rec) return;
-
       if (!this.canAffordRecipe(s, rec.cost, rec.goldCost || 0)) {
         window.Aetheria.Audio.sfxWrong();
         window.Aetheria.UI.showToast("⚠️ 合成材料不足！請查看上方檢視盒中標示紅色的材料。");
         return;
       }
-
       Object.entries(rec.cost || {}).forEach(function(entry) {
         s.inventory[entry[0]] = Math.max(0, (s.inventory[entry[0]] || 0) - entry[1]);
       });
-      if (rec.goldCost) {
-        s.gold = Math.max(0, (s.gold || 0) - rec.goldCost);
-      }
-
+      if (rec.goldCost) s.gold = Math.max(0, (s.gold || 0) - rec.goldCost);
       const outKey = rec.toKey || rec.giveKey || rec.outKey;
       const outCnt = rec.toCount || rec.count || rec.qty || 1;
-      if (outKey) {
-        s.inventory[outKey] = (s.inventory[outKey] || 0) + outCnt;
-      }
+      if (outKey) s.inventory[outKey] = (s.inventory[outKey] || 0) + outCnt;
 
       window.Aetheria.Audio.sfxLevelUp();
       window.Aetheria.State.save();
@@ -2536,7 +1509,6 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       const UI = window.Aetheria.UI;
       if (!selectedObj) return;
-
       const modalBody = document.getElementById("modal-body");
       if (modalBody) this.savedScrollTop = modalBody.scrollTop;
 
@@ -2545,7 +1517,6 @@ window.Aetheria = window.Aetheria || {};
         this.renderGridWorkshopModal(this.curTab);
         return;
       }
-
       if (selectedObj.itemType === "tool") {
         if (selectedObj.isMax) return;
         if (!selectedObj.canCraft) {
@@ -2558,9 +1529,7 @@ window.Aetheria = window.Aetheria || {};
         Object.entries(selectedObj.costMap || {}).forEach(function(entry) {
           s.inventory[entry[0]] = Math.max(0, (s.inventory[entry[0]] || 0) - entry[1]);
         });
-        if (selectedObj.goldCost) {
-          s.gold = Math.max(0, (s.gold || 0) - selectedObj.goldCost);
-        }
+        if (selectedObj.goldCost) s.gold = Math.max(0, (s.gold || 0) - selectedObj.goldCost);
         s.tools[tKey] = (s.tools[tKey] || 0) + 1;
         window.Aetheria.State.recalcMaxHp();
         window.Aetheria.Audio.sfxLevelUp();
@@ -2570,7 +1539,6 @@ window.Aetheria = window.Aetheria || {};
         this.renderGridWorkshopModal(this.curTab);
         return;
       }
-
       if (selectedObj.itemType === "weapon") {
         const wId = selectedObj.uid;
         if (selectedObj.unlocked) {
@@ -2580,14 +1548,8 @@ window.Aetheria = window.Aetheria || {};
           UI.updateAllHud();
           UI.showToast("⚔️ 已裝備武器：【" + selectedObj.shortName + "】！");
         } else {
-          if (!selectedObj.canCraft) {
-            window.Aetheria.Audio.sfxWrong();
-            UI.showToast("⚠️ 鍛造此武器的材料或金幣不足！");
-            return;
-          }
-          Object.entries(selectedObj.costMap || {}).forEach(function(entry) {
-            s.inventory[entry[0]] -= entry[1];
-          });
+          if (!selectedObj.canCraft) { window.Aetheria.Audio.sfxWrong(); UI.showToast("⚠️ 鍛造此武器的材料或金幣不足！"); return; }
+          Object.entries(selectedObj.costMap || {}).forEach(function(entry) { s.inventory[entry[0]] -= entry[1]; });
           if (selectedObj.goldCost) s.gold -= selectedObj.goldCost;
           if (!s.unlockedWeapons) s.unlockedWeapons = [];
           if (s.unlockedWeapons.indexOf(wId) === -1) s.unlockedWeapons.push(wId);
@@ -2600,7 +1562,6 @@ window.Aetheria = window.Aetheria || {};
         this.renderGridWorkshopModal(this.curTab);
         return;
       }
-
       if (selectedObj.itemType === "armor") {
         const aId = selectedObj.uid;
         if (selectedObj.unlocked) {
@@ -2611,14 +1572,8 @@ window.Aetheria = window.Aetheria || {};
           UI.updateAllHud();
           UI.showToast("🛡️ 已穿戴防具：【" + selectedObj.shortName + "】！");
         } else {
-          if (!selectedObj.canCraft) {
-            window.Aetheria.Audio.sfxWrong();
-            UI.showToast("⚠️ 鍛造此防具的材料或金幣不足！");
-            return;
-          }
-          Object.entries(selectedObj.costMap || {}).forEach(function(entry) {
-            s.inventory[entry[0]] -= entry[1];
-          });
+          if (!selectedObj.canCraft) { window.Aetheria.Audio.sfxWrong(); UI.showToast("⚠️ 鍛造此防具的材料或金幣不足！"); return; }
+          Object.entries(selectedObj.costMap || {}).forEach(function(entry) { s.inventory[entry[0]] -= entry[1]; });
           if (selectedObj.goldCost) s.gold -= selectedObj.goldCost;
           if (!s.unlockedArmors) s.unlockedArmors = [];
           if (s.unlockedArmors.indexOf(aId) === -1) s.unlockedArmors.push(aId);
@@ -2633,17 +1588,9 @@ window.Aetheria = window.Aetheria || {};
         this.renderGridWorkshopModal(this.curTab);
         return;
       }
-
       if (selectedObj.itemType === "relic") {
-        if (selectedObj.unlocked) return;
-        if (!selectedObj.canCraft) {
-          window.Aetheria.Audio.sfxWrong();
-          UI.showToast("⚠️ 合成此聖物的材料或金幣不足！");
-          return;
-        }
-        Object.entries(selectedObj.costMap || {}).forEach(function(entry) {
-          s.inventory[entry[0]] -= entry[1];
-        });
+        if (selectedObj.unlocked || !selectedObj.canCraft) return;
+        Object.entries(selectedObj.costMap || {}).forEach(function(entry) { s.inventory[entry[0]] -= entry[1]; });
         if (selectedObj.goldCost) s.gold -= selectedObj.goldCost;
         if (!s.unlockedRelics) s.unlockedRelics = [];
         s.unlockedRelics.push(selectedObj.uid);
@@ -2659,7 +1606,6 @@ window.Aetheria = window.Aetheria || {};
     useSrpgConsumable: function(matKey) {
       const s = window.Aetheria.State.data;
       if (!s.inventory || (s.inventory[matKey] || 0) <= 0) return;
-
       if (matKey === "rationJerky") {
         s.inventory.rationJerky--;
         window.Aetheria.State.restoreHunger(80, 90);
@@ -2696,7 +1642,6 @@ window.Aetheria = window.Aetheria || {};
       const self = this;
 
       registerSrpgDataIntoGame();
-
       if (activeTab) this.curTab = activeTab;
       const tab = this.curTab;
 
@@ -2719,12 +1664,8 @@ window.Aetheria = window.Aetheria || {};
       const matsDB = Data.MATERIALS || {};
 
       if (tab === "workshop") {
-        const recipeMap = {};
-        const seenNames = {};
-        COMPLETE_WORKSHOP_RECIPES.forEach(function(r) {
-          recipeMap[r.id] = r;
-          seenNames[r.name] = true;
-        });
+        const recipeMap = {}, seenNames = {};
+        COMPLETE_WORKSHOP_RECIPES.forEach(function(r) { recipeMap[r.id] = r; seenNames[r.name] = true; });
         const rawWks = Array.isArray(Data.WORKSHOP_RECIPES)
           ? Data.WORKSHOP_RECIPES
           : (Data.WORKSHOP_RECIPES && typeof Data.WORKSHOP_RECIPES === "object" ? Object.values(Data.WORKSHOP_RECIPES) : []);
@@ -2733,10 +1674,7 @@ window.Aetheria = window.Aetheria || {};
           const rid = r.id || r.wkId || ("wk_legacy_" + idx);
           if (REMOVED_BLOAT_RECIPE_IDS.indexOf(rid) !== -1) return;
           r.id = rid;
-          if (!recipeMap[rid] && !seenNames[r.name]) {
-            recipeMap[rid] = r;
-            seenNames[r.name] = true;
-          }
+          if (!recipeMap[rid] && !seenNames[r.name]) { recipeMap[rid] = r; seenNames[r.name] = true; }
         });
 
         Object.values(recipeMap).forEach(function(r) {
@@ -2744,25 +1682,14 @@ window.Aetheria = window.Aetheria || {};
           const outKey = r.toKey || r.giveKey || r.outKey;
           const owned = (s.inventory && s.inventory[outKey]) || 0;
           const canDo = self.canAffordRecipe(s, r.cost, r.goldCost || 0);
-
           itemsList.push({
-            uid: r.id,
-            raw: r,
-            itemType: "recipe",
-            subCat: subCat,
-            iconKey: "mat_" + outKey,
+            uid: r.id, raw: r, itemType: "recipe", subCat: subCat, iconKey: "mat_" + outKey,
             shortName: r.name.replace(/\s*x\d+$/i, "").replace(/\s*\([^)]*\)/g, ""),
-            fullName: r.name,
-            badgeText: "持有 " + owned,
-            canCraft: canDo,
-            costMap: r.cost,
-            goldCost: r.goldCost || 0,
-            desc: r.desc || "工坊合成加工品。"
+            fullName: r.name, badgeText: "持有 " + owned, canCraft: canDo,
+            costMap: r.cost, goldCost: r.goldCost || 0, desc: r.desc || "工坊合成加工品。"
           });
         });
-      }
-
-      else if (tab === "tools") {
+      } else if (tab === "tools") {
         ["axe", "pickaxe", "shovel", "rod", "hook", "pouch"].forEach(function(tKey) {
           const tDef = BUILTIN_TOOLS_DB[tKey] || (Data.TOOLS && Data.TOOLS[tKey]);
           if (!tDef) return;
@@ -2771,102 +1698,54 @@ window.Aetheria = window.Aetheria || {};
           const curTierObj = (tDef.tiers && tDef.tiers[curLv]) || { name: tDef.name, desc: "" };
           const isMax = !nextTier;
           const canDo = !isMax && self.canAffordRecipe(s, nextTier.cost, nextTier.gold || 0);
-
           itemsList.push({
-            uid: "tool_" + tKey,
-            toolKey: tKey,
-            itemType: "tool",
-            subCat: "all",
-            iconKey: tDef.iconKey || "icon_axe",
-            shortName: tDef.name,
-            fullName: tDef.name + " (當前：" + curTierObj.name + ")",
-            badgeText: isMax ? "★滿級" : ("Lv." + curLv),
-            canCraft: canDo,
-            isMax: isMax,
-            costMap: nextTier ? nextTier.cost : null,
-            goldCost: nextTier ? (nextTier.gold || 0) : 0,
+            uid: "tool_" + tKey, toolKey: tKey, itemType: "tool", subCat: "all", iconKey: tDef.iconKey || "icon_axe",
+            shortName: tDef.name, fullName: tDef.name + " (當前：" + curTierObj.name + ")",
+            badgeText: isMax ? "★滿級" : ("Lv." + curLv), canCraft: canDo, isMax: isMax,
+            costMap: nextTier ? nextTier.cost : null, goldCost: nextTier ? (nextTier.gold || 0) : 0,
             desc: nextTier ? ("下一階【" + nextTier.name + "】：" + (nextTier.desc || "")) : ("已達最高階級！" + (curTierObj.desc || ""))
           });
         });
-      }
-
-      else if (tab === "weapons") {
-        const seenWId = {};
-        const seenWName = {};
+      } else if (tab === "weapons") {
+        const seenWId = {}, seenWName = {};
         const wList = Object.values(Data.WEAPONS || {}).filter(function(w) {
-          if (!w || !w.id || !w.name) return false;
-          if (REMOVED_DUPLICATE_WEAPON_IDS.indexOf(w.id) !== -1) return false;
+          if (!w || !w.id || !w.name || REMOVED_DUPLICATE_WEAPON_IDS.indexOf(w.id) !== -1) return false;
           if (seenWId[w.id] || seenWName[w.name]) return false;
-          seenWId[w.id] = true;
-          seenWName[w.name] = true;
-          return true;
+          seenWId[w.id] = true; seenWName[w.name] = true; return true;
         });
-
-        wList.sort(function(a, b) {
-          return (a.tier || 1) - (b.tier || 1);
-        });
-
+        wList.sort(function(a, b) { return (a.tier || 1) - (b.tier || 1); });
         wList.forEach(function(w) {
           const unlocked = Boolean(s.unlockedWeapons && s.unlockedWeapons.indexOf(w.id) !== -1);
           const equipped = (s.equippedWeapon === w.id);
           const canDo = !unlocked && self.canAffordRecipe(s, w.cost, w.gold || 0);
           itemsList.push({
-            uid: w.id,
-            raw: w,
-            itemType: "weapon",
-            subCat: (w.tier <= 4) ? "low" : "high",
-            iconKey: "icon_sword",
-            shortName: w.name,
-            fullName: w.name + " (ATK +" + w.atk + ")",
+            uid: w.id, raw: w, itemType: "weapon", subCat: (w.tier <= 4) ? "low" : "high", iconKey: "icon_sword",
+            shortName: w.name, fullName: w.name + " (ATK +" + w.atk + ")",
             badgeText: equipped ? "已裝備" : (unlocked ? "已擁有" : ("T" + (w.tier || 1))),
-            canCraft: canDo,
-            unlocked: unlocked,
-            equipped: equipped,
-            costMap: w.cost,
-            goldCost: w.gold || 0,
+            canCraft: canDo, unlocked: unlocked, equipped: equipped, costMap: w.cost, goldCost: w.gold || 0,
             desc: w.desc || ("基礎攻擊力 +" + w.atk)
           });
         });
-      }
-
-      else if (tab === "armors") {
-        const seenAId = {};
-        const seenAName = {};
+      } else if (tab === "armors") {
+        const seenAId = {}, seenAName = {};
         const aList = Object.values(Data.ARMORS || {}).filter(function(a) {
-          if (!a || !a.id || !a.name) return false;
-          if (REMOVED_DUPLICATE_ARMOR_IDS.indexOf(a.id) !== -1) return false;
+          if (!a || !a.id || !a.name || REMOVED_DUPLICATE_ARMOR_IDS.indexOf(a.id) !== -1) return false;
           if (seenAId[a.id] || seenAName[a.name]) return false;
-          seenAId[a.id] = true;
-          seenAName[a.name] = true;
-          return true;
+          seenAId[a.id] = true; seenAName[a.name] = true; return true;
         });
-
-        aList.sort(function(a, b) {
-          return (a.tier || 1) - (b.tier || 1);
-        });
-
+        aList.sort(function(a, b) { return (a.tier || 1) - (b.tier || 1); });
         aList.forEach(function(a) {
           const unlocked = Boolean(s.unlockedArmors && s.unlockedArmors.indexOf(a.id) !== -1);
           const equipped = (s.equippedArmor === a.id);
           const canDo = !unlocked && self.canAffordRecipe(s, a.cost, a.gold || 0);
           itemsList.push({
-            uid: a.id,
-            raw: a,
-            itemType: "armor",
-            subCat: "armor",
-            iconKey: "icon_shield",
-            shortName: a.name,
-            fullName: a.name + " (DEF +" + a.def + " / HP +" + (a.hp || 0) + ")",
+            uid: a.id, raw: a, itemType: "armor", subCat: "armor", iconKey: "icon_shield",
+            shortName: a.name, fullName: a.name + " (DEF +" + a.def + " / HP +" + (a.hp || 0) + ")",
             badgeText: equipped ? "穿戴中" : (unlocked ? "已擁有" : ("T" + (a.tier || 1))),
-            canCraft: canDo,
-            unlocked: unlocked,
-            equipped: equipped,
-            costMap: a.cost,
-            goldCost: a.gold || 0,
+            canCraft: canDo, unlocked: unlocked, equipped: equipped, costMap: a.cost, goldCost: a.gold || 0,
             desc: a.desc || ("防禦力 +" + a.def + "，最大生命 +" + (a.hp || 0))
           });
         });
-
         const seenRId = {};
         Object.values(Data.RELICS || {}).forEach(function(rel) {
           if (!rel || !rel.id || seenRId[rel.id]) return;
@@ -2874,18 +1753,9 @@ window.Aetheria = window.Aetheria || {};
           const unlocked = Boolean(s.unlockedRelics && s.unlockedRelics.indexOf(rel.id) !== -1);
           const canDo = !unlocked && self.canAffordRecipe(s, rel.cost, rel.gold || 0);
           itemsList.push({
-            uid: rel.id,
-            raw: rel,
-            itemType: "relic",
-            subCat: "relic",
-            iconKey: "crystal",
-            shortName: rel.name,
-            fullName: "【聖物】" + rel.name,
-            badgeText: unlocked ? "★已共鳴" : "聖物",
-            canCraft: canDo,
-            unlocked: unlocked,
-            costMap: rel.cost,
-            goldCost: rel.gold || 0,
+            uid: rel.id, raw: rel, itemType: "relic", subCat: "relic", iconKey: "crystal",
+            shortName: rel.name, fullName: "【聖物】" + rel.name, badgeText: unlocked ? "★已共鳴" : "聖物",
+            canCraft: canDo, unlocked: unlocked, costMap: rel.cost, goldCost: rel.gold || 0,
             desc: rel.desc || "永久被動聖物加成。"
           });
         });
@@ -2894,24 +1764,17 @@ window.Aetheria = window.Aetheria || {};
       let subFilters = [];
       if (tab === "workshop") {
         subFilters = [
-          { id: "all",      label: "全部(" + itemsList.length + ")" },
-          { id: "can",      label: "✅可製作" },
-          { id: "explore",  label: "🧗開路/照明" },
-          { id: "smelt",    label: "🔥建材加工" },
-          { id: "survival", label: "🍖口糧補給" }
+          { id: "all", label: "全部(" + itemsList.length + ")" }, { id: "can", label: "✅可製作" },
+          { id: "explore", label: "🧗開路/照明" }, { id: "smelt", label: "🔥建材加工" }, { id: "survival", label: "🍖口糧補給" }
         ];
       } else if (tab === "weapons") {
         subFilters = [
-          { id: "all",  label: "全部武器(" + itemsList.length + ")" },
-          { id: "can",  label: "✅可鍛造/已擁有" },
-          { id: "low",  label: "T1~T4 初中階" },
-          { id: "high", label: "T5~T10 傳奇階" }
+          { id: "all", label: "全部武器(" + itemsList.length + ")" }, { id: "can", label: "✅可鍛造/已擁有" },
+          { id: "low", label: "T1~T4 初中階" }, { id: "high", label: "T5~T10 傳奇階" }
         ];
       } else if (tab === "armors") {
         subFilters = [
-          { id: "all",   label: "全部(" + itemsList.length + ")" },
-          { id: "armor", label: "🛡️防具護甲" },
-          { id: "relic", label: "💎遠古聖物" }
+          { id: "all", label: "全部(" + itemsList.length + ")" }, { id: "armor", label: "🛡️防具護甲" }, { id: "relic", label: "💎遠古聖物" }
         ];
       }
 
@@ -2932,9 +1795,7 @@ window.Aetheria = window.Aetheria || {};
       });
 
       this.currentFilteredMap = {};
-      filteredItems.forEach(function(it) {
-        self.currentFilteredMap[it.uid] = it;
-      });
+      filteredItems.forEach(function(it) { self.currentFilteredMap[it.uid] = it; });
 
       if (!this.selectedItemId || !this.currentFilteredMap[this.selectedItemId]) {
         const firstCraftable = filteredItems.find(function(x) { return x.canCraft; });
@@ -2948,21 +1809,16 @@ window.Aetheria = window.Aetheria || {};
         let chipsHtml = "";
         if (selectedObj.costMap && !selectedObj.unlocked && !selectedObj.isMax) {
           Object.entries(selectedObj.costMap).forEach(function(entry) {
-            const mKey = entry[0];
-            const req = entry[1];
+            const mKey = entry[0], req = entry[1];
             const have = (s.inventory && s.inventory[mKey]) || 0;
             const mName = (matsDB[mKey] && matsDB[mKey].name) || mKey;
             const ok = have >= req;
-            chipsHtml +=
-              '<span class="wk-mat-chip ' + (ok ? 'ok' : 'lack') + '">' +
-                S.iconHtml("mat_" + mKey, true) + mName + ' ' + have + '/' + req + (ok ? ' ✓' : '') +
-              '</span>';
+            chipsHtml += '<span class="wk-mat-chip ' + (ok ? 'ok' : 'lack') + '">' + S.iconHtml("mat_" + mKey, true) + mName + ' ' + have + '/' + req + (ok ? ' ✓' : '') + '</span>';
           });
         }
         if (selectedObj.goldCost > 0 && !selectedObj.unlocked && !selectedObj.isMax) {
           const gOk = (s.gold || 0) >= selectedObj.goldCost;
-          chipsHtml +=
-            '<span class="wk-mat-chip ' + (gOk ? 'ok' : 'lack') + '">💰 ' + selectedObj.goldCost + ' G</span>';
+          chipsHtml += '<span class="wk-mat-chip ' + (gOk ? 'ok' : 'lack') + '">💰 ' + selectedObj.goldCost + ' G</span>';
         }
 
         let actionBtnHtml = "";
@@ -2972,22 +1828,16 @@ window.Aetheria = window.Aetheria || {};
           actionBtnHtml =
             '<div style="display:flex; flex-direction:column; gap:4px;">' +
               '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; font-size:13px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">🔨 立即製作</button>' +
-              (canEatJerky
-                ? '<button class="na-btn" style="padding:4px 8px; font-size:11px; border-color:#5ac54f; color:#5ac54f;" onclick="Aetheria.HighlandsWorkshop.useSrpgConsumable(\'rationJerky\')">🍖 立即食用</button>'
-                : '') +
+              (canEatJerky ? '<button class="na-btn" style="padding:4px 8px; font-size:11px; border-color:#5ac54f; color:#5ac54f;" onclick="Aetheria.HighlandsWorkshop.useSrpgConsumable(\'rationJerky\')">🍖 立即食用</button>' : '') +
             '</div>';
         } else if (selectedObj.itemType === "tool") {
           actionBtnHtml = selectedObj.isMax
             ? '<span style="color:#5ac54f; font-weight:900; white-space:nowrap;">★ 已滿級</span>'
             : '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">⛏️ 升級工具</button>';
         } else if (selectedObj.itemType === "weapon" || selectedObj.itemType === "armor") {
-          if (selectedObj.equipped) {
-            actionBtnHtml = '<span style="color:#ffd166; font-weight:900; white-space:nowrap;">✓ 裝備中</span>';
-          } else if (selectedObj.unlocked) {
-            actionBtnHtml = '<button class="na-btn highlight" style="padding:7px 12px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">⚡ 立即裝備</button>';
-          } else {
-            actionBtnHtml = '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">🔨 鍛造</button>';
-          }
+          if (selectedObj.equipped) actionBtnHtml = '<span style="color:#ffd166; font-weight:900; white-space:nowrap;">✓ 裝備中</span>';
+          else if (selectedObj.unlocked) actionBtnHtml = '<button class="na-btn highlight" style="padding:7px 12px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">⚡ 立即裝備</button>';
+          else actionBtnHtml = '<button class="na-btn ' + (selectedObj.canCraft ? 'highlight' : '') + '" style="padding:7px 12px; white-space:nowrap;" onclick="Aetheria.HighlandsWorkshop.craftOrAct(\'' + selectedObj.uid + '\')">🔨 鍛造</button>';
         } else if (selectedObj.itemType === "relic") {
           actionBtnHtml = selectedObj.unlocked
             ? '<span style="color:#5ac54f; font-weight:900;">★ 生效中</span>'
@@ -2997,9 +1847,7 @@ window.Aetheria = window.Aetheria || {};
         inspectorInnerHtml =
           '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">' +
             '<div style="flex:1;">' +
-              '<div style="font-size:13.5px; font-weight:900; color:#ffd166;">' +
-                S.iconHtml(selectedObj.iconKey, true) + selectedObj.fullName +
-              '</div>' +
+              '<div style="font-size:13.5px; font-weight:900; color:#ffd166;">' + S.iconHtml(selectedObj.iconKey, true) + selectedObj.fullName + '</div>' +
               '<div style="font-size:11px; color:#cbd5e1; margin-top:2px; line-height:1.3;">' + selectedObj.desc + '</div>' +
               (chipsHtml ? '<div style="margin-top:4px;">' + chipsHtml + '</div>' : '') +
             '</div>' +
@@ -3022,9 +1870,7 @@ window.Aetheria = window.Aetheria || {};
             '<span class="wk-cell-badge">' + item.badgeText + '</span>' +
             '<div style="pointer-events:none;">' + S.iconHtml(item.iconKey) + '</div>' +
             '<div class="wk-cell-name">' + item.shortName + '</div>' +
-            (showQuickBtn
-              ? ('<button class="wk-cell-quick-btn" onclick="event.stopPropagation(); Aetheria.HighlandsWorkshop.craftOrAct(\'' + item.uid + '\')">' + quickBtnLabel + '</button>')
-              : '') +
+            (showQuickBtn ? ('<button class="wk-cell-quick-btn" onclick="event.stopPropagation(); Aetheria.HighlandsWorkshop.craftOrAct(\'' + item.uid + '\')">' + quickBtnLabel + '</button>') : '') +
           '</div>';
       });
 
@@ -3036,15 +1882,13 @@ window.Aetheria = window.Aetheria || {};
         '</div>' +
         '<div class="wk-icon-grid">' + gridCellsHtml + '</div>';
 
-      if (this.savedScrollTop > 0) {
-        body.scrollTop = this.savedScrollTop;
-      }
+      if (this.savedScrollTop > 0) body.scrollTop = this.savedScrollTop;
     }
   };
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 9. 掛載羅盤小地圖、實體過河木橋、3大現場機關解謎與唯一挖寶 ✖ =================
+  // ================= 9. 掛載系統 =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -3070,25 +1914,18 @@ window.Aetheria = window.Aetheria || {};
       Maps.getMap = function(zoneId) {
         if (zoneId && zoneId.indexOf("grotto_") === 0) {
           const pZone = zoneId.replace("grotto_", "");
-          if (!grottoMapsCache[zoneId]) {
-            grottoMapsCache[zoneId] = buildCliffGrottoMap(pZone);
-          }
+          if (!grottoMapsCache[zoneId]) grottoMapsCache[zoneId] = buildCliffGrottoMap(pZone);
           return grottoMapsCache[zoneId];
         }
         if (zoneId && zoneId.indexOf("crypt_") === 0) {
           const cZone = zoneId.replace("crypt_", "");
-          if (!cryptMapsCache[zoneId]) {
-            cryptMapsCache[zoneId] = buildAncientCryptMap(cZone);
-          }
+          if (!cryptMapsCache[zoneId]) cryptMapsCache[zoneId] = buildAncientCryptMap(cZone);
           return cryptMapsCache[zoneId];
         }
         const m = origGetMap(zoneId);
         if (m) {
-          if (m.id === "camp_hub") {
-            adjustCampTentsUpward(m);
-          } else if (HIGHLAND_ZONES[m.id]) {
-            injectHighlandCliffIntoMap(m);
-          }
+          if (m.id === "camp_hub") adjustCampTentsUpward(m);
+          else if (HIGHLAND_ZONES[m.id]) injectHighlandCliffIntoMap(m);
         }
         return m;
       };
@@ -3102,10 +1939,7 @@ window.Aetheria = window.Aetheria || {};
         if (camp) adjustCampTentsUpward(camp);
         Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
           const m = origGetMap(zId);
-          if (m) {
-            m._highlandInjectedToken = null;
-            injectHighlandCliffIntoMap(m);
-          }
+          if (m) { m._highlandInjectedToken = null; injectHighlandCliffIntoMap(m); }
         });
       };
     }
@@ -3118,9 +1952,7 @@ window.Aetheria = window.Aetheria || {};
           if (s && s.currentZone === "camp_hub" && portal &&
               (portal.targetZone === "tent_guild" || portal.targetZone === "tent_hero" || portal.targetZone === "tent_forge")) {
             const dist = Math.hypot((s.heroX || 0) - portal.x, (s.heroY || 0) - portal.y);
-            if (dist > 15 || s.heroY > 84) {
-              return;
-            }
+            if (dist > 15 || s.heroY > 84) return;
           }
           origPortal(portal);
         };
@@ -3129,32 +1961,16 @@ window.Aetheria = window.Aetheria || {};
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const s = window.Aetheria.State.data;
-        const prevX = s.heroX;
-        const prevY = s.heroY;
-        const prevZone = s.currentZone;
-
+        const prevX = s.heroX, prevY = s.heroY, prevZone = s.currentZone;
         origUpdateStep();
-
-        if (s.currentZone !== prevZone) {
+        if (s.currentZone !== prevZone || !HIGHLAND_ZONES[s.currentZone]) {
           s.onHighland = false;
           return;
         }
-
-        if (!HIGHLAND_ZONES[s.currentZone]) {
-          s.onHighland = false;
-          return;
-        }
-
         if (s.onHighland) {
-          if (!isInsideHighlandPlateau(s.heroX, s.heroY)) {
-            s.heroX = prevX;
-            s.heroY = prevY;
-          }
+          if (!isInsideHighlandPlateau(s.heroX, s.heroY)) { s.heroX = prevX; s.heroY = prevY; }
         } else {
-          if (isBlockedByCliffFromLowland(s.heroX, s.heroY)) {
-            s.heroX = prevX;
-            s.heroY = prevY;
-          }
+          if (isBlockedByCliffFromLowland(s.heroX, s.heroY)) { s.heroX = prevX; s.heroY = prevY; }
         }
       };
 
@@ -3164,26 +1980,19 @@ window.Aetheria = window.Aetheria || {};
           const hasCliff = Boolean(mapObj && HIGHLAND_ZONES[mapObj.id]);
           const prevCoords = [];
           if (hasCliff && mapObj.monsters) {
-            mapObj.monsters.forEach(function(m, idx) {
-              prevCoords[idx] = { x: m.x, y: m.y };
-            });
+            mapObj.monsters.forEach(function(m, idx) { prevCoords[idx] = { x: m.x, y: m.y }; });
           }
-
           origAI(mapObj, s);
-
           if (hasCliff && mapObj.monsters) {
             mapObj.monsters.forEach(function(m, idx) {
               if (!m || m.alive === false) return;
               if (isBlockedByCliffFromLowland(m.x, m.y)) {
                 if (prevCoords[idx] && !isBlockedByCliffFromLowland(prevCoords[idx].x, prevCoords[idx].y)) {
-                  m.x = prevCoords[idx].x;
-                  m.y = prevCoords[idx].y;
+                  m.x = prevCoords[idx].x; m.y = prevCoords[idx].y;
                 } else {
-                  m.x = 240;
-                  m.y = 920;
+                  m.x = 240; m.y = 720;
                 }
-                m.vx = -(m.vx || 0);
-                m.vy = -(m.vy || 0);
+                m.vx = -(m.vx || 0); m.vy = -(m.vy || 0);
               }
             });
           }
@@ -3214,11 +2023,8 @@ window.Aetheria = window.Aetheria || {};
               }
               const nextOrder = (mapObj._brazierStep || 0) + 1;
               if (d.orderNum === nextOrder) {
-                d.lit = true;
-                d.sprite = "brazier_on";
-                mapObj._brazierStep = nextOrder;
+                d.lit = true; d.sprite = "brazier_on"; mapObj._brazierStep = nextOrder;
                 window.Aetheria.Audio.sfxGather();
-
                 if (nextOrder >= 4) {
                   s.solvedExplorePuzzles[mapObj.id] = true;
                   window.Aetheria.State.save();
@@ -3230,12 +2036,7 @@ window.Aetheria = window.Aetheria || {};
                 }
               } else {
                 mapObj._brazierStep = 0;
-                (mapObj.decos || []).forEach(function(bd) {
-                  if (bd.isPuzzleOrderBrazier) {
-                    bd.lit = false;
-                    bd.sprite = "brazier_off";
-                  }
-                });
+                (mapObj.decos || []).forEach(function(bd) { if (bd.isPuzzleOrderBrazier) { bd.lit = false; bd.sprite = "brazier_off"; } });
                 window.Aetheria.Audio.sfxWrong();
                 window.Aetheria.UI.showToast("⚠️ 點燃順序錯誤！聖火已全部熄滅重置，請先閱讀左上方的【📜古碑謎語】！");
               }
@@ -3249,11 +2050,8 @@ window.Aetheria = window.Aetheria || {};
               }
               d.curDir = ((d.curDir || 0) + 1) % 4;
               window.Aetheria.Audio.sfxGather();
-
               const allStatues = (mapObj.decos || []).filter(function(sd) { return sd.isPuzzleRotateStatue; });
-              const allMatched = allStatues.length > 0 && allStatues.every(function(sd) { return sd.curDir === sd.targetDir; });
-
-              if (allMatched) {
+              if (allStatues.length > 0 && allStatues.every(function(sd) { return sd.curDir === sd.targetDir; })) {
                 s.solvedExplorePuzzles[mapObj.id] = true;
                 window.Aetheria.State.save();
                 window.Aetheria.Audio.sfxLevelUp();
@@ -3271,8 +2069,7 @@ window.Aetheria = window.Aetheria || {};
                 return;
               }
               const allLevers = (mapObj.decos || []).filter(function(ld) { return ld.isPuzzleToggleLever; });
-              const idx = d.leverIdx;
-              const toggleTargets = (idx === 0) ? [0, 1] : (idx === 1) ? [0, 1, 2] : [1, 2];
+              const toggleTargets = (d.leverIdx === 0) ? [0, 1] : (d.leverIdx === 1) ? [0, 1, 2] : [1, 2];
               allLevers.forEach(function(ld) {
                 if (toggleTargets.indexOf(ld.leverIdx) !== -1) {
                   ld.leverOn = !ld.leverOn;
@@ -3280,9 +2077,7 @@ window.Aetheria = window.Aetheria || {};
                 }
               });
               window.Aetheria.Audio.sfxGather();
-
-              const allOn = allLevers.length > 0 && allLevers.every(function(ld) { return ld.leverOn; });
-              if (allOn) {
+              if (allLevers.length > 0 && allLevers.every(function(ld) { return ld.leverOn; })) {
                 s.solvedExplorePuzzles[mapObj.id] = true;
                 window.Aetheria.State.save();
                 window.Aetheria.Audio.sfxLevelUp();
@@ -3295,9 +2090,7 @@ window.Aetheria = window.Aetheria || {};
             if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
               if (!s.unlockedCrypts) s.unlockedCrypts = {};
               const zId = d.zoneId || mapObj.id;
-              const isOpen = Boolean(s.unlockedCrypts[zId]);
-
-              if (!isOpen) {
+              if (!s.unlockedCrypts[zId]) {
                 if ((s.inventory.cryptKey || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
                   window.Aetheria.UI.showToast("🔒 古老的地底遺跡石門緊閉！請點擊左下角【羅盤小地圖】查看紅 ✖ 位置，用【探險鐵鏟】挖出【遠古遺跡鑰匙】！");
@@ -3313,20 +2106,15 @@ window.Aetheria = window.Aetheria || {};
                 window.Aetheria.Audio.sfxGather();
               }
 
-              const cryptMap = window.Aetheria.Data.Maps.getMap("crypt_" + zId);
+              window.Aetheria.Data.Maps.getMap("crypt_" + zId);
               s.currentZone = "crypt_" + zId;
               s.onHighland = false;
-              s.heroX = 280;
-              s.heroY = 275;
-              s.petX = 258;
-              s.petY = 278;
+              s.heroX = 280; s.heroY = 275; s.petX = 258; s.petY = 278;
               if (window.Aetheria.Renderer) {
                 window.Aetheria.Renderer.builtZoneKey = null;
                 window.Aetheria.Renderer.renderWorld();
               }
-              if (cryptMap && window.Aetheria.Audio && window.Aetheria.Audio.playBgm) {
-                window.Aetheria.Audio.playBgm("cave");
-              }
+              if (window.Aetheria.Audio && window.Aetheria.Audio.playBgm) window.Aetheria.Audio.playBgm("cave");
               window.Aetheria.State.save();
               window.Aetheria.UI.updateAllHud();
               return;
@@ -3334,9 +2122,7 @@ window.Aetheria = window.Aetheria || {};
 
             if (d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
               if (!s.riggedCliffs) s.riggedCliffs = {};
-              const isRigged = Boolean(s.riggedCliffs[mapObj.id]);
-
-              if (!isRigged) {
+              if (!s.riggedCliffs[mapObj.id]) {
                 if ((s.inventory.ropeLadder || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
                   window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🔨加工】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
@@ -3344,40 +2130,21 @@ window.Aetheria = window.Aetheria || {};
                 }
                 s.inventory.ropeLadder--;
                 s.riggedCliffs[mapObj.id] = true;
-                (mapObj.decos || []).forEach(function(dc) {
-                  if (dc.isCliffLadderSpot) {
-                    dc.sprite = "rope_ladder";
-                  }
-                });
+                (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
                 if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
               }
 
               window.Aetheria.Audio.sfxGather();
               if (s.onHighland) {
                 s.onHighland = false;
-                if (d.ladderSide === "north") {
-                  s.heroX = d.x;
-                  s.heroY = 772;
-                } else {
-                  s.heroX = d.x;
-                  s.heroY = 982;
-                }
-                s.petX = s.heroX - 20;
-                s.petY = s.heroY;
+                s.heroX = d.x; s.heroY = (d.ladderSide === "north") ? 772 : 982;
                 window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬下了平地！");
               } else {
                 s.onHighland = true;
-                if (d.ladderSide === "north") {
-                  s.heroX = d.x;
-                  s.heroY = 835;
-                } else {
-                  s.heroX = d.x;
-                  s.heroY = 895;
-                }
-                s.petX = s.heroX - 20;
-                s.petY = s.heroY;
+                s.heroX = d.x; s.heroY = (d.ladderSide === "north") ? 835 : 895;
                 window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【岩石高台礦區】！");
               }
+              s.petX = s.heroX - 20; s.petY = s.heroY;
               window.Aetheria.State.save();
               window.Aetheria.UI.updateAllHud();
               return;
@@ -3395,22 +2162,10 @@ window.Aetheria = window.Aetheria || {};
             for (let i = 0; i < mapObj.decos.length; i++) {
               const d = mapObj.decos[i];
               if (!d) continue;
-              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
-                hintEl.innerText = "閱讀古碑";
-                return;
-              }
-              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
-                hintEl.innerText = "點燃火盆";
-                return;
-              }
-              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
-                hintEl.innerText = "旋轉石像";
-                return;
-              }
-              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
-                hintEl.innerText = "扳動拉桿";
-                return;
-              }
+              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) { hintEl.innerText = "閱讀古碑"; return; }
+              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46)  { hintEl.innerText = "點燃火盆"; return; }
+              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46)  { hintEl.innerText = "旋轉石像"; return; }
+              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46)   { hintEl.innerText = "扳動拉桿"; return; }
               if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
                 const open = Boolean(s.unlockedCrypts && s.unlockedCrypts[d.zoneId || mapObj.id]);
                 hintEl.innerText = open ? "進入遺跡" : "鑰匙開鎖";
@@ -3457,14 +2212,12 @@ window.Aetheria = window.Aetheria || {};
             window.Aetheria.UI.showToast("此古遺跡機關寶箱已經領取過了！");
             return;
           }
-
           node.opened = true;
           s.claimedExplorePuzzleChests[node.zoneId] = true;
           s.gold = (s.gold || 0) + 280;
           s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
           s.inventory.mithril = (s.inventory.mithril || 0) + 2;
           s.inventory.rationJerky = (s.inventory.rationJerky || 0) + 2;
-
           window.Aetheria.Audio.sfxLevelUp();
           window.Aetheria.State.save();
           window.Aetheria.UI.updateAllHud();
@@ -3492,22 +2245,18 @@ window.Aetheria = window.Aetheria || {};
             window.Aetheria.UI.showToast("此藏寶點已經挖掘過了！");
             return;
           }
-
           const shovelLv = (s.tools && s.tools.shovel) || 0;
           if (shovelLv < 1) {
             window.Aetheria.Audio.sfxWrong();
             window.Aetheria.UI.showToast("🥄 地面有神秘的「✖」藏寶記號！請先在【工坊 ➔ ⛏️工具】打造【Lv.1 精鐵探險鏟】(原木x2+鐵礦x1) 挖掘！");
             return;
           }
-
           node.opened = true;
           s.dugSpots[node.id] = true;
-
           if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
             const domNode = window.Aetheria.Renderer.domPool.nodes[node.id];
             if (domNode && domNode.el) domNode.el.style.display = "none";
           }
-
           window.Aetheria.Audio.sfxLevelUp();
 
           const zId = (s.currentZone || "").replace("grotto_", "");
@@ -3523,12 +2272,9 @@ window.Aetheria = window.Aetheria || {};
           } else {
             s.inventory.mithril = (s.inventory.mithril || 0) + (shovelLv >= 2 ? 2 : 1);
             s.inventory.quartz = (s.inventory.quartz || 0) + 2;
-            if (shovelLv >= 3) {
-              s.inventory.starIron = (s.inventory.starIron || 0) + 1;
-            }
+            if (shovelLv >= 3) s.inventory.starIron = (s.inventory.starIron || 0) + 1;
             window.Aetheria.UI.showToast("🥄 挖開唯一藏寶點：獲得【流沙秘銀、透明石英砂 +2】與 " + goldGain + " G！");
           }
-
           window.Aetheria.State.save();
           window.Aetheria.UI.updateAllHud();
           return;
@@ -3544,7 +2290,6 @@ window.Aetheria = window.Aetheria || {};
             window.Aetheria.UI.showToast("⚔️ 遠古聖物石棺受結界保護！請先擊敗前方的【★地底遺跡守衛魔像】！");
             return;
           }
-
           if (!s.claimedCryptVaults) s.claimedCryptVaults = {};
           const pZone = node.parentZoneId || s.currentZone;
           if (node.opened || s.claimedCryptVaults[pZone]) {
@@ -3552,13 +2297,11 @@ window.Aetheria = window.Aetheria || {};
             window.Aetheria.UI.showToast("此遠古聖物石棺已經開啟過了！");
             return;
           }
-
           node.opened = true;
           s.claimedCryptVaults[pZone] = true;
           s.gold = (s.gold || 0) + 350;
           s.inventory.tabletShard = (s.inventory.tabletShard || 0) + 1;
           s.inventory.obsidian = (s.inventory.obsidian || 0) + 2;
-
           window.Aetheria.Audio.sfxLevelUp();
           window.Aetheria.State.save();
           window.Aetheria.UI.updateAllHud();
@@ -3592,8 +2335,7 @@ window.Aetheria = window.Aetheria || {};
         if (!terrainLayer || !mapObj) return;
 
         renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer);
-        // ★ 確保河道上方掛載高圖層 (z-index: 6) 的實體像素過河木橋！
-        ensureVisibleDomBridge(mapObj, terrainLayer);
+        syncDomRiverBridge(mapObj, terrainLayer);
 
         Object.keys(this.domPool.decos || {}).forEach(function(k) {
           const item = Ren.domPool.decos[k];
@@ -3613,10 +2355,7 @@ window.Aetheria = window.Aetheria || {};
           if (!item || !item.data || !S) return;
           if (item.data.isBuriedSpot) {
             item.el.innerHTML = '<img src="' + S.getDataURL("buried_x_spot") + '" alt="">';
-            if (item.lbl) {
-              item.lbl.className = "dom-label dig-spot-lbl";
-              item.el.appendChild(item.lbl);
-            }
+            if (item.lbl) { item.lbl.className = "dom-label dig-spot-lbl"; item.el.appendChild(item.lbl); }
           } else if (item.data.isClusterBoulder) {
             item.el.innerHTML = '<img src="' + S.getDataURL("cluster_boulder") + '" alt="">';
             if (item.lbl) item.el.appendChild(item.lbl);
@@ -3644,18 +2383,14 @@ window.Aetheria = window.Aetheria || {};
             const d = item.data;
 
             if (d.isCliffLadderSpot) {
-              if (item.img && S) {
-                item.img.src = S.getDataURL(rigged ? "rope_ladder" : "cliff_stake");
-              }
+              if (item.img && S) item.img.src = S.getDataURL(rigged ? "rope_ladder" : "cliff_stake");
               if (item.lbl) {
                 item.lbl.style.display = "block";
                 item.lbl.className = "dom-label ladder-spot-lbl";
                 item.lbl.innerText = rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯";
               }
             } else if (d.isCryptEntrance) {
-              if (item.img && S) {
-                item.img.src = S.getDataURL(cryptOpen ? "crypt_door_open" : "crypt_door_locked");
-              }
+              if (item.img && S) item.img.src = S.getDataURL(cryptOpen ? "crypt_door_open" : "crypt_door_locked");
               if (item.lbl) {
                 item.lbl.style.display = "block";
                 item.lbl.className = "dom-label crypt-door-lbl";
@@ -3666,18 +2401,14 @@ window.Aetheria = window.Aetheria || {};
               item.lbl.className = "dom-label puzzle-mech-lbl";
               item.lbl.innerText = "📜古碑謎語";
             } else if (d.isPuzzleOrderBrazier) {
-              if (item.img && S) {
-                item.img.src = S.getDataURL(d.lit ? "brazier_on" : "brazier_off");
-              }
+              if (item.img && S) item.img.src = S.getDataURL(d.lit ? "brazier_on" : "brazier_off");
               if (item.lbl) {
                 item.lbl.style.display = "block";
                 item.lbl.className = "dom-label " + (d.lit ? "puzzle-mech-on" : "puzzle-mech-lbl");
                 item.lbl.innerText = (d.lit ? "🔥" : "") + d.brazierLabel;
               }
             } else if (d.isPuzzleRotateStatue) {
-              if (item.img && S) {
-                item.img.src = S.getDataURL("ancient_statue");
-              }
+              if (item.img && S) item.img.src = S.getDataURL("ancient_statue");
               if (item.lbl) {
                 const matched = (d.curDir === d.targetDir);
                 item.lbl.style.display = "block";
@@ -3685,9 +2416,7 @@ window.Aetheria = window.Aetheria || {};
                 item.lbl.innerText = d.statueName + ":" + DIR_SYMBOLS[d.curDir || 0];
               }
             } else if (d.isPuzzleToggleLever) {
-              if (item.img && S) {
-                item.img.src = S.getDataURL(d.leverOn ? "lever_on" : "lever_off");
-              }
+              if (item.img && S) item.img.src = S.getDataURL(d.leverOn ? "lever_on" : "lever_off");
               if (item.lbl) {
                 item.lbl.style.display = "block";
                 item.lbl.className = "dom-label " + (d.leverOn ? "puzzle-mech-on" : "puzzle-mech-lbl");
@@ -3769,10 +2498,7 @@ window.Aetheria = window.Aetheria || {};
         if (camp) adjustCampTentsUpward(camp);
         Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
           const m = Maps.getMap(zId);
-          if (m) {
-            m._highlandInjectedToken = null;
-            injectHighlandCliffIntoMap(m);
-          }
+          if (m) { m._highlandInjectedToken = null; injectHighlandCliffIntoMap(m); }
         });
       }
 
@@ -3787,7 +2513,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG Compass & Bridge Fix v11.3 init error:", err);
+      console.error("Survival RPG All-Maps Fix v11.4 init error:", err);
     }
   }
 
