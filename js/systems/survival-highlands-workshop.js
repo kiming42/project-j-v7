@@ -1,10 +1,12 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 懸崖與全圖地貌防消失修復、章節因果鏈模組 (survival-highlands-workshop.js - v13.1)
- * 【Part 1 / 2：修復 Canvas 被瀏覽器清空導致懸崖/全圖消失問題、6大差異化地貌自癒繪製引擎】
- * 關鍵修復：
- *   1. 【100% 修復懸崖與放大全圖消失】：移除會被手機瀏覽器 innerHTML="" 清空 GPU 緩衝區的舊 Canvas 節點快取，改為每次切換場景即時高速重繪，並支援全圖獨立自癒繪製！
- *   2. 【保留極速防 Lag】：行走時完全不重繪地貌 Canvas；透過底色一次填充優化，切換地圖繪製僅需 2ms！
- *   3. 【完整保留 v13.0 功能】：6大差異化生態地貌、章節 3 步因果解謎鏈、刪除左下角黑框小地圖、1~6章木橋通行與 📖求生合成圖鑑
+ * Project J：艾瑟瑞亞的破曉 — 主線強制因果鎖定與六大差異化地貌模組 (survival-highlands-workshop.js - v13.2)
+ * 【Part 1 / 2：主線強制鎖鑰定義、下屏主線任務框同步、地貌自癒渲染引擎】
+ * 核心修正：
+ *   1. 【100% 強制解謎才可推進主線】：
+ *      - 未完成本區「①工具破障 ➔ ②古碑機關 ➔ ③開啟破障寶箱取得破障聖物」前，無法修復過河橋樑、無法點亮封印柱！
+ *      - 守關 Boss 帶有【🛡️無敵結界】，未完成 3 步破障解謎直接觸碰 Boss 會被結界彈開並彈出解謎指引，徹底杜絕跳過解謎直接打王！
+ *   2. 【直接串連下屏主線任務框】：未完成本區破障前，下屏主線任務欄會直接顯示當前必須完成的解謎步驟與故事原因
+ *   3. 【保留 v13.1 全部修復】：懸崖與放大全圖永不消失、移除左下角黑框小地圖、營地帳篷零 Lag、📖求生合成圖鑑
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -53,11 +55,11 @@ window.Aetheria = window.Aetheria || {};
     } catch (e) {}
   }
 
-  // ================= 1. 注入樣式（隱藏黑框小地圖、圓形羅盤、章節因果指引條與圖鑑 UI） =================
+  // ================= 1. 注入樣式 =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v131-styles")) return;
+    if (document.getElementById("srpg-kenney-v132-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v131-styles";
+    style.id = "srpg-kenney-v132-styles";
     style.textContent = `
       .kenney-terrain-canvas {
         position: absolute !important;
@@ -166,22 +168,43 @@ window.Aetheria = window.Aetheria || {};
         top: 30px;
         right: 6px;
         z-index: 18;
-        background: rgba(20, 16, 19, 0.88);
+        background: rgba(92, 29, 36, 0.92);
         color: #ffd166;
-        border: 1.5px solid #f5b700;
+        border: 1.5px solid #ff758f;
         border-radius: 6px;
-        padding: 3px 7px;
-        font-size: 10px;
+        padding: 3px 8px;
+        font-size: 10.5px;
         font-weight: 900;
         cursor: pointer;
         pointer-events: auto;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.8);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.85);
         display: none;
       }
       #srpg-chain-tracker.chain-done {
         border-color: #5ac54f;
         color: #5ac54f;
-        background: rgba(20, 42, 30, 0.88);
+        background: rgba(20, 42, 30, 0.92);
+      }
+
+      /* 下屏主線強制破障提示條 */
+      #srpg-main-quest-lock-bar {
+        background: linear-gradient(90deg, #4a151b 0%, #2b1116 100%);
+        border: 1.5px solid #ff595e;
+        border-radius: 6px;
+        padding: 4px 8px;
+        margin-top: 4px;
+        color: #ffd166;
+        font-size: 11px;
+        font-weight: 900;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      #srpg-main-quest-lock-bar.unlocked {
+        background: linear-gradient(90deg, #183a27 0%, #12261b 100%);
+        border-color: #5ac54f;
+        color: #a3f7b5;
       }
 
       .fullmap-stage-wrap {
@@ -391,93 +414,126 @@ window.Aetheria = window.Aetheria || {};
     return canvas;
   }
 
-  // ================= 3. 章節 3 步因果解謎鏈定義 (ZONE_STORY_CHAINS) =================
+  // ================= 3. ★ 主線強制綁定：章節 3 步因果解謎鏈定義 (ZONE_STORY_CHAINS) =================
+  // 未完成全部 3 步 (step3Done === true) 前：
+  //   1. 無法修復過河橋樑 / 無法啟動南北封印柱
+  //   2. 守關 Boss 處於【🛡️無敵結界】狀態，觸碰時直接被結界彈開並彈出解謎步驟視窗！
   const ZONE_STORY_CHAINS = {
     zone1_forest: {
       zoneId: "zone1_forest",
-      title: "第一章・被荊棘詛咒的迷霧森林",
+      title: "第一章主線・破除迷霧森林荊棘詛咒",
       npcName: "斥候・里奧",
-      storyIntro: "千年腐化樹妖王以「魔界荊棘」與「黑瘴邪火」封鎖了森林深處，並加持了自身護盾結界！",
+      relicName: "【翠風破障聖印】",
+      storyIntro: "千年腐化樹妖王以「魔界荊棘」纏死了斷橋，並展開【無敵結界】！不先斬除荊棘並點燃四象淨化火盆取得【翠風破障聖印】，根本無法修橋或傷到樹妖王分毫！",
       step1GateId: "tg_z1_briar",
-      step1Title: "① 打造【✂️除荊開路鐮刀】斬開西南荊棘谷的【🌿荊棘魔藤】(x:420, y:540)",
-      step2Title: "② 依古碑日出至星夜順序點燃西南【🔥四象淨化火盆】(東➔南➔西➔北)",
-      step3Title: "③ 開啟中央【🏆古遺跡機關寶箱】並削弱樹妖王 2 層護盾與 20% 生命！",
-      bossDebuffMsg: "🌟【森林破障共鳴生效】：已斬斷荊棘並點燃四象聖火！千年樹妖王護盾上限 -2、生命 -20%！"
+      step1Short: "① 造【除荊鐮刀】斬開荊棘魔藤(x:420,y:540)",
+      step2Short: "② 依序點燃西南【四象火盆】(東➔南➔西➔北)",
+      step3Short: "③ 開啟機關寶箱取得【翠風破障聖印】解鎖修橋與Boss戰",
+      step1Title: "① 先爬上南側高台或進山洞採集赤銅礦與白錫礦 ➔ 於工坊合成【✂️除荊開路鐮刀】 ➔ 斬開西南荊棘谷的【🌿荊棘魔藤】(x:420, y:540)",
+      step2Title: "② 依古碑日出至星夜順序點燃西南【🔥四象淨化火盆】(東之晨➔南之日➔西之霞➔北之星)",
+      step3Title: "③ 開啟中央【🏆古遺跡機關寶箱】取得【翠風破障聖印】，即可修橋過河並破除樹妖王的無敵結界！",
+      bossDebuffMsg: "🌟【翠風破障聖印共鳴】：樹妖王的無敵結界已粉碎，且護盾上限 -2！"
     },
     cave1_mushroom: {
       zoneId: "cave1_mushroom",
       title: "第一章支線・幽窟暗河與冰封秘銀脈",
       npcName: "矮人探勘員",
-      storyIntro: "蘑菇洞窟深處的秘銀礦脈被地底寒氣凝結成「玄冰晶殼」，且暗河水閘卡死！",
+      relicName: "【幽窟破障聖印】",
+      storyIntro: "蘑菇洞窟深處被寒氣與暗河水閘封鎖，首領受暗河結界保護處於【無敵狀態】！",
       step1GateId: "tg_c1_ice",
-      step1Title: "① 在工坊調配【🔥高熱鋁熱火種】融化洞窟中段的【🧊玄冰晶殼】(x:860, y:640)",
+      step1Short: "① 造【高熱鋁熱火種】融化玄冰晶殼(x:860,y:640)",
+      step2Short: "② 扳動西南【三連連動機括拉桿】使其全亮綠",
+      step3Short: "③ 開啟機關寶箱取得【幽窟破障聖印】解除首領無敵",
+      step1Title: "① 在工坊以木炭、鐵礦與松脂調配【🔥高熱鋁熱火種】 ➔ 融化洞窟中段的【🧊玄冰晶殼】(x:860, y:640)",
       step2Title: "② 扳動西南暗河畔的【⚙️三連連動機括拉桿】使其全數亮綠開啟",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】獲取地底遺跡鑰匙與秘銀！",
-      bossDebuffMsg: "🌟【幽窟破障共鳴生效】：暗河水閘已開啟！洞窟首領護盾上限 -2、生命 -20%！"
+      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【幽窟破障聖印】，解除洞窟首領的無敵結界！",
+      bossDebuffMsg: "🌟【幽窟破障聖印共鳴】：洞窟首領無敵結界已解除，且護盾上限 -2！"
     },
     zone2_canyon: {
       zoneId: "zone2_canyon",
-      title: "第二章・法老王陵與失落的太陽齒輪",
+      title: "第二章主線・法老王陵與卡死的吊橋絞盤",
       npcName: "斥候隊長・凱爾",
-      storyIntro: "流沙峽谷的古老機關樞紐因缺少「青銅齒輪」而停擺，巨蠍王正吸收荒漠流沙強化甲殼！",
+      relicName: "【法老太陽聖印】",
+      storyIntro: "流沙峽谷的吊橋絞盤因缺少「青銅齒輪」而卡死，且流沙巨蠍王披着【無敵流沙重甲】！必須先啟動齒輪柱並共鳴四方石像取得【法老太陽聖印】，才能修好吊橋並擊穿蠍王重甲！",
       step1GateId: "tg_z2_gear",
-      step1Title: "① 採集赤銅與白錫冶煉青銅，合成【⚙️精密青銅齒輪】嵌入中段【⚙️齒輪機關柱】(x:720, y:540)",
+      step1Short: "① 造【精密青銅齒輪】嵌入中央齒輪柱(x:720,y:540)",
+      step2Short: "② 旋轉西南【四方石像】(西▶東,東◀西,北▼南,南▲北)",
+      step3Short: "③ 開啟機關寶箱取得【法老太陽聖印】解鎖吊橋與Boss戰",
+      step1Title: "① 採集赤銅與白錫冶煉青銅錠 ➔ 合成【⚙️精密青銅齒輪】嵌入流沙盆地的【⚙️齒輪機關柱】(x:720, y:540)",
       step2Title: "② 閱讀西南【📜法老方位碑】，旋轉四方守衛石像至正確朝向(西▶東、東◀西、北▼南、南▲北)",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】震碎巨蠍王的流沙重甲（首領護盾 -2、生命 -20%）！",
-      bossDebuffMsg: "🌟【法老王陵共鳴生效】：太陽齒輪與四方石像已共鳴！流沙巨蠍王護盾上限 -2、生命 -20%！"
+      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【法老太陽聖印】，解鎖峽谷吊橋並震碎巨蠍王的無敵重甲！",
+      bossDebuffMsg: "🌟【法老太陽聖印共鳴】：流沙巨蠍王的無敵重甲已粉碎，且護盾上限 -2！"
     },
     zone3_coast: {
       zoneId: "zone3_coast",
-      title: "第三章・新月沉船灣與海神退潮水閘",
+      title: "第三章主線・新月沉船灣與退潮水閘",
       npcName: "老船匠・達克",
-      storyIntro: "新月海灣漲潮淹沒了古代海神祭壇，幽靈船長藉由深海潮汐獲得不死加護！",
+      relicName: "【海神退潮聖印】",
+      storyIntro: "新月海灣漲潮淹沒了暗礁航道，且深海幽靈船長受【無敵潮汐結界】庇護！必須先打撈沉船水閘零件並扳動退潮拉桿取得【海神退潮聖印】，才能渡河並破除船長的不死結界！",
       step1GateId: "tg_z3_sunken",
-      step1Title: "① 在工坊打造【🧲深水打撈磁鉤】，前往新月海灣打撈【⚓深海沉船箱】(x:760, y:580) 尋回水閘零件",
-      step2Title: "② 前往西南祭壇扳動【⚙️三連連動水閘拉桿】排乾祭壇積水",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】斷絕幽靈船長的潮汐加護（首領護盾 -2、生命 -20%）！",
-      bossDebuffMsg: "🌟【海神水閘共鳴生效】：潮汐加護已斷絕！深海幽靈船長護盾上限 -2、生命 -20%！"
+      step1Short: "① 造【深水打撈磁鉤】打撈海灣沉船箱(x:760,y:580)",
+      step2Short: "② 扳動西南【三連退潮水閘拉桿】使其全亮綠",
+      step3Short: "③ 開啟機關寶箱取得【海神退潮聖印】解鎖渡河與Boss戰",
+      step1Title: "① 在工坊打造【🧲深水打撈磁鉤】 ➔ 前往新月海灣打撈【⚓深海沉船箱】(x:760, y:580) 尋回水閘零件",
+      step2Title: "② 前往西南祭壇扳動【⚙️三連連動水閘拉桿】使其全部開啟排乾積水",
+      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【海神退潮聖印】，解鎖渡河並破除幽靈船長的不死結界！",
+      bossDebuffMsg: "🌟【海神退潮聖印共鳴】：幽靈船長的不死潮汐結界已斷絕，且護盾上限 -2！"
     },
     zone4_snow: {
       zoneId: "zone4_snow",
-      title: "第四章・永凍鏡湖與逆風融霜聖火",
+      title: "第四章主線・永凍鏡湖與逆風融霜聖火",
       npcName: "冰原獵手・弗雷",
-      storyIntro: "霜語雪原中央的永凍鏡湖散發絕對零度寒氣，令極寒冰龍王披上堅不可摧的萬年玄冰甲！",
+      relicName: "【融霜地熱聖印】",
+      storyIntro: "霜語雪原受鏡湖絕對零度冰封，極寒冰龍王披着【無敵萬年玄冰甲】！必須先融化鏡湖玄冰棺並點燃四象融霜聖火取得【融霜地熱聖印】，才能建屋渡河並融化冰龍王的無敵冰甲！",
       step1GateId: "tg_z4_ice1",
-      step1Title: "① 合成【🔥高熱鋁熱火種】，前往中央鏡湖畔融化【🧊萬年玄冰棺】(x:700, y:540) 釋放地熱火種",
-      step2Title: "② 依逆風順序點燃西南【🔥四象融霜聖火陣】(北➔西➔南➔東)",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】融化冰龍王的玄冰護甲（首領護盾 -2、生命 -20%）！",
-      bossDebuffMsg: "🌟【融霜聖火共鳴生效】：鏡湖地熱已喚醒！極寒冰龍王護盾上限 -2、生命 -20%！"
+      step1Short: "① 造【高熱鋁熱火種】融化鏡湖玄冰棺(x:700,y:540)",
+      step2Short: "② 逆風點燃西南【四象融霜火盆】(北➔西➔南➔東)",
+      step3Short: "③ 開啟機關寶箱取得【融霜地熱聖印】解鎖冰龍Boss戰",
+      step1Title: "① 合成【🔥高熱鋁熱火種】 ➔ 前往中央鏡湖畔融化【🧊萬年玄冰棺】(x:700, y:540) 釋放地熱火種",
+      step2Title: "② 依逆風順序點燃西南【🔥四象融霜聖火陣】(北之極光➔西之寒星➔南之暖陽➔東之破曉)",
+      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【融霜地熱聖印】，破除極寒冰龍王的無敵玄冰甲！",
+      bossDebuffMsg: "🌟【融霜地熱聖印共鳴】：極寒冰龍王的無敵玄冰甲已融化，且護盾上限 -2！"
     },
     zone5_volcano: {
       zoneId: "zone5_volcano",
-      title: "第五章・雙重熔岩火口與急凍冷卻閥",
+      title: "第五章主線・雙重熔岩火口與急凍冷卻閥",
       npcName: "紅蓮學者・伊格",
-      storyIntro: "赤紅火山的雙重岩漿流令【紅蓮火山龍皇】處於沸騰不滅狀態，必須先以極寒之力冷卻地脈！",
+      relicName: "【地脈冷卻聖印】",
+      storyIntro: "火山岩漿河溫度過高，直接鋪設耐火石拱橋會瞬間融化，且紅蓮火山龍皇處於【無敵沸騰龍炎】狀態！必須先用急凍晶瓶冷卻火口並開啟三連冷卻閥取得【地脈冷卻聖印】，才可鋪橋及挑戰龍皇！",
       step1GateId: "tg_z5_magma",
-      step1Title: "① 以雪原冰蓮合成【❄️極寒急凍晶瓶】，冷卻並震碎火口旁的【🔥熔岩黑曜殼】(x:720, y:560)",
-      step2Title: "② 扳動西南熔爐區的【⚙️三連熔岩冷卻閥門】使其全部開啟",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】壓制紅蓮火山龍皇的沸騰龍炎（首領護盾 -2、生命 -20%）！",
-      bossDebuffMsg: "🌟【地脈冷卻共鳴生效】：火山地脈已冷卻！紅蓮火山龍皇護盾上限 -2、生命 -20%！"
+      step1Short: "① 造【極寒急凍晶瓶】震碎火口熔岩殼(x:720,y:560)",
+      step2Short: "② 扳動西南【三連熔岩冷卻閥門】使其全亮綠",
+      step3Short: "③ 開啟機關寶箱取得【地脈冷卻聖印】解鎖鋪橋與龍皇戰",
+      step1Title: "① 以雪原冰蓮合成【❄️極寒急凍晶瓶】 ➔ 冷卻並震碎中央火口的【🔥熔岩黑曜殼】(x:720, y:560)",
+      step2Title: "② 扳動西南熔爐區的【⚙️三連熔岩冷卻閥門】使其全部開啟降溫",
+      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【地脈冷卻聖印】，即可鋪設黑曜耐火石拱橋並解除火山龍皇的無敵龍炎！",
+      bossDebuffMsg: "🌟【地脈冷卻聖印共鳴】：紅蓮火山龍皇的無敵沸騰龍炎已壓制，且護盾上限 -2！"
     },
     zone6_sky: {
       zoneId: "zone6_sky",
-      title: "最終章・星界浮空聖壇與八方星象共鳴",
+      title: "最終章主線・星界浮空聖壇與八方星象共鳴",
       npcName: "破曉大賢者",
-      storyIntro: "天界浮空聖殿的星核齒輪停滯，最終領主受星界法則庇護，唯有重啟星核並對齊八方星象方可破局！",
+      relicName: "【創世破曉聖印】",
+      storyIntro: "天界浮空聖殿的星橋斷絕，最終領主受【無敵星界法則】庇護！唯有將青銅齒輪嵌入中央星核並對齊八方星象石像取得【創世破曉聖印】，才能架起星橋迎戰最終領主！",
       step1GateId: "tg_z6_gear",
-      step1Title: "① 合成【⚙️精密青銅齒輪】嵌入中央【⚙️星界齒輪聖柱】(x:720, y:550) 重啟星核",
+      step1Short: "① 造【精密青銅齒輪】嵌入星界聖柱(x:720,y:550)",
+      step2Short: "② 旋轉西南【四聖像】向外(北▲北,東▶東,南▼南,西◀西)",
+      step3Short: "③ 開啟機關寶箱取得【創世破曉聖印】解鎖最終決戰",
+      step1Title: "① 合成【⚙️精密青銅齒輪】 ➔ 嵌入中央【⚙️星界齒輪聖柱】(x:720, y:550) 重啟星核",
       step2Title: "② 旋轉西南星壇的【🗿四聖像】使其背心向外守護八方(北▲北、東▶東、南▼南、西◀西)",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】獲得創世破曉加護（最終領主護盾 -2、生命 -20%）！",
-      bossDebuffMsg: "🌟【創世星象共鳴生效】：八方星象已共鳴！天界最終領主護盾上限 -2、生命 -20%！"
+      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【創世破曉聖印】，解鎖星橋並破除最終領主的無敵星界法則！",
+      bossDebuffMsg: "🌟【創世破曉聖印共鳴】：最終領主的無敵法則已破除，且護盾上限 -2！"
     }
   };
 
   function getZoneStoryProgress(zoneId, s) {
     const chain = ZONE_STORY_CHAINS[zoneId];
     if (!chain || !s) return null;
-    const step1Done = Boolean(s.clearedToolGates && s.clearedToolGates[chain.step1GateId]);
-    const step2Done = Boolean(s.solvedExplorePuzzles && s.solvedExplorePuzzles[zoneId]);
-    const step3Done = Boolean(s.claimedExplorePuzzleChests && s.claimedExplorePuzzleChests[zoneId]);
+    // 若該區 Boss 已經在舊存檔被擊敗過，視為已完成破障鏈，不卡已通關章節
+    const bossAlreadyDead = Boolean(s.bossesDefeated && s.bossesDefeated[zoneId]);
+    const step1Done = Boolean(bossAlreadyDead || (s.clearedToolGates && s.clearedToolGates[chain.step1GateId]));
+    const step2Done = Boolean(bossAlreadyDead || (s.solvedExplorePuzzles && s.solvedExplorePuzzles[zoneId]));
+    const step3Done = Boolean(bossAlreadyDead || (s.claimedExplorePuzzleChests && s.claimedExplorePuzzleChests[zoneId]));
     const count = (step1Done ? 1 : 0) + (step2Done ? 1 : 0) + (step3Done ? 1 : 0);
     return {
       chain: chain,
@@ -485,11 +541,53 @@ window.Aetheria = window.Aetheria || {};
       step2Done: step2Done,
       step3Done: step3Done,
       count: count,
-      allDone: (step1Done && step2Done)
+      allDone: step3Done
     };
   }
 
-  // ================= 4. ★ 100% 防消失：6大差異化自然地貌自癒繪製引擎 =================
+  // ★ 同步更新下屏「主線任務進度框」：在未解開該區 3 步因果鏈前，直接在主線任務框醒目顯示當前強制破障步驟！
+  function syncMainQuestTrackerWithStoryChain() {
+    const s = window.Aetheria.State && window.Aetheria.State.data;
+    if (!s) return;
+    const prog = getZoneStoryProgress(s.currentZone, s);
+
+    // 尋找下屏的主線任務容器
+    const questBox = document.getElementById("quest-tracker") ||
+                     document.getElementById("quest-banner") ||
+                     document.querySelector("[id*='quest']");
+    if (!questBox) return;
+
+    let lockBar = document.getElementById("srpg-main-quest-lock-bar");
+    if (!prog) {
+      if (lockBar) setDisplayIfChanged(lockBar, "none");
+      return;
+    }
+
+    if (!lockBar) {
+      lockBar = document.createElement("div");
+      lockBar.id = "srpg-main-quest-lock-bar";
+      lockBar.onclick = function() {
+        if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) window.Aetheria.Audio.sfxTalkBlip();
+        if (window.Aetheria.HighlandsWorkshop) window.Aetheria.HighlandsWorkshop.openZoneStoryChainModal();
+      };
+      questBox.appendChild(lockBar);
+    }
+
+    setDisplayIfChanged(lockBar, "flex");
+    setClassIfChanged(lockBar, prog.allDone ? "unlocked" : "");
+
+    if (!prog.step1Done) {
+      setTextIfChanged(lockBar, "🔒【主線破障 0/3 (未解開無法修橋/打王)】下一步：" + prog.chain.step1Short + " (點擊詳情)");
+    } else if (!prog.step2Done) {
+      setTextIfChanged(lockBar, "🔒【主線破障 1/3 (地脈已通)】下一步：" + prog.chain.step2Short + " (點擊詳情)");
+    } else if (!prog.step3Done) {
+      setTextIfChanged(lockBar, "🔒【主線破障 2/3 (機關已開)】下一步：" + prog.chain.step3Short + " (點擊詳情)");
+    } else {
+      setTextIfChanged(lockBar, "🌟【主線破障 3/3 已完成】已取得" + prog.chain.relicName + "！可修橋過河並討伐首領！");
+    }
+  }
+
+  // ================= 4. 100% 防消失：6大差異化自然地貌自癒繪製引擎 =================
   const KENNEY_PALETTES = {
     forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e", river: "#2978d4", riverHi: "#8ce0ff", bank: "#d4b06a", bridge: "#9c6347", bridgeRail: "#d9a066" },
     cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d", river: "#1d3557", riverHi: "#38b6ff", bank: "#393246", bridge: "#64748b", bridgeRail: "#94a3b8" },
@@ -539,18 +637,18 @@ window.Aetheria = window.Aetheria || {};
     return inTopWing || inRightWing;
   }
 
+  // ★ 修正：移除「等級達標自動通橋」後門！僅當玩家已完成橋樑工程（或舊存檔已擊敗該區首領）時，橋樑才可通行！
   function isMapBridgeBuilt(mapObj, s) {
     if (!mapObj || !s) return false;
     const pb = s.projectsBuilt || {};
     const bd = s.bossesDefeated || {};
-    const uz = Array.isArray(s.unlockedZones) ? s.unlockedZones : [];
     const zId = mapObj.id;
 
-    if (zId === "zone1_forest")  return Boolean(pb.proj_z1_bridge || bd.zone1_forest || uz.indexOf("zone2_canyon") !== -1 || (s.lv && s.lv >= 5));
-    if (zId === "zone2_canyon")  return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon || uz.indexOf("zone3_coast") !== -1 || (s.lv && s.lv >= 10));
-    if (zId === "zone3_coast")   return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast || uz.indexOf("zone4_snow") !== -1 || (s.boatTier && s.boatTier >= 2) || (s.lv && s.lv >= 15));
-    if (zId === "zone4_snow")    return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow || uz.indexOf("zone5_volcano") !== -1 || (s.lv && s.lv >= 20));
-    if (zId === "zone5_volcano") return Boolean(pb.proj_z5_bridge || bd.zone5_volcano || uz.indexOf("zone6_sky") !== -1);
+    if (zId === "zone1_forest")  return Boolean(pb.proj_z1_bridge || bd.zone1_forest);
+    if (zId === "zone2_canyon")  return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon);
+    if (zId === "zone3_coast")   return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast);
+    if (zId === "zone4_snow")    return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow);
+    if (zId === "zone5_volcano") return Boolean(pb.proj_z5_bridge || bd.zone5_volcano);
     if (zId === "zone6_sky")     return Boolean(pb.proj_z6_bridge || bd.zone6_sky);
 
     const projDeco = (mapObj.decos || []).find(function(d) { return d && d.isProjectSite && d.projectId; });
@@ -639,14 +737,12 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ★ 核心獨立繪製函式：可將指定地圖的完整地貌、懸崖、山洞、河流、木橋與地標直接繪製到任何 Canvas Context 上！
   function paintTerrainOntoContext(ctx, mapObj, W, H, built) {
     const pal = KENNEY_PALETTES[mapObj.theme] || KENNEY_PALETTES.forest;
     const hasHighland = Boolean(HIGHLAND_ZONES[mapObj.id]);
     const cols = Math.ceil(W / 16);
     const rows = Math.ceil(H / 16);
 
-    // 一次填滿基礎背景色 (減少 45% fillRect 呼叫，極速完成)
     ctx.fillStyle = pal.bg1;
     ctx.fillRect(0, 0, W, H);
 
@@ -795,7 +891,6 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ★ 每次建立場景時，釋放舊畫布並建立全新畫布即時繪製，絕不重用被 innerHTML="" 清空的舊節點！
   function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
     if (!mapObj || !terrainLayer) return;
     if (mapObj.id === "ocean_sea") {
@@ -832,7 +927,6 @@ window.Aetheria = window.Aetheria || {};
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
   }
 
-  // 檢查主畫面地貌 Canvas 是否仍在 DOM 內且有效，若被清空則立即自動補繪
   function ensureActiveTerrainCanvas(mapObj) {
     if (!mapObj || mapObj.id === "ocean_sea") return null;
     const terrainLayer = document.getElementById("world-terrain-layer");
@@ -924,13 +1018,15 @@ window.Aetheria = window.Aetheria || {};
         setTextIfChanged(
           tracker,
           prog.allDone
-            ? ("🌟破障共鳴已生效 (" + prog.count + "/3)")
-            : ("🧭章節破障解謎: " + prog.count + "/3 (點擊線索)")
+            ? ("🌟破障聖印已得 (" + prog.count + "/3)")
+            : ("🔒主線破障解謎: " + prog.count + "/3 (必解)")
         );
       } else {
         setDisplayIfChanged(tracker, "none");
       }
     }
+
+    syncMainQuestTrackerWithStoryChain();
 
     const activeTerrain = ensureActiveTerrainCanvas(mapObj);
 
@@ -1413,7 +1509,7 @@ window.Aetheria = window.Aetheria || {};
 
   const COMPLETE_WORKSHOP_RECIPES = [
     { id: "wk_rope_ladder",     name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",     toCount: 1, cost: { rope: 1, wood: 2 },                  desc: "【★高低差開路】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！" },
-    { id: "wk_briar_sickle",    name: "除荊開路鐮刀",          category: "explore",  toKey: "briarSickle",    toCount: 1, isUniqueGear: true, cost: { bronzeIngot: 1, wood: 2, rope: 1 }, desc: "【★第一章解謎必備】永久可斬開各區【🌿千年荊棘魔藤】推進因果鏈，且砍伐草木收穫 +1！" },
+    { id: "wk_briar_sickle",    name: "除荊開路鐮刀",          category: "explore",  toKey: "briarSickle",    toCount: 1, isUniqueGear: true, cost: { bronzeIngot: 1, wood: 2, rope: 1 }, desc: "【★第一章解謎必備】永久可斬開各區【🌿千年荊棘魔藤】推進主線因果鏈，且砍伐草木收穫 +1！" },
     { id: "wk_salvage_hook",    name: "深水打撈磁鉤",          category: "explore",  toKey: "salvageHook",    toCount: 1, isUniqueGear: true, cost: { iron: 2, rope: 2, quartz: 1 },      desc: "【★第三章解謎必備】永久可打撈各區水岸的【⚓沉沒古寶箱】尋回水閘零件，且釣魚收穫 +1！" },
     { id: "wk_magnifying_lens", name: "水晶鑑定放大鏡",        category: "explore",  toKey: "magnifyingLens", toCount: 1, isUniqueGear: true, cost: { quartz: 2, bronzeIngot: 1 },        desc: "【★尋寶神器】持有後全地圖採集額外獲得稀有寶石與雙倍礦物機率 +35%！" },
     { id: "wk_ancient_gear",    name: "精密青銅齒輪 x1",       category: "explore",  toKey: "ancientGear",    toCount: 1, cost: { bronzeIngot: 1, flint: 2 },          desc: "【★第二/六章解謎必備】嵌入峽谷、海岸與天界的【⚙️失落齒輪機關柱】即可啟動古墓共鳴！" },
@@ -1540,14 +1636,13 @@ window.Aetheria = window.Aetheria || {};
       if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
       if (!s.projectsBuilt) s.projectsBuilt = {};
 
-      if ((s.lv && s.lv >= 5) || (s.bossesDefeated && s.bossesDefeated.zone1_forest)) {
-        s.projectsBuilt.proj_z1_bridge = true;
-      }
-      if ((s.lv && s.lv >= 10) || (s.bossesDefeated && s.bossesDefeated.zone2_canyon)) {
+      // 僅在該區 Boss 確定已被擊敗過時，才回溯標記橋樑已通（不依賴等級自動開橋，確保未打通章節必先解謎！）
+      if (s.bossesDefeated && s.bossesDefeated.zone1_forest) s.projectsBuilt.proj_z1_bridge = true;
+      if (s.bossesDefeated && s.bossesDefeated.zone2_canyon) {
         s.projectsBuilt.proj_z2_rope = true;
         s.projectsBuilt.proj_z2_bridge = true;
       }
-      if ((s.lv && s.lv >= 15) || (s.bossesDefeated && s.bossesDefeated.zone3_coast)) {
+      if (s.bossesDefeated && s.bossesDefeated.zone3_coast) {
         s.projectsBuilt.proj_z3_raft = true;
         s.projectsBuilt.proj_z3_bridge = true;
       }
@@ -2119,24 +2214,24 @@ window.Aetheria = window.Aetheria || {};
 
       const c = prog.chain;
       window.Aetheria.UI.setActivePanel("panel-modal");
-      document.getElementById("modal-title").innerHTML = "🧭 " + c.title + " (" + prog.count + "/3)";
+      document.getElementById("modal-title").innerHTML = "🔒 " + c.title + " (" + prog.count + "/3)";
 
       const body = document.getElementById("modal-body");
       body.innerHTML =
         '<div class="sys-card-scroll" style="margin-bottom:8px;">' +
-          '<b>🗣️ ' + c.npcName + '的情報：</b>' +
+          '<b>🗣️ ' + c.npcName + '的緊急情報（主線必解）：</b>' +
           '<div style="font-size:12px; color:#5c3824; margin-top:3px;">「' + c.storyIntro + '」</div>' +
         '</div>' +
         '<div class="codex-card ' + (prog.step1Done ? 'owned' : '') + '">' +
-          '<b style="color:' + (prog.step1Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step1Done ? '✅ 已完成' : '⏳ 步驟① (工具解謎)') + '</b>' +
+          '<b style="color:' + (prog.step1Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step1Done ? '✅ 步驟① 已完成' : '🔒 步驟① (工具破障 - 必解)') + '</b>' +
           '<div style="font-size:12px; color:#ffffff; margin-top:3px;">' + c.step1Title + '</div>' +
         '</div>' +
         '<div class="codex-card ' + (prog.step2Done ? 'owned' : '') + '">' +
-          '<b style="color:' + (prog.step2Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step2Done ? '✅ 已完成' : '⏳ 步驟② (現場古碑機關)') + '</b>' +
+          '<b style="color:' + (prog.step2Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step2Done ? '✅ 步驟② 已完成' : '🔒 步驟② (古碑機關 - 必解)') + '</b>' +
           '<div style="font-size:12px; color:#ffffff; margin-top:3px;">' + c.step2Title + '</div>' +
         '</div>' +
         '<div class="codex-card ' + (prog.step3Done ? 'owned' : '') + '">' +
-          '<b style="color:' + (prog.step3Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step3Done ? '✅ 已達成共鳴' : '⏳ 步驟③ (開啟秘寶與削弱領主)') + '</b>' +
+          '<b style="color:' + (prog.step3Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step3Done ? ('✅ 步驟③ 已取得' + c.relicName) : ('🔒 步驟③ (取得' + c.relicName + '解鎖修橋與首領戰)')) + '</b>' +
           '<div style="font-size:12px; color:#ffffff; margin-top:3px;">' + c.step3Title + '</div>' +
         '</div>' +
         '<div style="display:flex; gap:6px; margin-top:10px;">' +
@@ -2179,7 +2274,7 @@ window.Aetheria = window.Aetheria || {};
       const navHtml =
         '<div style="display:flex; gap:6px; margin-bottom:8px;">' +
           '<button class="na-btn highlight" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.UI.openForgeModal(\'workshop\')">🔨 前往隨身工坊合成</button>' +
-          '<button class="na-btn" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">🧭 本區破障因果鏈</button>' +
+          '<button class="na-btn" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">🔒 本區主線破障流程</button>' +
         '</div>';
 
       let cardsHtml = "";
@@ -2229,7 +2324,6 @@ window.Aetheria = window.Aetheria || {};
       body.innerHTML = navHtml + filterHtml + '<div>' + cardsHtml + '</div>';
     },
 
-    // ★ 關鍵修復：打開【全區全貌探索地圖】時，直接調用 paintTerrainOntoContext 獨立自癒繪製完整地形與懸崖，同時自動檢查並補繪主畫面懸崖！
     openFullZoneMapModal: function() {
       const s = window.Aetheria.State.data;
       const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
@@ -2251,8 +2345,8 @@ window.Aetheria = window.Aetheria || {};
         chainBanner.style.marginBottom = "6px";
         chainBanner.innerHTML =
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b style="color:#ffd166; font-size:12px;">🧭 ' + prog.chain.title + ' (' + prog.count + '/3)</b>' +
-            '<button class="na-btn" style="padding:2px 8px; font-size:10.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">詳情線索</button>' +
+            '<b style="color:#ffd166; font-size:12px;">🔒 ' + prog.chain.title + ' (' + prog.count + '/3)</b>' +
+            '<button class="na-btn" style="padding:2px 8px; font-size:10.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">必解詳情</button>' +
           '</div>' +
           '<div style="font-size:11px; color:#cbd5e1; margin-top:2px;">' +
             (!prog.step1Done ? prog.chain.step1Title : (!prog.step2Done ? prog.chain.step2Title : prog.chain.step3Title)) +
@@ -2281,7 +2375,6 @@ window.Aetheria = window.Aetheria || {};
       ctx.fillStyle = "#16427d";
       ctx.fillRect(0, 0, outW, outH);
 
-      // 直接在全區地圖 Canvas 上獨立繪製完整 Kenney 地貌、蜿蜒小徑、岩石懸崖、河流木橋與專屬地標，永不變藍底！
       if (mapObj.id !== "ocean_sea") {
         ctx.save();
         ctx.scale(scaleX, scaleY);
@@ -2378,14 +2471,14 @@ window.Aetheria = window.Aetheria || {};
         '<span>🟨 <b>步驟②古碑機關陣</b></span>' +
         '<span><b style="color:#e03c4b; background:#ffd166; padding:0 3px; border-radius:50%;">✖</b> <b>唯一挖寶點</b></span>' +
         '<span>🟪 <b>地底遺跡門</b></span>' +
-        '<span>🔴 <b>區域首領</b></span>';
+        '<span>🔴 <b>區域首領(需破障)</b></span>';
       body.appendChild(legend);
 
       canvas.onclick = function(ev) {
         const rect = canvas.getBoundingClientRect();
         const clickX = Math.round(((ev.clientX - rect.left) / rect.width) * W);
         const clickY = Math.round(((ev.clientY - rect.top) / rect.height) * H);
-        window.Aetheria.UI.showToast("🧭 地圖座標 (" + clickX + ", " + clickY + ")｜沿金色虛線完成「🩷步驟① ➔ 🟨步驟②」即可削弱 🔴首領！");
+        window.Aetheria.UI.showToast("🧭 地圖座標 (" + clickX + ", " + clickY + ")｜必須先完成「🩷步驟① ➔ 🟨步驟② ➔ 🏆開箱」才可修橋及挑戰 🔴首領！");
       };
     },
 
@@ -2867,7 +2960,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 11. 掛載系統（章節因果解謎鏈 + NPC動態線索 + 橋樑通行 + 首領破障削弱） =================
+  // ================= 11. 掛載系統（主線強制破障鎖定 + Boss 無敵結界彈開 + 橋樑通行） =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -2933,8 +3026,14 @@ window.Aetheria = window.Aetheria || {};
         const prevX = s.heroX, prevY = s.heroY, prevZone = s.currentZone;
         const curMap = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
 
+        // 僅當本區已修好橋（且已完成 3 步破障解謎或舊存檔已擊敗該區 Boss）時，才允許走過河道橋面
+        const prog = curMap ? getZoneStoryProgress(curMap.id, s) : null;
+        const canCrossBridge = Boolean(
+          curMap && curMap.hasRiver && isMapBridgeBuilt(curMap, s) && (!prog || prog.allDone)
+        );
+
         let bypassedRiverForBridge = false;
-        if (curMap && curMap.hasRiver && isMapBridgeBuilt(curMap, s)) {
+        if (canCrossBridge) {
           const bY = getMapBridgeY(curMap);
           if (s.heroY >= Math.min(195, bY - 55) && s.heroY <= Math.max(355, bY + 55)) {
             bypassedRiverForBridge = true;
@@ -3031,6 +3130,22 @@ window.Aetheria = window.Aetheria || {};
             const d = mapObj.decos[i];
             if (!d) continue;
 
+            // ★ 強制鎖鑰1：若玩家未完成本區 3 步破障解謎 (!prog.allDone)，試圖修橋 (isProjectSite) 或點亮南北封印柱時，直接攔截並彈出破障流程面板！
+            const isBridgeOrSealSite = Boolean(
+              !d.isHighlandElement && (
+                d.isProjectSite ||
+                d.projectId ||
+                d.isSealPillar ||
+                (d.sprite && String(d.sprite).indexOf("seal_pillar") !== -1)
+              )
+            );
+            if (isBridgeOrSealSite && prog && !prog.allDone && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 54) {
+              window.Aetheria.Audio.sfxWrong();
+              WorkshopUIManager.openZoneStoryChainModal();
+              window.Aetheria.UI.showToast("🔒 【主線環境鎖死】" + prog.chain.storyIntro);
+              return;
+            }
+
             if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               window.Aetheria.Audio.sfxTalkBlip();
               window.Aetheria.UI.showToast(d.riddleText || "古老的機關銘文。");
@@ -3041,7 +3156,8 @@ window.Aetheria = window.Aetheria || {};
                 Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               if (prog && !prog.step1Done && !isZoneExplorePuzzleSolved(mapObj, s)) {
                 window.Aetheria.Audio.sfxWrong();
-                window.Aetheria.UI.showToast("🔒 【章節因果鎖定】地脈能量被阻斷！請先完成 " + prog.chain.step1Title + "！");
+                WorkshopUIManager.openZoneStoryChainModal();
+                window.Aetheria.UI.showToast("🔒 【步驟①尚未完成】地脈被阻斷！請先完成：" + prog.chain.step1Short);
                 return;
               }
             }
@@ -3050,7 +3166,7 @@ window.Aetheria = window.Aetheria || {};
               if (isZoneExplorePuzzleSolved(mapObj, s)) {
                 const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
                 if (pChest) { Exp.harvestNode(pChest); return; }
-                window.Aetheria.UI.showToast("✨ 此處四象火盆陣已解開並領取過寶箱！");
+                window.Aetheria.UI.showToast("✨ 此處四象火盆陣已解開並取得破障聖印！");
                 return;
               }
               const nextOrder = (mapObj._brazierStep || 0) + 1;
@@ -3060,9 +3176,10 @@ window.Aetheria = window.Aetheria || {};
                 if (nextOrder >= 4) {
                   s.solvedExplorePuzzles[mapObj.id] = true;
                   window.Aetheria.State.save();
+                  syncMainQuestTrackerWithStoryChain();
                   window.Aetheria.Audio.sfxLevelUp();
-                  window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・領主結界削弱!", "#5ac54f", true);
-                  window.Aetheria.UI.showToast("🎉 【章節突破 2/3】四象聖火共鳴成功！首領護盾已削弱 -2，再按一次 A 鍵即可開啟【古遺跡機關寶箱】！");
+                  window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・請開中央寶箱!", "#5ac54f", true);
+                  window.Aetheria.UI.showToast("🎉 【主線破障 2/3 完成】四象聖火共鳴！請立即按 A 鍵開啟中央【古遺跡機關寶箱】取得" + (prog ? prog.chain.relicName : "破障聖印") + "！");
                 } else {
                   window.Aetheria.UI.showToast("🔥 點燃【" + d.brazierLabel + "】(" + nextOrder + "/4)！請繼續點燃下一座！");
                 }
@@ -3079,7 +3196,7 @@ window.Aetheria = window.Aetheria || {};
               if (isZoneExplorePuzzleSolved(mapObj, s)) {
                 const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
                 if (pChest) { Exp.harvestNode(pChest); return; }
-                window.Aetheria.UI.showToast("✨ 四方守衛石像已共鳴並領取過寶箱！");
+                window.Aetheria.UI.showToast("✨ 四方守衛石像已共鳴並取得破障聖印！");
                 return;
               }
               d.curDir = ((d.curDir || 0) + 1) % 4;
@@ -3088,9 +3205,10 @@ window.Aetheria = window.Aetheria || {};
               if (allStatues.length > 0 && allStatues.every(function(sd) { return sd.curDir === sd.targetDir; })) {
                 s.solvedExplorePuzzles[mapObj.id] = true;
                 window.Aetheria.State.save();
+                syncMainQuestTrackerWithStoryChain();
                 window.Aetheria.Audio.sfxLevelUp();
-                window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・領主結界削弱!", "#5ac54f", true);
-                window.Aetheria.UI.showToast("🎉 【章節突破 2/3】四方石像共鳴成功！首領護盾已削弱 -2，再按一次 A 鍵即可開啟【古遺跡機關寶箱】！");
+                window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・請開中央寶箱!", "#5ac54f", true);
+                window.Aetheria.UI.showToast("🎉 【主線破障 2/3 完成】四方石像共鳴！請立即按 A 鍵開啟中央【古遺跡機關寶箱】取得" + (prog ? prog.chain.relicName : "破障聖印") + "！");
               } else {
                 window.Aetheria.UI.showToast("🗿 旋轉【" + d.statueName + "】朝向為：" + DIR_SYMBOLS[d.curDir]);
               }
@@ -3101,7 +3219,7 @@ window.Aetheria = window.Aetheria || {};
               if (isZoneExplorePuzzleSolved(mapObj, s)) {
                 const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
                 if (pChest) { Exp.harvestNode(pChest); return; }
-                window.Aetheria.UI.showToast("✨ 三連拉桿機關已解開並領取過寶箱！");
+                window.Aetheria.UI.showToast("✨ 三連拉桿機關已解開並取得破障聖印！");
                 return;
               }
               const allLevers = (mapObj.decos || []).filter(function(ld) { return ld.isPuzzleToggleLever; });
@@ -3116,9 +3234,10 @@ window.Aetheria = window.Aetheria || {};
               if (allLevers.length > 0 && allLevers.every(function(ld) { return ld.leverOn; })) {
                 s.solvedExplorePuzzles[mapObj.id] = true;
                 window.Aetheria.State.save();
+                syncMainQuestTrackerWithStoryChain();
                 window.Aetheria.Audio.sfxLevelUp();
-                window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・領主結界削弱!", "#5ac54f", true);
-                window.Aetheria.UI.showToast("🎉 【章節突破 2/3】三座連動拉桿全部開啟！首領護盾已削弱 -2，再按一次 A 鍵即可開啟【古遺跡機關寶箱】！");
+                window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・請開中央寶箱!", "#5ac54f", true);
+                window.Aetheria.UI.showToast("🎉 【主線破障 2/3 完成】三座連動拉桿全部開啟！請立即按 A 鍵開啟中央【古遺跡機關寶箱】取得" + (prog ? prog.chain.relicName : "破障聖印") + "！");
               }
               return;
             }
@@ -3190,8 +3309,8 @@ window.Aetheria = window.Aetheria || {};
           const nearNpc = mapObj.npcs.some(function(n) { return n && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 52; });
           if (nearNpc) {
             setTimeout(function() {
-              const nextStepTxt = !prog.step1Done ? prog.chain.step1Title : prog.chain.step2Title;
-              window.Aetheria.UI.showToast("🗣️ " + prog.chain.npcName + "：『" + prog.chain.storyIntro + " 請先完成：" + nextStepTxt + "』");
+              const nextStepTxt = !prog.step1Done ? prog.chain.step1Short : (!prog.step2Done ? prog.chain.step2Short : prog.chain.step3Short);
+              window.Aetheria.UI.showToast("🗣️ " + prog.chain.npcName + "：『" + prog.chain.storyIntro + " 下一步：" + nextStepTxt + "』");
             }, 350);
           }
         }
@@ -3230,11 +3349,11 @@ window.Aetheria = window.Aetheria || {};
               const n = mapObj.nodes[j];
               if (!n || n.opened) continue;
               if (n.isExplorePuzzleChest && Math.hypot(s.heroX - n.x, s.heroY - n.y) < (puzzleDone ? 78 : 44)) {
-                setTextIfChanged(hintEl, "開啟秘寶箱");
+                setTextIfChanged(hintEl, "取破障聖印");
                 return;
               }
               if (n.isToolGateObstacle && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 52) {
-                setTextIfChanged(hintEl, "工具解謎");
+                setTextIfChanged(hintEl, "工具破障");
                 return;
               }
               if (n.isBuriedSpot && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 42) {
@@ -3248,9 +3367,9 @@ window.Aetheria = window.Aetheria || {};
               const d = mapObj.decos[i];
               if (!d) continue;
               if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) { setTextIfChanged(hintEl, "閱讀古碑"); return; }
-              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "點燃火盆"); return; }
-              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "旋轉石像"); return; }
-              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "扳動拉桿"); return; }
+              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "取破障聖印" : "點燃火盆"); return; }
+              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "取破障聖印" : "旋轉石像"); return; }
+              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { setTextIfChanged(hintEl, puzzleDone ? "取破障聖印" : "扳動拉桿"); return; }
               if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
                 const open = Boolean(s.unlockedCrypts && s.unlockedCrypts[d.zoneId || mapObj.id]);
                 setTextIfChanged(hintEl, open ? "進入遺跡" : "鑰匙開鎖");
@@ -3292,7 +3411,8 @@ window.Aetheria = window.Aetheria || {};
 
           if (haveCnt <= 0) {
             window.Aetheria.Audio.sfxWrong();
-            window.Aetheria.UI.showToast("🔒 【" + g.name + "】阻擋了地脈與秘寶！請先在【工坊 ➔ 🧗解謎工具/開路】合成【" + reqName + "】前來破解！");
+            WorkshopUIManager.openZoneStoryChainModal();
+            window.Aetheria.UI.showToast("🔒 【" + g.name + "】阻擋了地脈！請先在【工坊 ➔ 🧗解謎工具/開路】合成【" + reqName + "】前來破解！");
             return;
           }
 
@@ -3320,12 +3440,13 @@ window.Aetheria = window.Aetheria || {};
 
           window.Aetheria.Audio.sfxLevelUp();
           window.Aetheria.State.save();
+          syncMainQuestTrackerWithStoryChain();
           window.Aetheria.UI.updateAllHud();
 
           const chain = ZONE_STORY_CHAINS[s.currentZone];
           if (chain && chain.step1GateId === node.id) {
             window.Aetheria.UI.spawnFloatingText("🔓步驟①完成・地脈導通!", "#ffd166", true);
-            window.Aetheria.UI.showToast("🔓 【章節突破 1/3】使用【" + reqName + "】破除障礙！獲 " + rewardNames.join("、") + "，西南方【步驟②古碑機關陣】已導通！");
+            window.Aetheria.UI.showToast("🔓 【主線破障 1/3 完成】使用【" + reqName + "】破除障礙！西南方【步驟②古碑機關陣】已導通！");
           } else {
             window.Aetheria.UI.showToast("🔓 使用【" + reqName + "】成功破解" + g.name.replace(/\[.*\]/, "") + "！獲 " + (g.rewardGold || 250) + "G、" + rewardNames.join("、") + "！");
           }
@@ -3334,9 +3455,11 @@ window.Aetheria = window.Aetheria || {};
 
         if (node && node.isExplorePuzzleChest) {
           const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
-          if (!isZoneExplorePuzzleSolved(curMap, s)) {
+          const prog = getZoneStoryProgress(s.currentZone, s);
+          if ((prog && !prog.step1Done) || !isZoneExplorePuzzleSolved(curMap, s)) {
             window.Aetheria.Audio.sfxWrong();
-            window.Aetheria.UI.showToast("🔒 機關寶箱被結界鎖定！請先完成【步驟①工具破障】與【步驟②古碑謎語機關】！");
+            WorkshopUIManager.openZoneStoryChainModal();
+            window.Aetheria.UI.showToast("🔒 機關寶箱被結界鎖定！請先依序完成【步驟①工具破障】與【步驟②古碑謎語機關】！");
             return;
           }
           if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
@@ -3356,9 +3479,12 @@ window.Aetheria = window.Aetheria || {};
 
           window.Aetheria.Audio.sfxLevelUp();
           window.Aetheria.State.save();
+          syncMainQuestTrackerWithStoryChain();
           window.Aetheria.UI.updateAllHud();
-          window.Aetheria.UI.spawnFloatingText("🌟章節因果鏈 3/3 大圓滿!", "#ffd166", true);
-          window.Aetheria.UI.showToast("🏆 【章節破障 3/3 完成】獲 320G、🗝️遺跡鑰匙+1、🍲香辛燉肉+1、永久 HP+15，且本區首領護盾與生命已大幅削弱！");
+
+          const relicTitle = prog ? prog.chain.relicName : "【破障聖印】";
+          window.Aetheria.UI.spawnFloatingText("🌟獲" + relicTitle + "!", "#ffd166", true);
+          window.Aetheria.UI.showToast("🏆 【主線破障 3/3 大圓滿】獲得" + relicTitle + "！已解鎖過河修橋與封印柱，並粉碎首領的無敵結界！");
           return;
         }
 
@@ -3500,47 +3626,53 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // ================= 12. RPG 戰鬥平衡、護盾減傷與「章節因果解謎削弱首領」機制 =================
+    // ================= 12. ★ 強制鎖鑰2：守關 Boss 無敵結界彈開檢定 + 護盾減傷平衡 =================
     if (Bat) {
       if (Bat.startBattle) {
         const origStart = Bat.startBattle.bind(Bat);
         Bat.startBattle = function(mapMonsterNode, customMode, customQuestionId) {
+          const s = window.Aetheria.State.data;
+          const prog = getZoneStoryProgress(s.currentZone, s);
+
+          // ★ 若觸碰的是區域守關首領 (isBoss && 非地底遺跡魔像)，且玩家尚未完成本區 3 步破障解謎 (!prog.allDone)：
+          // 直接被【🛡️領主無敵結界】彈開，100% 拒絕進入戰鬥，並打開本區主線破障流程視窗！
+          if (mapMonsterNode && mapMonsterNode.isBoss && !mapMonsterNode.isCryptGuardian && prog && !prog.allDone) {
+            window.Aetheria.Audio.sfxWrong();
+            s.heroX = Math.max(80, (mapMonsterNode.x || s.heroX) - 52);
+            s.petX = s.heroX - 20;
+            window.Aetheria.UI.spawnFloatingText("🛡️無敵結界彈開!(需先破障)", "#ff595e", true);
+            WorkshopUIManager.openZoneStoryChainModal();
+            window.Aetheria.UI.showToast("🛡️ 【" + mapMonsterNode.name + "】受環境無敵結界保護！必須先完成本區 3 步破障解謎取得" + prog.chain.relicName + "才可開戰！");
+            return;
+          }
+
           origStart(mapMonsterNode, customMode, customQuestionId);
 
           const e = this.enemy;
           if (!e || this.mode !== "combat") return;
 
-          const s = window.Aetheria.State.data;
           const heroAtk = (window.Aetheria.State.getTotalAtk ? window.Aetheria.State.getTotalAtk() : 80);
           const heroMaxHp = s.maxHp || 300;
           const monLv = e.lv || 1;
           const isElite = Boolean(mapMonsterNode && (mapMonsterNode.isCryptGuardian || mapMonsterNode.isVolcanoHelperSubBoss || mapMonsterNode.isShiny));
-          const prog = getZoneStoryProgress(s.currentZone, s);
 
           if (e.isBoss) {
-            const minBossHp = Math.round(heroAtk * 10.5 + monLv * 180);
-            e.maxHp = Math.max(Math.round(e.maxHp * 3.5), minBossHp);
-            e.maxShield = Math.max(6, (e.maxShield || 4) + (monLv >= 20 ? 3 : 2));
-            e.atk = Math.max(Math.round((e.atk || 35) * 1.45), Math.round(heroMaxHp * 0.22));
+            const minBossHp = Math.round(heroAtk * 8.5 + monLv * 150);
+            e.maxHp = Math.max(Math.round(e.maxHp * 2.8), minBossHp);
+            e.maxShield = Math.max(4, (e.maxShield || 4) + 1);
+            e.atk = Math.max(Math.round((e.atk || 35) * 1.40), Math.round(heroMaxHp * 0.20));
             e._enrageUsed = false;
-
-            if (prog && prog.allDone) {
-              e.maxShield = Math.max(3, e.maxShield - 2);
-              e.maxHp = Math.round(e.maxHp * 0.80);
-              setTimeout(function() {
-                window.Aetheria.UI.spawnFloatingText("🌟破障共鳴：領主護盾-2!", "#5ac54f", true);
-                window.Aetheria.UI.showToast(prog.chain.bossDebuffMsg);
-              }, 350);
-            } else if (prog && !prog.allDone) {
-              e.maxShield += 1;
-              setTimeout(function() {
-                window.Aetheria.UI.showToast("⚠️ 首領受本區環境結界加持(護盾強化)！完成右上角【🧭章節破障解謎】可大幅削弱首領！");
-              }, 350);
-            }
             e.hp = e.maxHp;
             e.shield = e.maxShield;
+
+            if (prog && prog.allDone) {
+              setTimeout(function() {
+                window.Aetheria.UI.spawnFloatingText("🌟" + prog.chain.relicName + "破除無敵!", "#5ac54f", true);
+                window.Aetheria.UI.showToast(prog.chain.bossDebuffMsg);
+              }, 350);
+            }
           } else if (isElite) {
-            const minEliteHp = Math.round(heroAtk * 5.2 + monLv * 95);
+            const minEliteHp = Math.round(heroAtk * 5.0 + monLv * 90);
             e.maxHp = Math.max(Math.round(e.maxHp * 2.4), minEliteHp);
             e.hp = e.maxHp;
             e.maxShield = Math.max(4, (e.maxShield || 3) + 1);
@@ -3819,7 +3951,7 @@ window.Aetheria = window.Aetheria || {};
             btnWrap.style.cssText = "display:flex; gap:6px; margin-bottom:8px;";
             btnWrap.innerHTML =
               '<button class="na-btn highlight" style="flex:1; padding:7px; font-size:12px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">' +
-                '🧭 本區破障因果鏈' +
+                '🔒 本區主線破障流程' +
               '</button>' +
               '<button class="na-btn highlight" style="flex:1; padding:7px; font-size:12px;" onclick="Aetheria.HighlandsWorkshop.openSurvivalCodexModal(\'all\')">' +
                 '📖 求生合成圖鑑' +
@@ -3913,8 +4045,9 @@ window.Aetheria = window.Aetheria || {};
       if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) {
         window.Aetheria.UI.updateAllHud();
       }
+      syncMainQuestTrackerWithStoryChain();
     } catch (err) {
-      console.error("Survival RPG Story Chain & Self-Healing Canvas v13.1 init error:", err);
+      console.error("Survival RPG Hard-Gated Story Chain v13.2 init error:", err);
     }
   }
 
