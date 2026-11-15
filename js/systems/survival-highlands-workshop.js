@@ -1,28 +1,27 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 羅盤全貌地圖、多樣化機關解謎與 Kenney 地貌模組 (survival-highlands-workshop.js - v11.2)
- * 核心升級：
- *   1. 【圖1 圓形羅盤小地圖 (N/E/S/W)】：左下角小地圖改為圓形羅盤，即時顯示真實像素地形、懸崖與黃圈紅 X 藏寶點
- *   2. 【圖2 點擊羅盤放大「全區全貌大圖」】：點擊左下角羅盤即可彈出高解析度「全區全貌鳥瞰圖」，一覽全區懸崖、山洞、紅 X 寶藏與機關位置
- *   3. 【3大全新野外探索解題機關】：「🔥四象火盆順序陣」、「🗿四方石像轉向謎題」、「⚙️三連連動拉桿機關」，每區玩法不同！
- *   4. 保留 v11.1 的清爽設定（無農圃/魚籠/環境扣血、營地三帳篷上移防誤入、挖寶點永久只限挖一次、格仔工坊）
+ * Project J：艾瑟瑞亞的破曉 — 羅盤全貌地圖、木橋修復與多樣化機關模組 (survival-highlands-workshop.js - v11.3)
+ * 【Part 1 / 2：自動掛載圓形羅盤小地圖、過河木橋像素繪製與圖層修復】
+ * 修正重點：
+ *   1. 【100% 生效的圓形羅盤與點擊放大全圖】：自動抓取 #upper-screen 內的原生小地圖 canvas，包上 N/E/S/W 圓形羅盤框並綁定點擊打開【全區全貌大圖】
+ *   2. 【修復過河木橋消失】：將地貌 Canvas 設為 z-index:0 不遮擋原版木橋，並在河道過河處直接繪製 Kenney 像素木橋（含木板與護欄）
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入圖1圓形羅盤小地圖、圖2全區放大地圖與機關解謎 CSS =================
+  // ================= 1. 注入圓形羅盤、過河木橋圖層保護與全區放大地圖 CSS =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v112-styles")) return;
+    if (document.getElementById("srpg-kenney-v113-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v112-styles";
+    style.id = "srpg-kenney-v113-styles";
     style.textContent = `
-      /* Kenney 16x16 像素地貌底圖 Canvas */
+      /* Kenney 16x16 像素地貌底圖 Canvas：設為 z-index: 0，絕不遮擋原版木橋與物件 */
       .kenney-terrain-canvas {
-        position: absolute;
-        left: 0;
-        top: 0;
-        pointer-events: none;
-        z-index: 1;
-        image-rendering: pixelated;
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        pointer-events: none !important;
+        z-index: 0 !important;
+        image-rendering: pixelated !important;
       }
       #world-terrain-layer .dom-dirt-blob {
         opacity: 0 !important;
@@ -30,31 +29,46 @@ window.Aetheria = window.Aetheria || {};
       #world-terrain-layer .dom-dirt-blob.ocean-atoll {
         opacity: 1 !important;
       }
+      /* 確保原版河流、木橋、沙灘與棧橋浮在 Kenney 底圖上方 */
+      #world-terrain-layer .dom-river {
+        z-index: 1 !important;
+      }
+      #world-terrain-layer .dom-bridge,
+      #world-terrain-layer [class*="bridge"],
+      #world-terrain-layer .dom-wooden-pier {
+        z-index: 4 !important;
+      }
 
-      /* ================= 圖1：左下角 N/E/S/W 圓形羅盤小地圖 ================= */
-      #minimap-box {
-        width: 78px !important;
-        height: 78px !important;
+      /* ================= 圖1：左下角 N/E/S/W 圓形羅盤小地圖容器 ================= */
+      .srpg-compass-box {
+        position: absolute !important;
+        width: 80px !important;
+        height: 80px !important;
         bottom: 8px !important;
         left: 8px !important;
         border-radius: 50% !important;
         border: 5px solid #4a2511 !important;
         background: #102542 !important;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.85), inset 0 0 6px rgba(0,0,0,0.8) !important;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.9), inset 0 0 6px rgba(0,0,0,0.85) !important;
         overflow: visible !important;
         cursor: pointer !important;
         pointer-events: auto !important;
-        z-index: 28 !important;
+        z-index: 75 !important;
+        padding: 0 !important;
+        margin: 0 !important;
       }
-      #minimap-box:active {
-        transform: scale(0.95);
+      .srpg-compass-box:active {
+        transform: scale(0.94) !important;
       }
-      #minimap-canvas {
+      .srpg-compass-canvas {
         width: 100% !important;
         height: 100% !important;
         border-radius: 50% !important;
         display: block !important;
         image-rendering: pixelated !important;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+        border: none !important;
       }
       .compass-dir-tag {
         position: absolute;
@@ -67,12 +81,27 @@ window.Aetheria = window.Aetheria || {};
         line-height: 1.1;
         text-shadow: 1px 1px 0 #000;
         pointer-events: none;
-        z-index: 30;
+        z-index: 78;
       }
       .compass-dir-n { top: -8px; left: 50%; transform: translateX(-50%); color: #ffd166; }
       .compass-dir-s { bottom: -8px; left: 50%; transform: translateX(-50%); }
       .compass-dir-w { left: -8px; top: 50%; transform: translateY(-50%); }
       .compass-dir-e { right: -8px; top: 50%; transform: translateY(-50%); }
+      .compass-zoom-hint {
+        position: absolute;
+        bottom: -9px;
+        right: -12px;
+        background: #1d3557;
+        color: #ffd166;
+        border: 1px solid #f5b700;
+        border-radius: 4px;
+        font-size: 8.5px;
+        font-weight: 900;
+        padding: 0 3px;
+        pointer-events: none;
+        z-index: 79;
+        box-shadow: 0 1px 3px #000;
+      }
 
       /* ================= 圖2：點擊放大「全區全貌大圖」檢視器 ================= */
       .fullmap-stage-wrap {
@@ -305,29 +334,80 @@ window.Aetheria = window.Aetheria || {};
       const el = document.getElementById(id);
       if (el && el.parentNode) el.parentNode.removeChild(el);
     });
+  }
 
-    // 為左下角小地圖加上羅盤 N / E / S / W 方位字樣，並綁定點擊打開「全區全貌大圖」
-    const mmBox = document.getElementById("minimap-box");
-    if (mmBox && !mmBox._compassDecorated) {
-      mmBox._compassDecorated = true;
+  // ★ 自動尋找 #upper-screen 內的原生小地圖 canvas 並改造成「可點擊的 N/E/S/W 圓形羅盤」
+  let detectedMinimapCanvas = null;
+  function ensureCompassMinimapDOM() {
+    if (detectedMinimapCanvas && document.body.contains(detectedMinimapCanvas)) {
+      return detectedMinimapCanvas;
+    }
+    const upper = document.getElementById("upper-screen");
+    if (!upper) return null;
+
+    // 搜尋 #upper-screen 內任何非地貌、非全圖的原生小地圖 canvas
+    const candidates = upper.querySelectorAll("canvas:not(.kenney-terrain-canvas):not(#srpg-fullmap-canvas)");
+    let mmCanvas = document.getElementById("minimap-canvas") ||
+                   document.getElementById("minimap") ||
+                   document.getElementById("hud-minimap") ||
+                   (candidates.length > 0 ? candidates[0] : null);
+
+    if (!mmCanvas) return null;
+    detectedMinimapCanvas = mmCanvas;
+
+    let mmBox = mmCanvas.parentElement;
+    // 若 canvas 直接放在 #upper-screen 下（沒有獨立外框 div），自動建立羅盤外框包裹它！
+    if (!mmBox || mmBox.id === "upper-screen" || mmBox.id === "world-viewport") {
+      let wrap = document.getElementById("srpg-compass-auto-wrap");
+      if (!wrap) {
+        wrap = document.createElement("div");
+        wrap.id = "srpg-compass-auto-wrap";
+        mmCanvas.parentNode.insertBefore(wrap, mmCanvas);
+        wrap.appendChild(mmCanvas);
+      }
+      mmBox = wrap;
+    }
+
+    mmBox.classList.add("srpg-compass-box");
+    mmCanvas.classList.add("srpg-compass-canvas");
+
+    if (!mmBox._compassInitialized) {
+      mmBox._compassInitialized = true;
       mmBox.title = "點擊放大檢視【全區全貌探索地圖】";
+
       ["N", "S", "W", "E"].forEach(function(dir) {
         const span = document.createElement("span");
         span.className = "compass-dir-tag compass-dir-" + dir.toLowerCase();
         span.innerText = dir;
         mmBox.appendChild(span);
       });
-      mmBox.onclick = function(ev) {
-        ev.stopPropagation();
-        if (window.Aetheria.Audio) window.Aetheria.Audio.sfxTalkBlip();
+
+      const hint = document.createElement("span");
+      hint.className = "compass-zoom-hint";
+      hint.innerText = "🔍全圖";
+      mmBox.appendChild(hint);
+
+      const openFullMapHandler = function(ev) {
+        if (ev) {
+          ev.stopPropagation();
+          ev.preventDefault();
+        }
+        if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) {
+          window.Aetheria.Audio.sfxTalkBlip();
+        }
         if (window.Aetheria.HighlandsWorkshop) {
           window.Aetheria.HighlandsWorkshop.openFullZoneMapModal();
         }
       };
+
+      mmBox.onclick = openFullMapHandler;
+      mmCanvas.onclick = openFullMapHandler;
     }
+
+    return mmCanvas;
   }
 
-  // ================= 2. Kenney (CC0) 16x16 自然像素地貌 Canvas 渲染器（同時支援羅盤與全區大圖） =================
+  // ================= 2. Kenney (CC0) 16x16 自然像素地貌與過河木橋 Canvas 渲染器 =================
   const KENNEY_PALETTES = {
     forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e" },
     cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d" },
@@ -453,7 +533,7 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // 若地圖有河流或營地南岸大海，同步繪製到地貌 Canvas 上，方便羅盤小地圖與全區放大地圖直接呈現！
+    // ★ 修正2：繪製河流，並在過河處直接畫出清晰的「Kenney 像素木橋（含木板、欄杆與橋墩）」！
     if (mapObj.hasRiver) {
       const rx = mapObj.riverX || 1030;
       ctx.fillStyle = "#d4b06a";
@@ -461,8 +541,55 @@ window.Aetheria = window.Aetheria || {};
       ctx.fillStyle = "#2978d4";
       ctx.fillRect(rx, 0, 40, H);
       ctx.fillStyle = "#8ce0ff";
-      ctx.fillRect(rx + 4, 0, 4, H);
+      ctx.fillRect(rx + 5, 0, 3, H);
+
+      // 偵測過河木橋的 Y 座標（根據河畔工程木牌位置或預設 y=315）
+      let bridgeCenterY = mapObj.bridgeY || 315;
+      const projDeco = (mapObj.decos || []).find(function(d) {
+        return d && (d.isProjectSite || (d.projectId && d.projectId.indexOf("bridge") !== -1)) && Math.abs(d.x - rx) < 90;
+      });
+      if (projDeco && projDeco.y) {
+        bridgeCenterY = projDeco.y;
+      }
+
+      const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+      const bridgeBuilt = Boolean(
+        !projDeco ||
+        (projDeco.projectId && s.projectsBuilt && s.projectsBuilt[projDeco.projectId]) ||
+        (s.lv && s.lv >= 5)
+      );
+
+      const bx = rx - 10;
+      const bw = 60;
+      const by = bridgeCenterY - 22;
+      const bh = 44;
+
+      if (bridgeBuilt) {
+        // 已修復的完整過河木橋
+        ctx.fillStyle = "#2b1508";
+        ctx.fillRect(bx, by - 4, bw, bh + 8);
+        ctx.fillStyle = "#5c3824";
+        ctx.fillRect(bx + 2, by, bw - 4, bh);
+
+        // 垂直排列的橋面厚木板
+        for (let px = bx + 4; px < bx + bw - 6; px += 8) {
+          ctx.fillStyle = "#9c6347";
+          ctx.fillRect(px, by + 4, 6, bh - 8);
+          ctx.fillStyle = "#d9a066";
+          ctx.fillRect(px + 1, by + 6, 4, bh - 12);
+        }
+        // 上下木製橋欄杆
+        ctx.fillStyle = "#8f563b";
+        ctx.fillRect(bx, by - 2, bw, 5);
+        ctx.fillRect(bx, by + bh - 3, bw, 5);
+      } else {
+        // 尚未修復的斷橋兩端橋頭
+        ctx.fillStyle = "#5c3824";
+        ctx.fillRect(bx, by, 16, bh);
+        ctx.fillRect(bx + bw - 16, by, 16, bh);
+      }
     }
+
     if (mapObj.id === "camp_hub") {
       ctx.fillStyle = "#e6c88c";
       ctx.fillRect(0, 356, W, 124);
@@ -548,7 +675,6 @@ window.Aetheria = window.Aetheria || {};
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
   }
 
-  // ★ 繪製附圖 1 & 附圖 2 同款的「黃底黑邊圓圈 + 紅色 X」藏寶記號
   function drawTreasureXMarkerOnCanvas(ctx, x, y, radius) {
     ctx.save();
     ctx.beginPath();
@@ -571,9 +697,9 @@ window.Aetheria = window.Aetheria || {};
     ctx.restore();
   }
 
-  // ★ 圖1：即時繪製左下角「圓形羅盤真實地形小地圖」
+  // ★ 圖1：即時在偵測到的原生小地圖 canvas 上繪製「圓形羅盤真實地形」
   function renderCompassMinimap(mapObj, s) {
-    const mmCanvas = document.getElementById("minimap-canvas");
+    const mmCanvas = ensureCompassMinimapDOM();
     if (!mmCanvas || !mapObj || !s) return;
 
     if (mmCanvas.width !== 96 || mmCanvas.height !== 96) {
@@ -584,16 +710,14 @@ window.Aetheria = window.Aetheria || {};
     const ctx = mmCanvas.getContext("2d");
     ctx.clearRect(0, 0, 96, 96);
 
-    // 海洋背景底色
     ctx.fillStyle = "#1d5eb8";
     ctx.fillRect(0, 0, 96, 96);
 
-    const viewSpan = 680; // 羅盤視野半徑
+    const viewSpan = 680;
     const sx = (s.heroX || 300) - viewSpan / 2;
     const sy = (s.heroY || 240) - viewSpan / 2;
     const scale = 96 / viewSpan;
 
-    // 1. 複製真實 Kenney 地貌底圖至圓形羅盤內
     if (cachedTerrainCanvas && cachedTerrainZoneId === mapObj.id) {
       ctx.drawImage(cachedTerrainCanvas, sx, sy, viewSpan, viewSpan, 0, 0, 96, 96);
     } else if (mapObj.id === "ocean_sea") {
@@ -611,7 +735,6 @@ window.Aetheria = window.Aetheria || {};
       });
     }
 
-    // 2. 繪製樹木綠點
     ctx.fillStyle = "#2d5a27";
     (mapObj.trees || []).forEach(function(t) {
       const tx = (t.x - sx) * scale;
@@ -621,7 +744,6 @@ window.Aetheria = window.Aetheria || {};
       }
     });
 
-    // 3. 繪製未挖掘的「黃圈紅 X」藏寶點与寶箱
     (mapObj.nodes || []).forEach(function(n) {
       if (n.opened) return;
       const nx = (n.x - sx) * scale;
@@ -636,7 +758,6 @@ window.Aetheria = window.Aetheria || {};
       }
     });
 
-    // 4. 繪製傳送門/山洞入口 (青色亮點)
     (mapObj.portals || []).forEach(function(p) {
       const px = (p.x - sx) * scale;
       const py = (p.y - sy) * scale;
@@ -646,7 +767,6 @@ window.Aetheria = window.Aetheria || {};
       }
     });
 
-    // 5. 繪製中心玩家位置（醒目白邊翠綠圓點）
     ctx.beginPath();
     ctx.arc(48, 48, 4.2, 0, Math.PI * 2);
     ctx.fillStyle = "#ffffff";
@@ -684,7 +804,129 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 3. 註冊像素圖示（新增石像轉向與機關拉桿圖示） =================
+  // ===== Part 1 結束位置（請緊接在此行下方貼上 Part 2 代碼） =====
+  // ★ 強制掛載左下角「圓形羅盤小地圖 Canvas」並隱藏舊版黑底方框小地圖
+  function mountGuaranteedCompassWidget() {
+    const upper = document.getElementById("upper-screen");
+    if (!upper) return;
+
+    // 隱藏舊版方框點陣小地圖（若存在且非羅盤容器）
+    const oldMinis = upper.querySelectorAll("[id*='mini'], [class*='mini'], [id*='radar'], [class*='radar']");
+    oldMinis.forEach(function(el) {
+      if (el.id !== "minimap-box" && el.id !== "minimap-canvas" && el.id !== "srpg-compass-auto-wrap") {
+        el.style.display = "none";
+      }
+    });
+
+    // 額外檢查 #upper-screen 左下角是否有未命名的小方框並隱藏
+    const upperRect = upper.getBoundingClientRect();
+    Array.from(upper.children).forEach(function(ch) {
+      if (ch.id === "minimap-box" || ch.id === "srpg-compass-auto-wrap" || ch.id === "world-viewport" ||
+          ch.id === "hud-overlay" || ch.id === "hud-hearts-box" || ch.id === "weather-fx-layer" ||
+          ch.id === "sleep-transition-overlay") {
+        return;
+      }
+      const r = ch.getBoundingClientRect();
+      if (r.width > 30 && r.width < 130 && r.height > 25 && r.height < 110 &&
+          (r.left - upperRect.left) < 35 && (upperRect.bottom - r.bottom) < 35) {
+        ch.style.display = "none";
+      }
+    });
+
+    // 建立保證存在的圓形羅盤容器與 Canvas
+    let box = document.getElementById("minimap-box");
+    let canvas = document.getElementById("minimap-canvas");
+
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "minimap-box";
+      box.className = "srpg-compass-box";
+      upper.appendChild(box);
+    } else {
+      box.className = "srpg-compass-box";
+      box.style.display = "block";
+      // 清除舊版方框內的圓點 div
+      Array.from(box.children).forEach(function(c) {
+        if (c.tagName !== "CANVAS" && !c.classList.contains("compass-dir-tag") && !c.classList.contains("compass-zoom-hint")) {
+          c.style.display = "none";
+        }
+      });
+    }
+
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+      canvas.id = "minimap-canvas";
+      canvas.className = "srpg-compass-canvas";
+      canvas.width = 96;
+      canvas.height = 96;
+      box.appendChild(canvas);
+    }
+
+    ensureCompassMinimapDOM();
+  }
+
+  // ★ 在 #world-terrain-layer 河道上方直接掛載高圖層 (z-index: 6) 的實體像素木橋，確保過河木橋 100% 清晰顯示！
+  function ensureVisibleDomBridge(mapObj, terrainLayer) {
+    if (!mapObj || !terrainLayer || !mapObj.hasRiver) return;
+    const oldBridge = terrainLayer.querySelector(".srpg-dom-river-bridge");
+    if (oldBridge) oldBridge.remove();
+
+    const rx = mapObj.riverX || 1030;
+    let bridgeY = mapObj.bridgeY || 240;
+
+    // 自動對齊河畔工程牌或過河道路的 Y 座標
+    const projDeco = (mapObj.decos || []).find(function(d) {
+      return d && (d.isProjectSite || (d.projectId && d.projectId.indexOf("bridge") !== -1) || Math.abs(d.x - rx) < 65);
+    });
+    if (projDeco && projDeco.y) {
+      bridgeY = projDeco.y;
+    }
+
+    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+    const isBuilt = Boolean(
+      !projDeco ||
+      !projDeco.projectId ||
+      (s.projectsBuilt && s.projectsBuilt[projDeco.projectId]) ||
+      (s.lv && s.lv >= 5)
+    );
+
+    const bridgeEl = document.createElement("div");
+    bridgeEl.className = "srpg-dom-river-bridge";
+    const bw = 56;
+    const bh = 42;
+    bridgeEl.style.cssText =
+      "position:absolute; left:" + (rx - 8) + "px; top:" + (bridgeY - 21) + "px; " +
+      "width:" + bw + "px; height:" + bh + "px; z-index:6; pointer-events:none; box-sizing:border-box;";
+
+    if (isBuilt) {
+      bridgeEl.style.background =
+        "repeating-linear-gradient(90deg, #9c6347 0px, #9c6347 6px, #5c3824 6px, #5c3824 9px)";
+      bridgeEl.style.borderTop = "4px solid #d9a066";
+      bridgeEl.style.borderBottom = "4px solid #d9a066";
+      bridgeEl.style.outline = "2px solid #2b1508";
+      bridgeEl.style.boxShadow = "0 4px 8px rgba(0,0,0,0.55)";
+    } else {
+      // 未修復時顯示斷橋兩端木樁
+      bridgeEl.style.background =
+        "linear-gradient(90deg, #8f563b 0%, #8f563b 22%, transparent 22%, transparent 78%, #8f563b 78%, #8f563b 100%)";
+      bridgeEl.style.borderTop = "3px dashed #5c3824";
+      bridgeEl.style.borderBottom = "3px dashed #5c3824";
+    }
+
+    terrainLayer.appendChild(bridgeEl);
+
+    // 同步將木橋畫入 cachedTerrainCanvas，讓羅盤小地圖與放大全圖也能看到這座橋
+    if (cachedTerrainCanvas && cachedTerrainZoneId === mapObj.id) {
+      const ctx = cachedTerrainCanvas.getContext("2d");
+      ctx.fillStyle = "#5c3824";
+      ctx.fillRect(rx - 8, bridgeY - 20, 56, 40);
+      ctx.fillStyle = "#d9a066";
+      ctx.fillRect(rx - 8, bridgeY - 20, 56, 4);
+      ctx.fillRect(rx - 8, bridgeY + 16, 56, 4);
+    }
+  }
+
+  // ================= 3. 註冊像素圖示（含石像轉向、機關拉桿、鐵鏟、紅叉藏寶點） =================
   function registerSurvivalRpgSprites() {
     const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
     if (!S || !S.getDataURL) return;
@@ -707,7 +949,6 @@ window.Aetheria = window.Aetheria || {};
       return c.toDataURL();
     }
 
-    // 🗿 遠古轉向雕像 (ancient_statue)
     const ancientStatueUrl = buildGridDataUrl([
       ".....KKKKKK.....",
       "....KGGGGGGK....",
@@ -727,7 +968,6 @@ window.Aetheria = window.Aetheria || {};
       "................"
     ], { K: "#141013", G: "#94a3b8", D: "#475569", Y: "#ffd166" });
 
-    // ⚙️ 機關拉桿 (lever_off / lever_on)
     const leverOffUrl = buildGridDataUrl([
       "................",
       "..KKKK..........",
@@ -1440,7 +1680,7 @@ window.Aetheria = window.Aetheria || {};
     return campMap;
   }
 
-  // ================= 6. ★ 探索時的 3 大全新現場機關解謎（火盆順序陣、石像轉向陣、三連連動拉桿） =================
+  // ================= 6. 探索時的 3 大全新現場機關解謎（火盆順序陣、石像轉向陣、三連連動拉桿） =================
   const DIR_SYMBOLS = ["▲北", "▶東", "▼南", "◀西"];
 
   const ZONE_EXPLORE_PUZZLES = {
@@ -1464,7 +1704,6 @@ window.Aetheria = window.Aetheria || {};
       type: "statue_rotate",
       cx: 1120, cy: 840,
       riddle: "📜【法老方位碑】：「令四方石像共鳴：『西衛望東(▶東)』、『東衛望西(◀西)』、『北衛俯視南境(▼南)』、『南衛仰望北辰(▲北)』！」",
-      // 目標朝向：0=▲北, 1=▶東, 2=▼南, 3=◀西
       statues: [
         { dx: -52, dy: 0,   initDir: 0, targetDir: 1, name: "西衛" },
         { dx: 52,  dy: 0,   initDir: 1, targetDir: 3, name: "東衛" },
@@ -1516,10 +1755,8 @@ window.Aetheria = window.Aetheria || {};
     const cx = pCfg.cx;
     const cy = pCfg.cy;
 
-    // 鋪設機關陣石板地基
     mapObj.dirtBlobs.push({ cx: cx, cy: cy, rx: 105, ry: 85, isExpandedBlob: true });
 
-    // 1. 謎語提示石碑 (位於機關陣左上方)
     mapObj.decos.push({
       id: "exp_puz_tablet_" + mapObj.id,
       x: cx - 72,
@@ -1534,7 +1771,6 @@ window.Aetheria = window.Aetheria || {};
       zoneId: mapObj.id
     });
 
-    // 2. 中央機關秘寶箱（需解開本區現場機關才可開啟）
     mapObj.nodes.push({
       id: "exp_puz_chest_" + mapObj.id,
       x: cx,
@@ -1547,7 +1783,6 @@ window.Aetheria = window.Aetheria || {};
       opened: chestClaimed
     });
 
-    // 3. 依類型生成互動機關物件
     if (pCfg.type === "brazier_order") {
       mapObj._brazierStep = solved ? 4 : 0;
       pCfg.items.forEach(function(it, idx) {
@@ -2009,7 +2244,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 固定唯一挖寶點（同時會顯示在圖2的全區放大地圖上！）
     const buriedSpotsCoords = [
       { x: 265,  y: 625,  reqHighland: false },
       { x: 585,  y: 1045, reqHighland: false },
@@ -2061,7 +2295,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // ★ 注入本區專屬的現場探索解題機關（火盆順序陣 / 石像轉向陣 / 三連連動拉桿）
     injectExplorationPuzzlesIntoMap(mapObj);
 
     return mapObj;
@@ -2075,7 +2308,6 @@ window.Aetheria = window.Aetheria || {};
     savedScrollTop: 0,
     currentFilteredMap: {},
 
-    // ★ 圖2：點擊左下角羅盤時，彈出高解析度【🗺️ 區域全貌探索大圖】！
     openFullZoneMapModal: function() {
       const s = window.Aetheria.State.data;
       const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
@@ -2106,7 +2338,6 @@ window.Aetheria = window.Aetheria || {};
       const scaleX = outW / W;
       const scaleY = outH / H;
 
-      // 1. 繪製全區真實 Kenney 地形底圖
       ctx.fillStyle = "#16427d";
       ctx.fillRect(0, 0, outW, outH);
 
@@ -2125,13 +2356,11 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
-      // 2. 繪製全區樹木叢
       ctx.fillStyle = "#264e22";
       (mapObj.trees || []).forEach(function(t) {
         ctx.fillRect(t.x * scaleX - 2, t.y * scaleY - 2, 4, 4);
       });
 
-      // 3. 繪製傳送門與懸崖山洞口
       (mapObj.portals || []).forEach(function(p) {
         const px = p.x * scaleX;
         const py = p.y * scaleY;
@@ -2142,7 +2371,6 @@ window.Aetheria = window.Aetheria || {};
         ctx.strokeRect(px - 5, py - 5, 10, 10);
       });
 
-      // 4. 繪製地底遺跡石門、機關陣與繩梯位置
       (mapObj.decos || []).forEach(function(d) {
         const dx = d.x * scaleX;
         const dy = d.y * scaleY;
@@ -2159,7 +2387,6 @@ window.Aetheria = window.Aetheria || {};
         }
       });
 
-      // 5. ★ 繪製附圖 2 同款的「黃底紅 X (⊗)」藏寶點與未開寶箱！
       (mapObj.nodes || []).forEach(function(n) {
         if (n.opened) return;
         const nx = n.x * scaleX;
@@ -2175,7 +2402,6 @@ window.Aetheria = window.Aetheria || {};
         }
       });
 
-      // 6. 繪製首領 Boss 位置 (紅骷髏標記)
       (mapObj.monsters || []).forEach(function(m) {
         if (m.alive === false) return;
         const mx = m.x * scaleX;
@@ -2191,7 +2417,6 @@ window.Aetheria = window.Aetheria || {};
         }
       });
 
-      // 7. 繪製玩家當前位置（醒目雙圈青白光點 +「你」標示）
       const hx = (s.heroX || 300) * scaleX;
       const hy = (s.heroY || 240) * scaleY;
       ctx.beginPath();
@@ -2206,7 +2431,6 @@ window.Aetheria = window.Aetheria || {};
       ctx.strokeStyle = "#141013";
       ctx.stroke();
 
-      // 圖例說明列
       const legend = document.createElement("div");
       legend.className = "fullmap-legend-bar";
       legend.innerHTML =
@@ -2218,7 +2442,6 @@ window.Aetheria = window.Aetheria || {};
         '<span>🔴 <b>區域首領</b></span>';
       body.appendChild(legend);
 
-      // 點擊全區大圖任意位置，可顯示該位置的座標與地標提示
       canvas.onclick = function(ev) {
         const rect = canvas.getBoundingClientRect();
         const clickX = Math.round(((ev.clientX - rect.left) / rect.width) * W);
@@ -2821,7 +3044,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 9. 掛載羅盤小地圖、3大現場機關解謎、唯一挖寶 ✖ 與營地三帳篷防誤入 =================
+  // ================= 9. 掛載羅盤小地圖、實體過河木橋、3大現場機關解謎與唯一挖寶 ✖ =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -2967,7 +3190,6 @@ window.Aetheria = window.Aetheria || {};
         };
       }
 
-      // ★ A 鍵互動：3 大現場探索解題機關 + 地底遺跡門 + 懸崖繩梯
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
@@ -2979,14 +3201,12 @@ window.Aetheria = window.Aetheria || {};
             const d = mapObj.decos[i];
             if (!d) continue;
 
-            // 1. 📜 閱讀機關謎語石碑
             if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
               window.Aetheria.Audio.sfxTalkBlip();
               window.Aetheria.UI.showToast(d.riddleText || "古老的機關銘文。");
               return;
             }
 
-            // 2. 🔥 四象火盆順序陣互動
             if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
               if (s.solvedExplorePuzzles[mapObj.id]) {
                 window.Aetheria.UI.showToast("✨ 此處四象火盆陣已解開並永久鎖定！");
@@ -3022,7 +3242,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 3. 🗿 四方石像轉向共鳴陣互動
             if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
               if (s.solvedExplorePuzzles[mapObj.id]) {
                 window.Aetheria.UI.showToast("✨ 四方守衛石像已共鳴並永久鎖定！");
@@ -3046,7 +3265,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 4. ⚙️ 三連連動拉桿開關互動
             if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
               if (s.solvedExplorePuzzles[mapObj.id]) {
                 window.Aetheria.UI.showToast("✨ 三連拉桿機關已解開並永久鎖定！");
@@ -3054,7 +3272,6 @@ window.Aetheria = window.Aetheria || {};
               }
               const allLevers = (mapObj.decos || []).filter(function(ld) { return ld.isPuzzleToggleLever; });
               const idx = d.leverIdx;
-              // 連動規則：0 切換 [0,1]，1 切換 [0,1,2]，2 切換 [1,2]
               const toggleTargets = (idx === 0) ? [0, 1] : (idx === 1) ? [0, 1, 2] : [1, 2];
               allLevers.forEach(function(ld) {
                 if (toggleTargets.indexOf(ld.leverIdx) !== -1) {
@@ -3075,7 +3292,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 5. 🗝️ 地底遺跡石門
             if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
               if (!s.unlockedCrypts) s.unlockedCrypts = {};
               const zId = d.zoneId || mapObj.id;
@@ -3116,7 +3332,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // 6. 🧗 懸崖繩梯
             if (d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
               if (!s.riggedCliffs) s.riggedCliffs = {};
               const isRigged = Boolean(s.riggedCliffs[mapObj.id]);
@@ -3230,7 +3445,6 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
 
-        // ★ 檢查「古遺跡機關寶箱」是否已解開現場謎題
         if (node && node.isExplorePuzzleChest) {
           if (!s.solvedExplorePuzzles || !s.solvedExplorePuzzles[node.zoneId]) {
             window.Aetheria.Audio.sfxWrong();
@@ -3357,7 +3571,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Ren) {
-      // 攔截原版小地圖更新，改為繪製圖1的「圓形羅盤真實地形小地圖」
       if (Ren.updateMinimap) {
         Ren.updateMinimap = function(mapObj, s) {
           renderCompassMinimap(mapObj, s);
@@ -3372,11 +3585,15 @@ window.Aetheria = window.Aetheria || {};
         }
         origBuild(mapObj);
 
+        mountGuaranteedCompassWidget();
+
         const terrainLayer = document.getElementById("world-terrain-layer");
         const S = window.Aetheria.Data.Sprites;
         if (!terrainLayer || !mapObj) return;
 
         renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer);
+        // ★ 確保河道上方掛載高圖層 (z-index: 6) 的實體像素過河木橋！
+        ensureVisibleDomBridge(mapObj, terrainLayer);
 
         Object.keys(this.domPool.decos || {}).forEach(function(k) {
           const item = Ren.domPool.decos[k];
@@ -3543,6 +3760,7 @@ window.Aetheria = window.Aetheria || {};
       injectSurvivalRpgStyles();
       registerSurvivalRpgSprites();
       registerSrpgDataIntoGame();
+      mountGuaranteedCompassWidget();
       hookSystemsForHighlandsAndWorkshop();
 
       const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -3569,7 +3787,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG Compass & Puzzles v11.2 init error:", err);
+      console.error("Survival RPG Compass & Bridge Fix v11.3 init error:", err);
     }
   }
 
