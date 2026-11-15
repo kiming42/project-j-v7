@@ -2931,4 +2931,544 @@ window.Aetheria = window.Aetheria || {};
         const s = window.Aetheria.State.data;
         if (node && node.reqHighland && !s.onHighland) {
           window.Aetheria.Audio.sfxWrong();
-          window.Aetheria.UI.showToast("🧗 此位置位於高台上！請先從懸崖邊的【🧗繩梯】爬上高
+          window.Aetheria.UI.showToast("🧗 此位置位於高台上！請先從懸崖邊的【🧗繩梯】爬上高台！");
+          return;
+        }
+
+        if (node && node.isToolGateObstacle && node.gateCfg) {
+          const g = node.gateCfg;
+          if (!s.clearedToolGates) s.clearedToolGates = {};
+          if (node.opened || s.clearedToolGates[node.id]) {
+            node.opened = true;
+            return;
+          }
+
+          const reqKey = g.reqKey;
+          const matsDB = (window.Aetheria.Data && window.Aetheria.Data.MATERIALS) || {};
+          const reqName = (matsDB[reqKey] && matsDB[reqKey].name) || reqKey;
+          const haveCnt = (s.inventory && s.inventory[reqKey]) || 0;
+
+          if (haveCnt <= 0) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("🔒 【" + g.name + "】阻擋了秘寶！請先在【工坊 ➔ 🧗解謎工具/開路】合成【" + reqName + "】前來破解！");
+            return;
+          }
+
+          if (g.consume) {
+            s.inventory[reqKey] = Math.max(0, haveCnt - 1);
+          }
+
+          node.opened = true;
+          s.clearedToolGates[node.id] = true;
+          spawnHarvestParticles(node.x, node.y, "#5ac54f");
+
+          if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
+            const domNode = window.Aetheria.Renderer.domPool.nodes[node.id];
+            if (domNode && domNode.el) setDisplayIfChanged(domNode.el, "none");
+          }
+
+          s.gold = (s.gold || 0) + (g.rewardGold || 250);
+          const rewardNames = [];
+          Object.entries(g.rewardMats || {}).forEach(function(entry) {
+            const mk = entry[0], mc = entry[1];
+            s.inventory[mk] = (s.inventory[mk] || 0) + mc;
+            const mn = (matsDB[mk] && matsDB[mk].name) || mk;
+            rewardNames.push(mn + "+" + mc);
+          });
+
+          window.Aetheria.Audio.sfxLevelUp();
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+          window.Aetheria.UI.showToast("🔓 使用【" + reqName + "】成功破解" + g.name.replace(/\[.*\]/, "") + "！獲 " + (g.rewardGold || 250) + "G、" + rewardNames.join("、") + "！");
+          return;
+        }
+
+        if (node && node.isExplorePuzzleChest) {
+          const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
+          if (!isZoneExplorePuzzleSolved(curMap, s)) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("🔒 機關寶箱被結界鎖定！請先閱讀左上方的【📜古碑謎語】並解開周圍的現場機關！");
+            return;
+          }
+          if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
+          if (node.opened || s.claimedExplorePuzzleChests[node.zoneId]) {
+            node.opened = true;
+            window.Aetheria.UI.showToast("此古遺跡機關寶箱已經領取過了！");
+            return;
+          }
+          node.opened = true;
+          s.claimedExplorePuzzleChests[node.zoneId] = true;
+          s.gold = (s.gold || 0) + 280;
+          s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
+          s.inventory.mithril = (s.inventory.mithril || 0) + 2;
+          s.inventory.rationJerky = (s.inventory.rationJerky || 0) + 2;
+          window.Aetheria.Audio.sfxLevelUp();
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+          window.Aetheria.UI.showToast("🏆 解開古遺跡機關寶箱！獲得【280G、🗝️遠古遺跡鑰匙+1、流沙秘銀+2、風乾肉脯+2】！");
+          return;
+        }
+
+        if (node) {
+          const pColor = (node.type === "wood") ? "#5ac54f" : (node.isBuriedSpot ? "#d9a066" : "#8ce0ff");
+          spawnHarvestParticles(node.x, node.y, pColor);
+          if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
+            const domItem = window.Aetheria.Renderer.domPool.nodes[node.id];
+            if (domItem && domItem.el) {
+              domItem.el.classList.remove("srpg-node-hit");
+              void domItem.el.offsetWidth;
+              domItem.el.classList.add("srpg-node-hit");
+            }
+          }
+        }
+
+        if (node && node.isBuriedSpot) {
+          if (!s.dugSpots) s.dugSpots = {};
+          if (node.opened || s.dugSpots[node.id]) {
+            node.opened = true;
+            window.Aetheria.UI.showToast("此藏寶點已經挖掘過了！");
+            return;
+          }
+          const shovelLv = (s.tools && s.tools.shovel) || 0;
+          if (shovelLv < 1) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("🥄 地面有神秘的「✖」藏寶記號！請先在【工坊 ➔ ⛏️工具】打造【Lv.1 精鐵探險鏟】(原木x2+鐵礦x1) 挖掘！");
+            return;
+          }
+          node.opened = true;
+          s.dugSpots[node.id] = true;
+          if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
+            const domNode = window.Aetheria.Renderer.domPool.nodes[node.id];
+            if (domNode && domNode.el) setDisplayIfChanged(domNode.el, "none");
+          }
+          window.Aetheria.Audio.sfxLevelUp();
+
+          const zId = (s.currentZone || "").replace("grotto_", "");
+          const cryptAlreadyOpen = Boolean(s.unlockedCrypts && s.unlockedCrypts[zId]);
+          const hasKeyInBag = ((s.inventory && s.inventory.cryptKey) || 0) > 0;
+          const goldGain = (65 + (s.lv || 1) * 6) * (shovelLv >= 2 ? 2 : 1);
+          s.gold = (s.gold || 0) + goldGain;
+
+          if (!cryptAlreadyOpen && !hasKeyInBag) {
+            s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
+            s.inventory.mithril = (s.inventory.mithril || 0) + 1;
+            window.Aetheria.UI.showToast("🥄 挖開唯一藏寶點！獲得【🗝️遠古遺跡鑰匙 +1、流沙秘銀 +1】與 " + goldGain + " G！");
+          } else {
+            s.inventory.mithril = (s.inventory.mithril || 0) + (shovelLv >= 2 ? 2 : 1);
+            s.inventory.quartz = (s.inventory.quartz || 0) + 2;
+            s.inventory.ancientGear = (s.inventory.ancientGear || 0) + 1;
+            if (shovelLv >= 3) s.inventory.starIron = (s.inventory.starIron || 0) + 1;
+            window.Aetheria.UI.showToast("🥄 挖開唯一藏寶點：獲得【流沙秘銀、⚙️精密青銅齒輪 +1、石英砂 +2】與 " + goldGain + " G！");
+          }
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+          return;
+        }
+
+        if (node && node.isCryptVaultChest) {
+          const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
+          const guardianAlive = curMap && (curMap.monsters || []).some(function(m) {
+            return m.isCryptGuardian && m.alive !== false;
+          });
+          if (guardianAlive) {
+            window.Aetheria.Audio.sfxWrong();
+            window.Aetheria.UI.showToast("⚔️ 遠古聖物石棺受結界保護！請先擊敗前方的【★地底遺跡守衛魔像】！");
+            return;
+          }
+          if (!s.claimedCryptVaults) s.claimedCryptVaults = {};
+          const pZone = node.parentZoneId || s.currentZone;
+          if (node.opened || s.claimedCryptVaults[pZone]) {
+            node.opened = true;
+            window.Aetheria.UI.showToast("此遠古聖物石棺已經開啟過了！");
+            return;
+          }
+          node.opened = true;
+          s.claimedCryptVaults[pZone] = true;
+          s.gold = (s.gold || 0) + 350;
+          s.inventory.tabletShard = (s.inventory.tabletShard || 0) + 1;
+          s.inventory.obsidian = (s.inventory.obsidian || 0) + 2;
+          window.Aetheria.Audio.sfxLevelUp();
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+          window.Aetheria.UI.showToast("🏆 開啟遠古聖物石棺！獲【350G、古文明聖碑殘片x1、熔岩黑曜石x2】！");
+          return;
+        }
+
+        const wasOpened = Boolean(node && node.opened);
+        origHarvest(node);
+
+        if (node && !wasOpened && node.opened && node.giveKey) {
+          const gKey = node.giveKey;
+          const toolType = node.reqTool || (node.type === "wood" ? "axe" : "pickaxe");
+          const toolLv = (s.tools && s.tools[toolType]) || 0;
+
+          if (node.type === "wood" && (s.inventory.briarSickle || 0) > 0) {
+            s.inventory[gKey] = (s.inventory[gKey] || 0) + 1;
+          }
+          if ((s.inventory.magnifyingLens || 0) > 0 && Math.random() < 0.35) {
+            const bonusGem = (Math.random() < 0.5) ? "quartz" : "copperOre";
+            s.inventory[bonusGem] = (s.inventory[bonusGem] || 0) + 1;
+          }
+          if (toolLv >= 2 && Math.random() < 0.50) {
+            s.inventory[gKey] = (s.inventory[gKey] || 0) + 1;
+          }
+
+          if (toolLv >= 3 && !isChainHarvesting) {
+            isChainHarvesting = true;
+            try {
+              const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
+              let chainCnt = 0;
+              if (curMap && curMap.nodes) {
+                curMap.nodes.forEach(function(other) {
+                  if (!other || other.opened || other.id === node.id) return;
+                  if (other.type !== "wood" && other.type !== "crystal") return;
+                  if (other.isBuriedSpot || other.isToolGateObstacle || other.isExplorePuzzleChest || other.isCryptVaultChest) return;
+                  if (other.reqHighland && !s.onHighland) return;
+                  const dist = Math.hypot(other.x - node.x, other.y - node.y);
+                  if (dist <= 155 && other.giveKey) {
+                    other.opened = true;
+                    s.inventory[other.giveKey] = (s.inventory[other.giveKey] || 0) + 2;
+                    spawnHarvestParticles(other.x, other.y, "#ffd166");
+                    chainCnt++;
+                  }
+                });
+              }
+              if (chainCnt > 0) {
+                window.Aetheria.UI.spawnFloatingText("🌪️連鎖震波採集 +" + chainCnt + "!", "#ffd166", true);
+              }
+            } finally {
+              isChainHarvesting = false;
+            }
+          }
+
+          window.Aetheria.State.save();
+          window.Aetheria.UI.updateAllHud();
+        }
+      };
+    }
+
+    if (Bat && Bat.winBattle) {
+      const origWin = Bat.winBattle.bind(Bat);
+      Bat.winBattle = function() {
+        const isCombat = (this.mode === "combat");
+        const ref = this.mapMonsterRef;
+        origWin();
+        if (isCombat) {
+          const s = window.Aetheria.State.data;
+          const z = String(s.currentZone || "");
+          if (z.indexOf("zone3_coast") !== -1) {
+            const clothKey = findMatKeyByNameKeyword("帆布", "sailCloth");
+            const sirenKey = findMatKeyByNameKeyword("海妖", null);
+            if ((s.inventory[clothKey] || 0) < 4) s.inventory[clothKey] = (s.inventory[clothKey] || 0) + 1;
+            if (sirenKey && (s.inventory[sirenKey] || 0) < 1) s.inventory[sirenKey] = 1;
+          } else if (z.indexOf("zone4_snow") !== -1) {
+            const sinewKey = findMatKeyByNameKeyword("獸筋", "sinew");
+            if ((s.inventory[sinewKey] || 0) < 4) s.inventory[sinewKey] = (s.inventory[sinewKey] || 0) + 1;
+          } else if (z.indexOf("zone5_volcano") !== -1) {
+            const scaleKey = findMatKeyByNameKeyword("龍鱗", null);
+            const coreKey  = findMatKeyByNameKeyword("熔核", null);
+            if (scaleKey && (s.inventory[scaleKey] || 0) < 3) s.inventory[scaleKey] = (s.inventory[scaleKey] || 0) + 1;
+            if (coreKey && (s.inventory[coreKey] || 0) < 2)   s.inventory[coreKey]  = (s.inventory[coreKey] || 0) + 1;
+
+            if (ref && (ref.isBoss || (ref.name && ref.name.indexOf("龍皇") !== -1))) {
+              if (!s.bossesDefeated) s.bossesDefeated = {};
+              s.bossesDefeated.zone5_volcano = true;
+              const vMap = window.Aetheria.Data.Maps.getMap("zone5_volcano");
+              if (vMap && vMap.monsters) {
+                vMap.monsters.forEach(function(m) { if (m && m.isBoss) m.alive = false; });
+              }
+            }
+          }
+          window.Aetheria.State.save();
+          if (window.Aetheria.UI) window.Aetheria.UI.updateAllHud();
+        }
+      };
+    }
+
+    if (Ren) {
+      if (Ren.updateMinimap) {
+        Ren.updateMinimap = function(mapObj, s) {
+          renderCompassMinimap(mapObj, s, false);
+        };
+      }
+
+      const origBuild = Ren.buildSceneDOM.bind(Ren);
+      Ren.buildSceneDOM = function(mapObj) {
+        if (mapObj) {
+          if (mapObj.id === "camp_hub") adjustCampTentsUpward(mapObj);
+          else if (HIGHLAND_ZONES[mapObj.id]) injectHighlandCliffIntoMap(mapObj);
+        }
+        origBuild(mapObj);
+
+        mountGuaranteedCompassWidget();
+
+        const terrainLayer = document.getElementById("world-terrain-layer");
+        const S = window.Aetheria.Data.Sprites;
+        if (!terrainLayer || !mapObj) return;
+
+        renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer);
+        syncDomRiverBridge(mapObj, terrainLayer);
+
+        Object.keys(this.domPool.decos || {}).forEach(function(k) {
+          const item = Ren.domPool.decos[k];
+          if (!item || !item.data || !item.el) return;
+          const d = item.data;
+          if ((d.isCliffLadderSpot || d.isCryptEntrance || d.isExplorePuzzleTablet ||
+               d.isPuzzleOrderBrazier || d.isPuzzleRotateStatue || d.isPuzzleToggleLever) && !item.lbl) {
+            const lbl = document.createElement("div");
+            lbl.className = "dom-label";
+            item.el.appendChild(lbl);
+            item.lbl = lbl;
+          }
+        });
+
+        Object.keys(this.domPool.nodes || {}).forEach(function(nId) {
+          const item = Ren.domPool.nodes[nId];
+          if (!item || !item.data || !S) return;
+          if (item.data.isBuriedSpot) {
+            item.el.innerHTML = '<img src="' + S.getDataURL("buried_x_spot") + '" alt="">';
+            if (item.lbl) { item.lbl.className = "dom-label dig-spot-lbl"; item.el.appendChild(item.lbl); }
+          } else if (item.data.isToolGateObstacle && item.data.gateSprite) {
+            item.el.innerHTML = '<img src="' + S.getDataURL(item.data.gateSprite) + '" alt="">';
+            if (item.lbl) { item.lbl.className = "dom-label tool-gate-lbl"; item.el.appendChild(item.lbl); }
+          } else if (item.data.isClusterBoulder) {
+            item.el.innerHTML = '<img src="' + S.getDataURL("cluster_boulder") + '" alt="">';
+            if (item.lbl) item.el.appendChild(item.lbl);
+          }
+        });
+
+        const s = window.Aetheria.State && window.Aetheria.State.data;
+        if (s) renderCompassMinimap(mapObj, s, true);
+      };
+
+      const origRender = Ren.renderWorld.bind(Ren);
+      Ren.renderWorld = function() {
+        origRender();
+        try {
+          const s = window.Aetheria.State.data;
+          const S = window.Aetheria.Data.Sprites;
+          const mapObj = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
+          const rigged = Boolean(s && s.riggedCliffs && s.riggedCliffs[s.currentZone]);
+          const cryptOpen = Boolean(s && s.unlockedCrypts && s.unlockedCrypts[s.currentZone]);
+
+          if (mapObj) {
+            renderCompassMinimap(mapObj, s, false);
+          }
+
+          Object.keys(this.domPool.decos || {}).forEach(function(k) {
+            const item = Ren.domPool.decos[k];
+            if (!item || !item.data) return;
+            const d = item.data;
+
+            if (d.isCliffLadderSpot) {
+              const sprKey = rigged ? "rope_ladder" : "cliff_stake";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
+              if (item.lbl) {
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label ladder-spot-lbl");
+                setTextIfChanged(item.lbl, rigged ? (s.onHighland ? "🧗爬下懸崖" : "🧗爬上高台") : "🧗架設繩梯");
+              }
+            } else if (d.isCryptEntrance) {
+              const sprKey = cryptOpen ? "crypt_door_open" : "crypt_door_locked";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
+              if (item.lbl) {
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label crypt-door-lbl");
+                setTextIfChanged(item.lbl, cryptOpen ? "🏛️地底遺跡(已開)" : "🔒地底遺跡[需鑰匙]");
+              }
+            } else if (d.isExplorePuzzleTablet && item.lbl) {
+              setDisplayIfChanged(item.lbl, "block");
+              setClassIfChanged(item.lbl, "dom-label puzzle-mech-lbl");
+              setTextIfChanged(item.lbl, "📜古碑謎語");
+            } else if (d.isPuzzleOrderBrazier) {
+              const sprKey = d.lit ? "brazier_on" : "brazier_off";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
+              if (item.lbl) {
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label " + (d.lit ? "puzzle-mech-on" : "puzzle-mech-lbl"));
+                setTextIfChanged(item.lbl, (d.lit ? "🔥" : "") + d.brazierLabel);
+              }
+            } else if (d.isPuzzleRotateStatue) {
+              if (item.img && S && item.img._lastSpr !== "ancient_statue") {
+                item.img._lastSpr = "ancient_statue";
+                item.img.src = S.getDataURL("ancient_statue");
+              }
+              if (item.lbl) {
+                const matched = (d.curDir === d.targetDir);
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label " + (matched ? "puzzle-mech-on" : "puzzle-mech-lbl"));
+                setTextIfChanged(item.lbl, d.statueName + ":" + DIR_SYMBOLS[d.curDir || 0]);
+              }
+            } else if (d.isPuzzleToggleLever) {
+              const sprKey = d.leverOn ? "lever_on" : "lever_off";
+              if (item.img && S && item.img._lastSpr !== sprKey) {
+                item.img._lastSpr = sprKey;
+                item.img.src = S.getDataURL(sprKey);
+              }
+              if (item.lbl) {
+                setDisplayIfChanged(item.lbl, "block");
+                setClassIfChanged(item.lbl, "dom-label " + (d.leverOn ? "puzzle-mech-on" : "puzzle-mech-lbl"));
+                setTextIfChanged(item.lbl, "拉桿" + (d.leverIdx + 1) + (d.leverOn ? "[🟢開]" : "[🔴關]"));
+              }
+            }
+          });
+
+          Object.keys(this.domPool.nodes || {}).forEach(function(nId) {
+            const item = Ren.domPool.nodes[nId];
+            if (!item || !item.data || !item.lbl) return;
+            const n = item.data;
+            if (n.opened ||
+                (n.isBuriedSpot && s.dugSpots && s.dugSpots[n.id]) ||
+                (n.isToolGateObstacle && s.clearedToolGates && s.clearedToolGates[n.id])) {
+              setDisplayIfChanged(item.el, "none");
+              setDisplayIfChanged(item.lbl, "none");
+              return;
+            }
+            if (n.type === "chest") return;
+            const dist = Math.hypot((s.heroX || 0) - n.x, (s.heroY || 0) - n.y);
+            const showRadius = (n.isBuriedSpot || n.isToolGateObstacle) ? 105 : 62;
+            setDisplayIfChanged(item.lbl, (dist < showRadius) ? "block" : "none");
+          });
+        } catch (e) {}
+      };
+    }
+
+    if (UI) {
+      UI.openForgeModal = function(activeTab) {
+        const s = window.Aetheria.State && window.Aetheria.State.data;
+        const forgeUnlocked = Boolean(
+          s && ((s.projectsBuilt && s.projectsBuilt.proj_camp_forge) || s.equippedWeapon || (s.lv && s.lv > 1))
+        );
+        if (!forgeUnlocked) {
+          window.Aetheria.Audio.sfxWrong();
+          UI.showToast("🔨 巴爾的鍛造爐尚未修復！請先在營地拾取枯枝x3、燧石x3、黏土x2修復熔爐！");
+          return;
+        }
+        WorkshopUIManager.renderGridWorkshopModal(activeTab || WorkshopUIManager.curTab || "workshop");
+      };
+
+      // ★ 在【日誌】與【背包】頂部自動加上「📖 查閱求生合成圖鑑」按鈕！
+      if (UI.openQuestLogModal) {
+        const origQuestLog = UI.openQuestLogModal.bind(UI);
+        UI.openQuestLogModal = function() {
+          origQuestLog();
+          const body = document.getElementById("modal-body");
+          if (body && !document.getElementById("open-codex-from-quest-btn")) {
+            const btnWrap = document.createElement("div");
+            btnWrap.id = "open-codex-from-quest-btn";
+            btnWrap.style.marginBottom = "8px";
+            btnWrap.innerHTML =
+              '<button class="na-btn highlight" style="width:100%; padding:7px; font-size:12.5px;" onclick="Aetheria.HighlandsWorkshop.openSurvivalCodexModal(\'all\')">' +
+                '📖 打開【艾瑟瑞亞求生合成圖鑑】(全材料/配方/獲取途徑)' +
+              '</button>';
+            body.insertBefore(btnWrap, body.firstChild);
+          }
+        };
+      }
+
+      ["openBagModal", "openInventoryModal"].forEach(function(fnName) {
+        if (UI[fnName]) {
+          const origBag = UI[fnName].bind(UI);
+          UI[fnName] = function() {
+            origBag();
+            const body = document.getElementById("modal-body");
+            if (body && !document.getElementById("open-codex-from-bag-btn")) {
+              const btnWrap = document.createElement("div");
+              btnWrap.id = "open-codex-from-bag-btn";
+              btnWrap.style.marginBottom = "8px";
+              btnWrap.innerHTML =
+                '<button class="na-btn highlight" style="width:100%; padding:7px; font-size:12.5px;" onclick="Aetheria.HighlandsWorkshop.openSurvivalCodexModal(\'all\')">' +
+                  '📖 查閱【求生合成圖鑑】(材料獲取途徑與解謎用途)' +
+                '</button>';
+              body.insertBefore(btnWrap, body.firstChild);
+            }
+          };
+        }
+      });
+
+      if (UI.openRationQuickModal) {
+        const origRation = UI.openRationQuickModal.bind(UI);
+        UI.openRationQuickModal = function() {
+          origRation();
+          const s = window.Aetheria.State.data;
+          const jerkyCnt = (s.inventory && s.inventory.rationJerky) || 0;
+          const stewCnt  = (s.inventory && s.inventory.spicedStew) || 0;
+          const body = document.getElementById("modal-body");
+          if (body && !document.getElementById("quick-eat-jerky-card")) {
+            const S = window.Aetheria.Data.Sprites;
+            const card = document.createElement("div");
+            card.id = "quick-eat-jerky-card";
+            card.className = "sys-card";
+            card.style.borderColor = "#f5b700";
+            card.innerHTML =
+              '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+                '<div>' +
+                  '<b>' + S.iconHtml("mat_spicedStew", true) + '香辛海陸燉肉 (持有：' + stewCnt + ')</b>' +
+                  '<div style="font-size:11px; color:#5ac54f;">恢復 100% 飽食 + 150 HP，且永久最大HP +15！</div>' +
+                '</div>' +
+                '<button class="na-btn ' + (stewCnt > 0 ? 'highlight' : '') + '" style="padding:6px 12px;" onclick="Aetheria.HighlandsWorkshop.useSrpgConsumable(\'spicedStew\'); Aetheria.UI.openRationQuickModal();">食用</button>' +
+              '</div>' +
+              '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+                '<div>' +
+                  '<b>' + S.iconHtml("mat_rationJerky", true) + '岩鹽風乾肉脯 (持有：' + jerkyCnt + ')</b>' +
+                  '<div style="font-size:11px; color:#ffd166;">立即恢復 +80% 飽食度 與 +90 HP</div>' +
+                '</div>' +
+                '<button class="na-btn ' + (jerkyCnt > 0 ? 'highlight' : '') + '" style="padding:6px 12px;" onclick="Aetheria.HighlandsWorkshop.useSrpgConsumable(\'rationJerky\'); Aetheria.UI.openRationQuickModal();">食用</button>' +
+              '</div>';
+            body.insertBefore(card, body.firstChild);
+          }
+        };
+      }
+    }
+  }
+
+  function initHighlandsAndWorkshopModule() {
+    try {
+      injectSurvivalRpgStyles();
+      registerSurvivalRpgSprites();
+      registerSrpgDataIntoGame();
+      mountGuaranteedCompassWidget();
+      hookSystemsForHighlandsAndWorkshop();
+
+      const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
+      if (Maps && Maps.getMap) {
+        const camp = Maps.getMap("camp_hub");
+        if (camp) { camp._campTentsAdjustedToken = null; adjustCampTentsUpward(camp); }
+        Object.keys(HIGHLAND_ZONES).forEach(function(zId) {
+          const m = Maps.getMap(zId);
+          if (m) { m._highlandInjectedToken = null; injectHighlandCliffIntoMap(m); }
+        });
+      }
+
+      if (window.Aetheria.State && window.Aetheria.State.recalcMaxHp) {
+        window.Aetheria.State.recalcMaxHp();
+      }
+      if (window.Aetheria.Renderer) {
+        window.Aetheria.Renderer.builtZoneKey = null;
+        window.Aetheria.Renderer.renderWorld();
+      }
+      if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) {
+        window.Aetheria.UI.updateAllHud();
+      }
+    } catch (err) {
+      console.error("Survival RPG Codex & Anti-Lag v12.1 init error:", err);
+    }
+  }
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    setTimeout(initHighlandsAndWorkshopModule, 185);
+  } else {
+    window.addEventListener("load", function() {
+      setTimeout(initHighlandsAndWorkshopModule, 185);
+    });
+  }
+})();
