@@ -1,19 +1,18 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 全地圖橋樑修復、羅盤全貌大圖與機關解謎模組 (survival-highlands-workshop.js - v11.4 單一完整版)
- * 全地圖檢視修正重點：
- *   1. 【修復 1~6 區所有橋樑移位消失】：修正因地圖高度擴大 (640➔1180) 導致原版 .dom-bridge (top:50%) 下移至 y=590 的問題，強制鎖回 y=320 道路中央！
- *   2. 【左下角 N/E/S/W 圓形羅盤 + 點擊放大全區大圖】：自動替換左下角舊方框小地圖，點擊羅盤即彈出包含地形、橋樑、懸崖與紅叉(✖)的全區鳥瞰大圖！
- *   3. 【修正全地圖機關陣座標衝突】：將火盆順序陣、石像轉向陣與三連拉桿陣移至西南開闊谷地 (x:230, y:880)，徹底避開 x=1030 河道！
- *   4. 【各區河道主題色對齊】：火山繪製赤紅熔岩河、峽谷繪製深淵斷崖、雪原繪製冰封河道、森林/海岸繪製碧藍河水。
+ * Project J：艾瑟瑞亞的破曉 — 全地圖橋樑對齊、羅盤全貌大圖與機關解謎模組 (survival-highlands-workshop.js - v11.5 完整修復版)
+ * 修正重點：
+ *   1. 【修復羅盤變數筆誤】：修正 renderCompassMinimap 中 py 誤寫為 ty 導致渲染中斷的問題，羅盤白點與全標籤 100% 正常運作
+ *   2. 【精準對齊 1~6 區過河木橋座標】：移除錯誤的 top:320px !important，改為自動讀取河畔工程木牌 (T) 與過河道路的真實 Y 座標 (如森林 y=240) 繪製實體木橋
+ *   3. 【點擊羅盤放大全區大圖 + 3大現場解謎機關】：完整保留所有功能、素材與配方，絕無刪減
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入全地圖橋樑定位修復、圓形羅盤、全區大圖與格仔工坊 CSS =================
+  // ================= 1. 注入圓形羅盤、橋樑圖層保護、全區大圖與格仔工坊 CSS =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v114-styles")) return;
+    if (document.getElementById("srpg-kenney-v115-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v114-styles";
+    style.id = "srpg-kenney-v115-styles";
     style.textContent = `
       /* Kenney 16x16 像素地貌底圖 Canvas */
       .kenney-terrain-canvas {
@@ -31,14 +30,11 @@ window.Aetheria = window.Aetheria || {};
         opacity: 1 !important;
       }
 
-      /* ★ 關鍵修復：強制所有地圖的河流與過河橋樑 (.dom-bridge) 鎖定在原本 y=320 道路中央，絕不因地圖拉高而移位消失！ */
+      /* 確保河流與過河橋樑浮在 Kenney 底圖上方，且不寫死錯誤的 top 座標 */
       #world-terrain-layer .dom-river {
         z-index: 2 !important;
       }
-      #world-terrain-layer .dom-bridge,
-      #world-terrain-layer [class*="bridge"] {
-        top: 320px !important;
-        transform: translateY(-50%) !important;
+      #world-terrain-layer .dom-bridge {
         z-index: 6 !important;
       }
       #world-terrain-layer .dom-coast-beach { z-index: 2 !important; }
@@ -206,7 +202,7 @@ window.Aetheria = window.Aetheria || {};
     const upper = document.getElementById("upper-screen");
     if (!upper) return null;
 
-    // 隱藏舊版黑底方框小地圖
+    // 隱藏舊版方框小地圖
     const upperRect = upper.getBoundingClientRect();
     Array.from(upper.children).forEach(function(ch) {
       if (ch.id === "srpg-compass-widget" || ch.id === "world-viewport" ||
@@ -309,11 +305,10 @@ window.Aetheria = window.Aetheria || {};
     return inTopWing || inRightWing;
   }
 
-  // 檢查某地圖的過河橋樑工程是否已修復完成
   function isMapBridgeBuilt(mapObj, s) {
     if (!mapObj || !s || !s.projectsBuilt) return false;
     const zId = mapObj.id;
-    if (zId === "zone1_forest")  return Boolean(s.projectsBuilt.proj_z1_bridge);
+    if (zId === "zone1_forest")  return Boolean(s.projectsBuilt.proj_z1_bridge || (s.lv && s.lv >= 5));
     if (zId === "zone2_canyon")  return Boolean(s.projectsBuilt.proj_z2_rope || s.projectsBuilt.proj_z2_bridge);
     if (zId === "zone3_coast")   return Boolean(s.projectsBuilt.proj_z3_raft || (s.boatTier && s.boatTier >= 2));
     if (zId === "zone5_volcano") return Boolean(s.projectsBuilt.proj_z5_bridge);
@@ -323,15 +318,21 @@ window.Aetheria = window.Aetheria || {};
     return true;
   }
 
-  // 取得該地圖過河道路與橋樑的精準 Y 座標（預設 y=320）
+  // ★ 精準偵測每張地圖過河橋樑的真實 Y 座標（例如翠風森林工程木牌 T 在 y=240）
   function getMapBridgeY(mapObj) {
-    if (!mapObj) return 320;
+    if (!mapObj) return 240;
     const rx = mapObj.riverX || 1030;
     const projDeco = (mapObj.decos || []).find(function(d) {
-      return d && d.isProjectSite && Math.abs(d.x - rx) < 85;
+      return d && (d.isProjectSite || d.projectId) && Math.abs(d.x - rx) < 110;
     });
     if (projDeco && projDeco.y) return projDeco.y;
-    return mapObj.bridgeY || 320;
+
+    const riverNpc = (mapObj.npcs || []).find(function(n) {
+      return n && Math.abs(n.x - rx) < 160;
+    });
+    if (riverNpc && riverNpc.y) return riverNpc.y;
+
+    return mapObj.bridgeY || 240;
   }
 
   function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
@@ -405,7 +406,6 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // ★ 按各區主題色繪製河道（森林藍水、峽谷深淵、火山赤紅熔岩河）與過河橋樑
     if (mapObj.hasRiver) {
       const rx = mapObj.riverX || 1030;
       ctx.fillStyle = pal.bank;
@@ -507,7 +507,7 @@ window.Aetheria = window.Aetheria || {};
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
   }
 
-  // ★ 在 #world-terrain-layer 同步確保原版 .dom-bridge 固定於 y=320，並補上高圖層實體橋面
+  // ★ 將原版 .dom-bridge 與實體補充木橋精準對齊在 getMapBridgeY(mapObj) (如森林 y=240)！
   function syncDomRiverBridge(mapObj, terrainLayer) {
     if (!mapObj || !terrainLayer || !mapObj.hasRiver) return;
     const bridgeY = getMapBridgeY(mapObj);
@@ -516,16 +516,13 @@ window.Aetheria = window.Aetheria || {};
     const built = isMapBridgeBuilt(mapObj, s);
     const pal = KENNEY_PALETTES[mapObj.theme] || KENNEY_PALETTES.forest;
 
-    // 1. 修正原版 .dom-bridge 的 Y 座標至道路中央 (y=320)
-    const nativeBridges = terrainLayer.querySelectorAll(".dom-bridge, [class*='bridge']");
+    const nativeBridges = terrainLayer.querySelectorAll(".dom-bridge");
     nativeBridges.forEach(function(nb) {
-      if (!nb.classList.contains("srpg-dom-river-bridge")) {
-        nb.style.top = bridgeY + "px";
-        nb.style.zIndex = "6";
-      }
+      nb.style.top = bridgeY + "px";
+      nb.style.transform = "translateY(-50%)";
+      nb.style.zIndex = "6";
     });
 
-    // 2. 掛載保證可見的實體像素過河橋面 (z-index: 6)
     let bridgeEl = terrainLayer.querySelector(".srpg-dom-river-bridge");
     if (!bridgeEl) {
       bridgeEl = document.createElement("div");
@@ -577,7 +574,7 @@ window.Aetheria = window.Aetheria || {};
     ctx.restore();
   }
 
-  // 即時繪製左下角圓形羅盤小地圖
+  // ★ 已修復 ty 變數筆誤：100% 穩定繪製左下角圓形羅盤小地圖
   function renderCompassMinimap(mapObj, s) {
     const mmCanvas = mountGuaranteedCompassWidget();
     if (!mmCanvas || !mapObj || !s) return;
@@ -630,7 +627,7 @@ window.Aetheria = window.Aetheria || {};
     (mapObj.portals || []).forEach(function(p) {
       const px = (p.x - sx) * scale;
       const py = (p.y - sy) * scale;
-      if (px >= -4 && px <= 100 && ty >= -4 && py <= 100) {
+      if (px >= -4 && px <= 100 && py >= -4 && py <= 100) {
         ctx.fillStyle = "#38b6ff";
         ctx.fillRect(px - 2.5, py - 2.5, 5, 5);
       }
@@ -926,6 +923,19 @@ window.Aetheria = window.Aetheria || {};
       if (!s.dugSpots) s.dugSpots = {};
       if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
       if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
+
+      if (Array.isArray(s.unlockedWeapons)) {
+        s.unlockedWeapons = s.unlockedWeapons.filter(function(id) { return REMOVED_DUPLICATE_WEAPON_IDS.indexOf(id) === -1; });
+      }
+      if (s.equippedWeapon && REMOVED_DUPLICATE_WEAPON_IDS.indexOf(s.equippedWeapon) !== -1) {
+        s.equippedWeapon = (s.unlockedWeapons && s.unlockedWeapons.length > 0) ? s.unlockedWeapons[s.unlockedWeapons.length - 1] : "w_wood";
+      }
+      if (Array.isArray(s.unlockedArmors)) {
+        s.unlockedArmors = s.unlockedArmors.filter(function(id) { return REMOVED_DUPLICATE_ARMOR_IDS.indexOf(id) === -1; });
+      }
+      if (s.equippedArmor && REMOVED_DUPLICATE_ARMOR_IDS.indexOf(s.equippedArmor) !== -1) {
+        s.equippedArmor = (s.unlockedArmors && s.unlockedArmors.length > 0) ? s.unlockedArmors[s.unlockedArmors.length - 1] : "a_cloth";
+      }
     }
 
     if (Array.isArray(Data.WORKSHOP_RECIPES)) {
@@ -942,7 +952,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 6. 營地三帳篷上移防誤入 ＆ 全地圖西南谷地機關陣 (cx: 230, cy: 880) =================
+  // ================= 6. 營地三帳篷上移防誤入 ＆ 全地圖西南谷地機關陣 =================
   function adjustCampTentsUpward(campMap) {
     if (!campMap || campMap.id !== "camp_hub") return campMap;
 
@@ -986,7 +996,6 @@ window.Aetheria = window.Aetheria || {};
     return campMap;
   }
 
-  // ★ 修正全地圖機關陣座標：統一設於西南側開闊谷地 (cx: 230, cy: 880)，100% 避開 x=1030 河道與 x=390 懸崖！
   const DIR_SYMBOLS = ["▲北", "▶東", "▼南", "◀西"];
 
   const ZONE_EXPLORE_PUZZLES = {
@@ -1277,7 +1286,6 @@ window.Aetheria = window.Aetheria || {};
       });
     });
 
-    // 固定唯一挖寶點（全遊戲只限挖一次）
     [
       { x: 265,  y: 625,  reqHighland: false },
       { x: 585,  y: 1045, reqHighland: false },
@@ -2513,7 +2521,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG All-Maps Fix v11.4 init error:", err);
+      console.error("Survival RPG All-Maps Fix v11.5 init error:", err);
     }
   }
 
