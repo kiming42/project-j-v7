@@ -1,18 +1,18 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 全地圖橋樑對齊、羅盤全貌大圖與機關解謎模組 (survival-highlands-workshop.js - v11.5 完整修復版)
- * 修正重點：
- *   1. 【修復羅盤變數筆誤】：修正 renderCompassMinimap 中 py 誤寫為 ty 導致渲染中斷的問題，羅盤白點與全標籤 100% 正常運作
- *   2. 【精準對齊 1~6 區過河木橋座標】：移除錯誤的 top:320px !important，改為自動讀取河畔工程木牌 (T) 與過河道路的真實 Y 座標 (如森林 y=240) 繪製實體木橋
- *   3. 【點擊羅盤放大全區大圖 + 3大現場解謎機關】：完整保留所有功能、素材與配方，絕無刪減
+ * Project J：艾瑟瑞亞的破曉 — 羅盤圖層、機關開箱與帳篷入口修復模組 (survival-highlands-workshop.js - v11.6)
+ * 實機截圖 3 大問題修正：
+ *   1. 【修復圖1羅盤遮擋文字】：降低羅盤 z-index 至 18，並將底部對話/提示文字框提升至 z-index:95，文字 100% 完整顯示不被遮蓋
+ *   2. 【修復圖2機關寶箱開唔到】：拉開石像/火盆間距並取消卡位，當機關全部變綠解開後，走近寶箱或外圍按 A 鍵即可直接開箱領獎
+ *   3. 【修復圖3入唔到帳幕】：將營地北面三個帳篷門口對齊至踏墊 (y=86)，走到門口或按 A 鍵即可順暢進入帳篷
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 1. 注入圓形羅盤、橋樑圖層保護、全區大圖與格仔工坊 CSS =================
+  // ================= 1. 注入羅盤圖層修正、橋樑對齊與格仔工坊 CSS =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v115-styles")) return;
+    if (document.getElementById("srpg-kenney-v116-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v115-styles";
+    style.id = "srpg-kenney-v116-styles";
     style.textContent = `
       /* Kenney 16x16 像素地貌底圖 Canvas */
       .kenney-terrain-canvas {
@@ -30,38 +30,39 @@ window.Aetheria = window.Aetheria || {};
         opacity: 1 !important;
       }
 
-      /* 確保河流與過河橋樑浮在 Kenney 底圖上方，且不寫死錯誤的 top 座標 */
-      #world-terrain-layer .dom-river {
-        z-index: 2 !important;
-      }
-      #world-terrain-layer .dom-bridge {
-        z-index: 6 !important;
-      }
+      #world-terrain-layer .dom-river { z-index: 2 !important; }
+      #world-terrain-layer .dom-bridge { z-index: 6 !important; }
       #world-terrain-layer .dom-coast-beach { z-index: 2 !important; }
       #world-terrain-layer .dom-coast-sea   { z-index: 3 !important; }
       #world-terrain-layer .dom-wooden-pier { z-index: 4 !important; }
 
-      /* 左下角 N/E/S/W 圓形羅盤小地圖 */
+      /* ★ 修復圖1：將圓形羅盤 z-index 設為 18，並強制所有底部對話框/Toast 提示框浮在羅盤上方 (z-index: 95)！ */
       #minimap-box, .srpg-compass-box {
         position: absolute !important;
-        width: 80px !important;
-        height: 80px !important;
+        width: 76px !important;
+        height: 76px !important;
         bottom: 8px !important;
         left: 8px !important;
         border-radius: 50% !important;
-        border: 5px solid #4a2511 !important;
+        border: 4px solid #4a2511 !important;
         background: #102542 !important;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.9), inset 0 0 6px rgba(0,0,0,0.85) !important;
+        box-shadow: 0 3px 8px rgba(0,0,0,0.85), inset 0 0 6px rgba(0,0,0,0.85) !important;
         overflow: visible !important;
         cursor: pointer !important;
         pointer-events: auto !important;
-        z-index: 75 !important;
+        z-index: 18 !important;
         padding: 0 !important;
         margin: 0 !important;
       }
       #minimap-box:active, .srpg-compass-box:active {
         transform: scale(0.94) !important;
       }
+      /* 確保對話框、古碑提示框與 Toast 永遠在羅盤之上，絕不被遮蓋 */
+      #toast-box, #dialog-box, #msg-box, #story-box,
+      [id*="toast"], [class*="toast"], [id*="dialog"], [class*="dialog"] {
+        z-index: 95 !important;
+      }
+
       #minimap-canvas, .srpg-compass-canvas {
         width: 100% !important;
         height: 100% !important;
@@ -83,16 +84,16 @@ window.Aetheria = window.Aetheria || {};
         line-height: 1.1;
         text-shadow: 1px 1px 0 #000;
         pointer-events: none;
-        z-index: 78;
+        z-index: 19;
       }
-      .compass-dir-n { top: -8px; left: 50%; transform: translateX(-50%); color: #ffd166; }
-      .compass-dir-s { bottom: -8px; left: 50%; transform: translateX(-50%); }
-      .compass-dir-w { left: -8px; top: 50%; transform: translateY(-50%); }
-      .compass-dir-e { right: -8px; top: 50%; transform: translateY(-50%); }
+      .compass-dir-n { top: -7px; left: 50%; transform: translateX(-50%); color: #ffd166; }
+      .compass-dir-s { bottom: -7px; left: 50%; transform: translateX(-50%); }
+      .compass-dir-w { left: -7px; top: 50%; transform: translateY(-50%); }
+      .compass-dir-e { right: -7px; top: 50%; transform: translateY(-50%); }
       .compass-zoom-hint {
         position: absolute;
-        bottom: -9px;
-        right: -12px;
+        bottom: -8px;
+        right: -10px;
         background: #1d3557;
         color: #ffd166;
         border: 1px solid #f5b700;
@@ -101,7 +102,7 @@ window.Aetheria = window.Aetheria || {};
         font-weight: 900;
         padding: 0 3px;
         pointer-events: none;
-        z-index: 79;
+        z-index: 20;
         box-shadow: 0 1px 3px #000;
       }
 
@@ -197,12 +198,11 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 強制掛載左下角「N/E/S/W 圓形羅盤小地圖」並綁定點擊放大全圖 =================
+  // ================= 2. 掛載左下角「N/E/S/W 圓形羅盤小地圖」並確保不遮擋對話框 =================
   function mountGuaranteedCompassWidget() {
     const upper = document.getElementById("upper-screen");
     if (!upper) return null;
 
-    // 隱藏舊版方框小地圖
     const upperRect = upper.getBoundingClientRect();
     Array.from(upper.children).forEach(function(ch) {
       if (ch.id === "srpg-compass-widget" || ch.id === "world-viewport" ||
@@ -214,6 +214,9 @@ window.Aetheria = window.Aetheria || {};
       if (ch.id === "minimap-box" || ch.id === "minimap" ||
           (r.width > 25 && r.width < 135 && r.height > 20 && r.height < 115 && (r.left - upperRect.left) < 40 && (upperRect.bottom - r.bottom) < 40)) {
         ch.style.display = "none";
+      } else if (r.width >= 160 && (upperRect.bottom - r.bottom) < 60) {
+        // 若是底部長條形的對話/Toast 訊息框，強制設為高圖層 (z-index: 95) 壓在羅盤上方！
+        ch.style.zIndex = "95";
       }
     });
 
@@ -318,7 +321,6 @@ window.Aetheria = window.Aetheria || {};
     return true;
   }
 
-  // ★ 精準偵測每張地圖過河橋樑的真實 Y 座標（例如翠風森林工程木牌 T 在 y=240）
   function getMapBridgeY(mapObj) {
     if (!mapObj) return 240;
     const rx = mapObj.riverX || 1030;
@@ -507,7 +509,6 @@ window.Aetheria = window.Aetheria || {};
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
   }
 
-  // ★ 將原版 .dom-bridge 與實體補充木橋精準對齊在 getMapBridgeY(mapObj) (如森林 y=240)！
   function syncDomRiverBridge(mapObj, terrainLayer) {
     if (!mapObj || !terrainLayer || !mapObj.hasRiver) return;
     const bridgeY = getMapBridgeY(mapObj);
@@ -574,7 +575,6 @@ window.Aetheria = window.Aetheria || {};
     ctx.restore();
   }
 
-  // ★ 已修復 ty 變數筆誤：100% 穩定繪製左下角圓形羅盤小地圖
   function renderCompassMinimap(mapObj, s) {
     const mmCanvas = mountGuaranteedCompassWidget();
     if (!mmCanvas || !mapObj || !s) return;
@@ -952,7 +952,7 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  // ================= 6. 營地三帳篷上移防誤入 ＆ 全地圖西南谷地機關陣 =================
+  // ================= 6. ★ 修復圖3：曙光營地三帳篷門口對齊踏墊 (y=86)，走到門口或按 A 鍵皆可順暢進入！ =================
   function adjustCampTentsUpward(campMap) {
     if (!campMap || campMap.id !== "camp_hub") return campMap;
 
@@ -963,22 +963,25 @@ window.Aetheria = window.Aetheria || {};
       return p.id !== "p_enter_museum";
     });
 
+    // 將北排三個帳篷外觀設於 y = 16，並取消帳篷門口下方的硬碰撞阻擋，讓玩家能走到門口踏墊上
     (campMap.decos || []).forEach(function(d) {
       const spr = String(d.sprite || "");
       if (d.id === "deco_hero_tent_ext" || spr.indexOf("tent") !== -1 || (d.y !== undefined && d.y <= 95 && (d.w >= 40 || d.h >= 36))) {
-        d.y = 18;
+        d.y = 16;
+        d.solid = false;
       }
     });
 
+    // 將三個帳篷的門口傳送點設在門口踏墊位置 (y = 86)，既遠離營地中央 (y > 140) 防誤入，走到門口又能立即進入！
     (campMap.portals || []).forEach(function(p) {
       if (p.targetZone === "tent_guild" || p.targetZone === "tent_hero" || p.targetZone === "tent_forge") {
-        p.y = 72;
+        p.y = 86;
       }
     });
 
     if (campMap.trees) {
       campMap.trees = campMap.trees.filter(function(t) {
-        return !(t.y < 78 && ((t.x >= 60 && t.x <= 185) || (t.x >= 255 && t.x <= 365) || (t.x >= 435 && t.x <= 565)));
+        return !(t.y < 85 && ((t.x >= 60 && t.x <= 185) || (t.x >= 255 && t.x <= 365) || (t.x >= 435 && t.x <= 565)));
       });
     }
 
@@ -988,7 +991,7 @@ window.Aetheria = window.Aetheria || {};
         const tm = Maps.getMap(tZone);
         if (tm && tm.portals) {
           tm.portals.forEach(function(ep) {
-            if (ep.targetZone === "camp_hub") ep.targetY = 108;
+            if (ep.targetZone === "camp_hub") ep.targetY = 118;
           });
         }
       });
@@ -996,6 +999,7 @@ window.Aetheria = window.Aetheria || {};
     return campMap;
   }
 
+  // ================= 7. ★ 修復圖2：拉開機關陣間距並取消卡位，解開後按 A 鍵立即開啟中央寶箱！ =================
   const DIR_SYMBOLS = ["▲北", "▶東", "▼南", "◀西"];
 
   const ZONE_EXPLORE_PUZZLES = {
@@ -1003,8 +1007,8 @@ window.Aetheria = window.Aetheria || {};
       type: "brazier_order", cx: 230, cy: 880,
       riddle: "📜【森林古碑謎語】：「依日出至星夜之序點燃四方聖火：先點『東之晨(1)』➔ 次燃『南之日(2)』➔ 再亮『西之霞(3)』➔ 終耀『北之星(4)』！」",
       items: [
-        { dx: 52, dy: 0, order: 1, label: "東之晨" }, { dx: 0, dy: 48, order: 2, label: "南之日" },
-        { dx: -52, dy: 0, order: 3, label: "西之霞" }, { dx: 0, dy: -48, order: 4, label: "北之星" }
+        { dx: 64, dy: 0, order: 1, label: "東之晨" }, { dx: 0, dy: 58, order: 2, label: "南之日" },
+        { dx: -64, dy: 0, order: 3, label: "西之霞" }, { dx: 0, dy: -58, order: 4, label: "北之星" }
       ]
     },
     cave1_mushroom: {
@@ -1015,8 +1019,8 @@ window.Aetheria = window.Aetheria || {};
       type: "statue_rotate", cx: 230, cy: 880,
       riddle: "📜【法老方位碑】：「令四方石像共鳴：『西衛望東(▶東)』、『東衛望西(◀西)』、『北衛俯視南境(▼南)』、『南衛仰望北辰(▲北)』！」",
       statues: [
-        { dx: -52, dy: 0, initDir: 0, targetDir: 1, name: "西衛" }, { dx: 52, dy: 0, initDir: 1, targetDir: 3, name: "東衛" },
-        { dx: 0, dy: -48, initDir: 3, targetDir: 2, name: "北衛" }, { dx: 0, dy: 48, initDir: 2, targetDir: 0, name: "南衛" }
+        { dx: -64, dy: 0, initDir: 0, targetDir: 1, name: "西衛" }, { dx: 64, dy: 0, initDir: 1, targetDir: 3, name: "東衛" },
+        { dx: 0, dy: -58, initDir: 3, targetDir: 2, name: "北衛" }, { dx: 0, dy: 58, initDir: 2, targetDir: 0, name: "南衛" }
       ]
     },
     zone3_coast: {
@@ -1027,8 +1031,8 @@ window.Aetheria = window.Aetheria || {};
       type: "brazier_order", cx: 230, cy: 880,
       riddle: "📜【冰原融霜碑】：「逆風點燃四聖火：先燃『北之極光(1)』➔ 次點『西之寒星(2)』➔ 再亮『南之暖陽(3)』➔ 終耀『東之破曉(4)』！」",
       items: [
-        { dx: 0, dy: -48, order: 1, label: "北之極光" }, { dx: -52, dy: 0, order: 2, label: "西之寒星" },
-        { dx: 0, dy: 48, order: 3, label: "南之暖陽" },  { dx: 52, dy: 0, order: 4, label: "東之破曉" }
+        { dx: 0, dy: -58, order: 1, label: "北之極光" }, { dx: -64, dy: 0, order: 2, label: "西之寒星" },
+        { dx: 0, dy: 58, order: 3, label: "南之暖陽" },  { dx: 64, dy: 0, order: 4, label: "東之破曉" }
       ]
     },
     zone5_volcano: {
@@ -1039,11 +1043,41 @@ window.Aetheria = window.Aetheria || {};
       type: "statue_rotate", cx: 230, cy: 880,
       riddle: "📜【天界星象碑】：「四聖像背心向外守護八方：『北像朝北(▲北)』、『東像朝東(▶東)』、『南像朝南(▼南)』、『西像朝西(◀西)』！」",
       statues: [
-        { dx: 0, dy: -48, initDir: 2, targetDir: 0, name: "北像" }, { dx: 52, dy: 0, initDir: 3, targetDir: 1, name: "東像" },
-        { dx: 0, dy: 48, initDir: 0, targetDir: 2, name: "南像" },  { dx: -52, dy: 0, initDir: 1, targetDir: 3, name: "西像" }
+        { dx: 0, dy: -58, initDir: 2, targetDir: 0, name: "北像" }, { dx: 64, dy: 0, initDir: 3, targetDir: 1, name: "東像" },
+        { dx: 0, dy: 58, initDir: 0, targetDir: 2, name: "南像" },  { dx: -64, dy: 0, initDir: 1, targetDir: 3, name: "西像" }
       ]
     }
   };
+
+  // 動態檢查該地圖的現場機關是否已全部達成共鳴
+  function isZoneExplorePuzzleSolved(mapObj, s) {
+    if (!mapObj || !s) return false;
+    if (s.solvedExplorePuzzles && s.solvedExplorePuzzles[mapObj.id]) return true;
+
+    const decos = mapObj.decos || [];
+    const statues = decos.filter(function(d) { return d && d.isPuzzleRotateStatue; });
+    if (statues.length > 0 && statues.every(function(d) { return d.curDir === d.targetDir; })) {
+      if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
+      s.solvedExplorePuzzles[mapObj.id] = true;
+      return true;
+    }
+
+    const levers = decos.filter(function(d) { return d && d.isPuzzleToggleLever; });
+    if (levers.length > 0 && levers.every(function(d) { return d.leverOn; })) {
+      if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
+      s.solvedExplorePuzzles[mapObj.id] = true;
+      return true;
+    }
+
+    const braziers = decos.filter(function(d) { return d && d.isPuzzleOrderBrazier; });
+    if (braziers.length > 0 && braziers.every(function(d) { return d.lit; })) {
+      if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
+      s.solvedExplorePuzzles[mapObj.id] = true;
+      return true;
+    }
+
+    return false;
+  }
 
   function injectExplorationPuzzlesIntoMap(mapObj) {
     const pCfg = ZONE_EXPLORE_PUZZLES[mapObj.id];
@@ -1053,11 +1087,12 @@ window.Aetheria = window.Aetheria || {};
     const chestClaimed = Boolean(s.claimedExplorePuzzleChests && s.claimedExplorePuzzleChests[mapObj.id]);
     const cx = pCfg.cx, cy = pCfg.cy;
 
-    mapObj.dirtBlobs.push({ cx: cx, cy: cy, rx: 95, ry: 80, isExpandedBlob: true });
+    mapObj.dirtBlobs.push({ cx: cx, cy: cy, rx: 105, ry: 90, isExpandedBlob: true });
 
+    // 古碑與機關設為 solid: false，確保主角能自由走入中央開啟寶箱，絕不卡位！
     mapObj.decos.push({
       id: "exp_puz_tablet_" + mapObj.id,
-      x: cx - 64, y: cy - 52, sprite: "seal_pillar_on", w: 26, h: 30, solid: true,
+      x: cx - 72, y: cy - 62, sprite: "seal_pillar_on", w: 26, h: 30, solid: false,
       isHighlandElement: true, isExplorePuzzleTablet: true, riddleText: pCfg.riddle, zoneId: mapObj.id
     });
 
@@ -1072,7 +1107,7 @@ window.Aetheria = window.Aetheria || {};
       pCfg.items.forEach(function(it, idx) {
         mapObj.decos.push({
           id: "exp_puz_brazier_" + mapObj.id + "_" + idx,
-          x: cx + it.dx, y: cy + it.dy, sprite: solved ? "brazier_on" : "brazier_off", w: 26, h: 28, solid: true,
+          x: cx + it.dx, y: cy + it.dy, sprite: solved ? "brazier_on" : "brazier_off", w: 26, h: 28, solid: false,
           isHighlandElement: true, isPuzzleOrderBrazier: true, lit: solved, orderNum: it.order, brazierLabel: it.label, zoneId: mapObj.id
         });
       });
@@ -1081,24 +1116,24 @@ window.Aetheria = window.Aetheria || {};
         const curDir = solved ? st.targetDir : st.initDir;
         mapObj.decos.push({
           id: "exp_puz_statue_" + mapObj.id + "_" + idx,
-          x: cx + st.dx, y: cy + st.dy, sprite: "ancient_statue", w: 28, h: 30, solid: true,
+          x: cx + st.dx, y: cy + st.dy, sprite: "ancient_statue", w: 28, h: 30, solid: false,
           isHighlandElement: true, isPuzzleRotateStatue: true, curDir: curDir, targetDir: st.targetDir, statueName: st.name, zoneId: mapObj.id
         });
       });
     } else if (pCfg.type === "lever_toggle") {
       const initStates = solved ? [true, true, true] : [true, false, false];
-      [-48, 0, 48].forEach(function(dx, idx) {
+      [-56, 0, 56].forEach(function(dx, idx) {
         const isOn = initStates[idx];
         mapObj.decos.push({
           id: "exp_puz_lever_" + mapObj.id + "_" + idx,
-          x: cx + dx, y: cy + 48, sprite: isOn ? "lever_on" : "lever_off", w: 26, h: 26, solid: true,
+          x: cx + dx, y: cy + 56, sprite: isOn ? "lever_on" : "lever_off", w: 26, h: 26, solid: false,
           isHighlandElement: true, isPuzzleToggleLever: true, leverIdx: idx, leverOn: isOn, zoneId: mapObj.id
         });
       });
     }
   }
 
-  // ================= 7. 各區高低差懸崖、山洞 (grotto_*) 與隱藏地底遺跡 (crypt_*) =================
+  // ================= 8. 各區高低差懸崖、山洞 (grotto_*) 與隱藏地底遺跡 (crypt_*) =================
   const HIGHLAND_ZONES = {
     zone1_forest:   { targetW: 1680, targetH: 1180, ores: ["iron", "rockSalt", "quartz", "coal"],        grottoOres: ["coal", "iron", "rockSalt", "quartz"],   cryptName: "翠風古老樹根地窖", cryptBoss: "★遠古樹根守衛魔像" },
     cave1_mushroom: { targetW: 1580, targetH: 1140, ores: ["coal", "mithril", "quartz", "rockSalt"],     grottoOres: ["coal", "mithril", "quartz", "basalt"], cryptName: "幽窟地底秘銀聖堂", cryptBoss: "★秘銀晶簇鎮守魔像" },
@@ -1320,7 +1355,7 @@ window.Aetheria = window.Aetheria || {};
     return mapObj;
   }
 
-  // ================= 8. 全區全貌放大地圖與格仔工坊管理系統 =================
+  // ================= 9. 全區全貌放大地圖與格仔工坊管理系統 =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -1896,7 +1931,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 9. 掛載系統 =================
+  // ================= 10. 掛載系統（含修復後的帳篷進入與機關寶箱優先開啟） =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -1953,6 +1988,7 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (Exp) {
+      // ★ 修復圖3：放寬營地北面三個帳篷門口進入判定 (dist <= 26 且 heroY <= 104)，走到踏墊即可順暢進入！
       if (Exp.triggerPortal) {
         const origPortal = Exp.triggerPortal.bind(Exp);
         Exp.triggerPortal = function(portal) {
@@ -1960,7 +1996,7 @@ window.Aetheria = window.Aetheria || {};
           if (s && s.currentZone === "camp_hub" && portal &&
               (portal.targetZone === "tent_guild" || portal.targetZone === "tent_hero" || portal.targetZone === "tent_forge")) {
             const dist = Math.hypot((s.heroX || 0) - portal.x, (s.heroY || 0) - portal.y);
-            if (dist > 15 || s.heroY > 84) return;
+            if (dist > 28 || s.heroY > 104) return;
           }
           origPortal(portal);
         };
@@ -2013,20 +2049,54 @@ window.Aetheria = window.Aetheria || {};
         if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
         const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
 
+        if (mapObj) {
+          // ★ 修復圖3：站在營地帳篷門口 (距離 < 44px) 按 A 鍵亦可直接進入帳篷！
+          if (mapObj.id === "camp_hub" && mapObj.portals) {
+            for (let pIdx = 0; pIdx < mapObj.portals.length; pIdx++) {
+              const pt = mapObj.portals[pIdx];
+              if (pt && (pt.targetZone === "tent_guild" || pt.targetZone === "tent_hero" || pt.targetZone === "tent_forge") &&
+                  Math.hypot(s.heroX - pt.x, s.heroY - pt.y) < 44) {
+                Exp.triggerPortal(pt);
+                return;
+              }
+            }
+          }
+
+          // ★ 修復圖2：優先檢查是否站在【古遺跡機關寶箱】或【遠古聖物石棺】旁 (< 62px)！
+          // 當四方石像/火盆/拉桿全部變綠共鳴後，按 A 鍵會直接優先打開寶箱，絕不會被外圍石像攔截！
+          const puzzleDone = isZoneExplorePuzzleSolved(mapObj, s);
+          if (mapObj.nodes) {
+            for (let nIdx = 0; nIdx < mapObj.nodes.length; nIdx++) {
+              const nd = mapObj.nodes[nIdx];
+              if (!nd || nd.opened) continue;
+              if (nd.isExplorePuzzleChest && Math.hypot(s.heroX - nd.x, s.heroY - nd.y) < (puzzleDone ? 78 : 44)) {
+                Exp.harvestNode(nd);
+                return;
+              }
+              if (nd.isCryptVaultChest && Math.hypot(s.heroX - nd.x, s.heroY - nd.y) < 56) {
+                Exp.harvestNode(nd);
+                return;
+              }
+            }
+          }
+        }
+
         if (mapObj && mapObj.decos) {
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
             if (!d) continue;
 
-            if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) {
+            if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               window.Aetheria.Audio.sfxTalkBlip();
               window.Aetheria.UI.showToast(d.riddleText || "古老的機關銘文。");
               return;
             }
 
-            if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
-              if (s.solvedExplorePuzzles[mapObj.id]) {
-                window.Aetheria.UI.showToast("✨ 此處四象火盆陣已解開並永久鎖定！");
+            if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
+              if (isZoneExplorePuzzleSolved(mapObj, s)) {
+                const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
+                if (pChest) { Exp.harvestNode(pChest); return; }
+                window.Aetheria.UI.showToast("✨ 此處四象火盆陣已解開並領取過寶箱！");
                 return;
               }
               const nextOrder = (mapObj._brazierStep || 0) + 1;
@@ -2038,7 +2108,7 @@ window.Aetheria = window.Aetheria || {};
                   window.Aetheria.State.save();
                   window.Aetheria.Audio.sfxLevelUp();
                   window.Aetheria.UI.spawnFloatingText("🔓四象火盆共鳴!", "#5ac54f", true);
-                  window.Aetheria.UI.showToast("🎉 四象聖火順序完全正確！中央的【古遺跡機關寶箱】已解鎖！");
+                  window.Aetheria.UI.showToast("🎉 四象聖火順序完全正確！再按一次 A 鍵即可開啟中央【古遺跡機關寶箱】！");
                 } else {
                   window.Aetheria.UI.showToast("🔥 點燃【" + d.brazierLabel + "】(" + nextOrder + "/4)！請繼續點燃下一座！");
                 }
@@ -2051,9 +2121,11 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
-              if (s.solvedExplorePuzzles[mapObj.id]) {
-                window.Aetheria.UI.showToast("✨ 四方守衛石像已共鳴並永久鎖定！");
+            if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
+              if (isZoneExplorePuzzleSolved(mapObj, s)) {
+                const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
+                if (pChest) { Exp.harvestNode(pChest); return; }
+                window.Aetheria.UI.showToast("✨ 四方守衛石像已共鳴並領取過寶箱！");
                 return;
               }
               d.curDir = ((d.curDir || 0) + 1) % 4;
@@ -2064,16 +2136,18 @@ window.Aetheria = window.Aetheria || {};
                 window.Aetheria.State.save();
                 window.Aetheria.Audio.sfxLevelUp();
                 window.Aetheria.UI.spawnFloatingText("🔓石像方位共鳴!", "#5ac54f", true);
-                window.Aetheria.UI.showToast("🎉 四方石像方位完全吻合！中央的【古遺跡機關寶箱】已解鎖！");
+                window.Aetheria.UI.showToast("🎉 四方石像方位完全吻合！再按一次 A 鍵即可開啟中央【古遺跡機關寶箱】！");
               } else {
                 window.Aetheria.UI.showToast("🗿 旋轉【" + d.statueName + "】朝向為：" + DIR_SYMBOLS[d.curDir]);
               }
               return;
             }
 
-            if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46) {
-              if (s.solvedExplorePuzzles[mapObj.id]) {
-                window.Aetheria.UI.showToast("✨ 三連拉桿機關已解開並永久鎖定！");
+            if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
+              if (isZoneExplorePuzzleSolved(mapObj, s)) {
+                const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
+                if (pChest) { Exp.harvestNode(pChest); return; }
+                window.Aetheria.UI.showToast("✨ 三連拉桿機關已解開並領取過寶箱！");
                 return;
               }
               const allLevers = (mapObj.decos || []).filter(function(ld) { return ld.isPuzzleToggleLever; });
@@ -2090,7 +2164,7 @@ window.Aetheria = window.Aetheria || {};
                 window.Aetheria.State.save();
                 window.Aetheria.Audio.sfxLevelUp();
                 window.Aetheria.UI.spawnFloatingText("🔓三連拉桿解鎖!", "#5ac54f", true);
-                window.Aetheria.UI.showToast("🎉 三座連動拉桿全部開啟！中央的【古遺跡機關寶箱】已解鎖！");
+                window.Aetheria.UI.showToast("🎉 三座連動拉桿全部開啟！再按一次 A 鍵即可開啟中央【古遺跡機關寶箱】！");
               }
               return;
             }
@@ -2166,14 +2240,39 @@ window.Aetheria = window.Aetheria || {};
       Exp.updateContextHint = function(mapObj, s) {
         const hintEl = document.getElementById("a-btn-hint");
         if (hintEl && mapObj) {
+          if (mapObj.id === "camp_hub" && mapObj.portals) {
+            for (let pIdx = 0; pIdx < mapObj.portals.length; pIdx++) {
+              const pt = mapObj.portals[pIdx];
+              if (pt && (pt.targetZone === "tent_guild" || pt.targetZone === "tent_hero" || pt.targetZone === "tent_forge") &&
+                  Math.hypot(s.heroX - pt.x, s.heroY - pt.y) < 44) {
+                hintEl.innerText = "進入帳篷";
+                return;
+              }
+            }
+          }
+          const puzzleDone = isZoneExplorePuzzleSolved(mapObj, s);
+          if (mapObj.nodes) {
+            for (let j = 0; j < mapObj.nodes.length; j++) {
+              const n = mapObj.nodes[j];
+              if (!n || n.opened) continue;
+              if (n.isExplorePuzzleChest && Math.hypot(s.heroX - n.x, s.heroY - n.y) < (puzzleDone ? 78 : 44)) {
+                hintEl.innerText = "開啟秘寶箱";
+                return;
+              }
+              if (n.isBuriedSpot && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 42) {
+                hintEl.innerText = "鐵鏟挖寶";
+                return;
+              }
+            }
+          }
           if (mapObj.decos) {
             for (let i = 0; i < mapObj.decos.length; i++) {
               const d = mapObj.decos[i];
               if (!d) continue;
-              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 48) { hintEl.innerText = "閱讀古碑"; return; }
-              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46)  { hintEl.innerText = "點燃火盆"; return; }
-              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46)  { hintEl.innerText = "旋轉石像"; return; }
-              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 46)   { hintEl.innerText = "扳動拉桿"; return; }
+              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) { hintEl.innerText = "閱讀古碑"; return; }
+              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { hintEl.innerText = puzzleDone ? "開啟秘寶箱" : "點燃火盆"; return; }
+              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { hintEl.innerText = puzzleDone ? "開啟秘寶箱" : "旋轉石像"; return; }
+              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { hintEl.innerText = puzzleDone ? "開啟秘寶箱" : "扳動拉桿"; return; }
               if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
                 const open = Boolean(s.unlockedCrypts && s.unlockedCrypts[d.zoneId || mapObj.id]);
                 hintEl.innerText = open ? "進入遺跡" : "鑰匙開鎖";
@@ -2182,15 +2281,6 @@ window.Aetheria = window.Aetheria || {};
               if (d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
                 const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
                 hintEl.innerText = !rigged ? "架設繩梯" : (s.onHighland ? "爬下懸崖" : "爬上高台");
-                return;
-              }
-            }
-          }
-          if (mapObj.nodes) {
-            for (let j = 0; j < mapObj.nodes.length; j++) {
-              const n = mapObj.nodes[j];
-              if (n && !n.opened && n.isBuriedSpot && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 42) {
-                hintEl.innerText = "鐵鏟挖寶";
                 return;
               }
             }
@@ -2209,7 +2299,8 @@ window.Aetheria = window.Aetheria || {};
         }
 
         if (node && node.isExplorePuzzleChest) {
-          if (!s.solvedExplorePuzzles || !s.solvedExplorePuzzles[node.zoneId]) {
+          const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
+          if (!isZoneExplorePuzzleSolved(curMap, s)) {
             window.Aetheria.Audio.sfxWrong();
             window.Aetheria.UI.showToast("🔒 機關寶箱被結界鎖定！請先閱讀左上方的【📜古碑謎語】並解開周圍的現場機關！");
             return;
@@ -2383,6 +2474,7 @@ window.Aetheria = window.Aetheria || {};
 
           if (mapObj) {
             renderCompassMinimap(mapObj, s);
+            isZoneExplorePuzzleSolved(mapObj, s);
           }
 
           Object.keys(this.domPool.decos || {}).forEach(function(k) {
@@ -2521,7 +2613,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG All-Maps Fix v11.5 init error:", err);
+      console.error("Survival RPG All-Maps Fix v11.6 init error:", err);
     }
   }
 
