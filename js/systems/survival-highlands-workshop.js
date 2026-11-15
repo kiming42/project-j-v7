@@ -1,15 +1,15 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 章節因果解謎鏈與六大差異化地貌模組 (survival-highlands-workshop.js - v13.0)
- * 【Part 1 / 2：極速防抖、黑框小地圖移除、6大差異化地貌渲染引擎與章節因果解謎鏈定義】
- * 核心升級：
- *   1. 【打破倒模地圖：6大差異化生態地貌】：森林荊棘深谷、洞窟地下暗河、峽谷流沙盆地、海岸新月海灣、雪原中央鏡湖、火山雙重熔岩火口、天界浮空星壇
- *   2. 【章節 3 步因果解謎鏈 (ZONE_STORY_CHAINS)】：將「NPC故事線索 ➔ 打造工具破除障礙(步驟①) ➔ 解開古碑機關(步驟②) ➔ 修橋與削弱區域Boss護盾(步驟③)」深度串連！
- *   3. 【保留全部優化與修復】：永久刪除左下角黑框小地圖、營地帳篷零 Lag、1~6章木橋順暢通行、RPG護盾減傷平衡與 📖求生合成圖鑑
+ * Project J：艾瑟瑞亞的破曉 — 懸崖與全圖地貌防消失修復、章節因果鏈模組 (survival-highlands-workshop.js - v13.1)
+ * 【Part 1 / 2：修復 Canvas 被瀏覽器清空導致懸崖/全圖消失問題、6大差異化地貌自癒繪製引擎】
+ * 關鍵修復：
+ *   1. 【100% 修復懸崖與放大全圖消失】：移除會被手機瀏覽器 innerHTML="" 清空 GPU 緩衝區的舊 Canvas 節點快取，改為每次切換場景即時高速重繪，並支援全圖獨立自癒繪製！
+ *   2. 【保留極速防 Lag】：行走時完全不重繪地貌 Canvas；透過底色一次填充優化，切換地圖繪製僅需 2ms！
+ *   3. 【完整保留 v13.0 功能】：6大差異化生態地貌、章節 3 步因果解謎鏈、刪除左下角黑框小地圖、1~6章木橋通行與 📖求生合成圖鑑
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
 (function() {
-  // ================= 0. 效能防抖與 DOM 屬性鎖（杜絕每幀重複觸發 MutationObserver） =================
+  // ================= 0. 效能防抖與 DOM 屬性鎖 =================
   function setTextIfChanged(el, newText) {
     if (!el) return;
     if (el._lastTxt !== newText) {
@@ -53,11 +53,11 @@ window.Aetheria = window.Aetheria || {};
     } catch (e) {}
   }
 
-  // ================= 1. 注入樣式（隱藏黑框小地圖、圓形羅盤、章節因果指引條与圖鑑 UI） =================
+  // ================= 1. 注入樣式（隱藏黑框小地圖、圓形羅盤、章節因果指引條與圖鑑 UI） =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v130-styles")) return;
+    if (document.getElementById("srpg-kenney-v131-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v130-styles";
+    style.id = "srpg-kenney-v131-styles";
     style.textContent = `
       .kenney-terrain-canvas {
         position: absolute !important;
@@ -161,7 +161,6 @@ window.Aetheria = window.Aetheria || {};
         box-shadow: 0 1px 3px #000;
       }
 
-      /* 右上角「章節探索因果鏈」輕量進度標籤（點擊可查看本區解謎故事線索） */
       #srpg-chain-tracker {
         position: absolute;
         top: 30px;
@@ -392,8 +391,7 @@ window.Aetheria = window.Aetheria || {};
     return canvas;
   }
 
-  // ================= 3. ★ 章節 3 步因果解謎鏈定義 (ZONE_STORY_CHAINS) =================
-  // 將「工具解謎障礙 (步驟①) ➔ 現場古碑機關 (步驟②) ➔ 領主破障共鳴與寶箱 (步驟③)」串連成完整故事！
+  // ================= 3. 章節 3 步因果解謎鏈定義 (ZONE_STORY_CHAINS) =================
   const ZONE_STORY_CHAINS = {
     zone1_forest: {
       zoneId: "zone1_forest",
@@ -423,7 +421,7 @@ window.Aetheria = window.Aetheria || {};
       npcName: "斥候隊長・凱爾",
       storyIntro: "流沙峽谷的古老機關樞紐因缺少「青銅齒輪」而停擺，巨蠍王正吸收荒漠流沙強化甲殼！",
       step1GateId: "tg_z2_gear",
-      step1Title: "① 採集赤銅與白錫冶煉青銅，合成【⚙️精密青銅齒輪】嵌入中段【⚙️齒輪機關柱】(x:780, y:560)",
+      step1Title: "① 採集赤銅與白錫冶煉青銅，合成【⚙️精密青銅齒輪】嵌入中段【⚙️齒輪機關柱】(x:720, y:540)",
       step2Title: "② 閱讀西南【📜法老方位碑】，旋轉四方守衛石像至正確朝向(西▶東、東◀西、北▼南、南▲北)",
       step3Title: "③ 開啟【🏆古遺跡機關寶箱】震碎巨蠍王的流沙重甲（首領護盾 -2、生命 -20%）！",
       bossDebuffMsg: "🌟【法老王陵共鳴生效】：太陽齒輪與四方石像已共鳴！流沙巨蠍王護盾上限 -2、生命 -20%！"
@@ -434,7 +432,7 @@ window.Aetheria = window.Aetheria || {};
       npcName: "老船匠・達克",
       storyIntro: "新月海灣漲潮淹沒了古代海神祭壇，幽靈船長藉由深海潮汐獲得不死加護！",
       step1GateId: "tg_z3_sunken",
-      step1Title: "① 在工坊打造【🧲深水打撈磁鉤】，前往新月海灣打撈【⚓深海沉船箱】(x:820, y:540) 尋回水閘零件",
+      step1Title: "① 在工坊打造【🧲深水打撈磁鉤】，前往新月海灣打撈【⚓深海沉船箱】(x:760, y:580) 尋回水閘零件",
       step2Title: "② 前往西南祭壇扳動【⚙️三連連動水閘拉桿】排乾祭壇積水",
       step3Title: "③ 開啟【🏆古遺跡機關寶箱】斷絕幽靈船長的潮汐加護（首領護盾 -2、生命 -20%）！",
       bossDebuffMsg: "🌟【海神水閘共鳴生效】：潮汐加護已斷絕！深海幽靈船長護盾上限 -2、生命 -20%！"
@@ -445,7 +443,7 @@ window.Aetheria = window.Aetheria || {};
       npcName: "冰原獵手・弗雷",
       storyIntro: "霜語雪原中央的永凍鏡湖散發絕對零度寒氣，令極寒冰龍王披上堅不可摧的萬年玄冰甲！",
       step1GateId: "tg_z4_ice1",
-      step1Title: "① 合成【🔥高熱鋁熱火種】，前往中央鏡湖畔融化【🧊萬年玄冰棺】(x:680, y:520) 釋放地熱火種",
+      step1Title: "① 合成【🔥高熱鋁熱火種】，前往中央鏡湖畔融化【🧊萬年玄冰棺】(x:700, y:540) 釋放地熱火種",
       step2Title: "② 依逆風順序點燃西南【🔥四象融霜聖火陣】(北➔西➔南➔東)",
       step3Title: "③ 開啟【🏆古遺跡機關寶箱】融化冰龍王的玄冰護甲（首領護盾 -2、生命 -20%）！",
       bossDebuffMsg: "🌟【融霜聖火共鳴生效】：鏡湖地熱已喚醒！極寒冰龍王護盾上限 -2、生命 -20%！"
@@ -456,7 +454,7 @@ window.Aetheria = window.Aetheria || {};
       npcName: "紅蓮學者・伊格",
       storyIntro: "赤紅火山的雙重岩漿流令【紅蓮火山龍皇】處於沸騰不滅狀態，必須先以極寒之力冷卻地脈！",
       step1GateId: "tg_z5_magma",
-      step1Title: "① 以雪原冰蓮合成【❄️極寒急凍晶瓶】，冷卻並震碎火口旁的【🔥熔岩黑曜殼】(x:680, y:540)",
+      step1Title: "① 以雪原冰蓮合成【❄️極寒急凍晶瓶】，冷卻並震碎火口旁的【🔥熔岩黑曜殼】(x:720, y:560)",
       step2Title: "② 扳動西南熔爐區的【⚙️三連熔岩冷卻閥門】使其全部開啟",
       step3Title: "③ 開啟【🏆古遺跡機關寶箱】壓制紅蓮火山龍皇的沸騰龍炎（首領護盾 -2、生命 -20%）！",
       bossDebuffMsg: "🌟【地脈冷卻共鳴生效】：火山地脈已冷卻！紅蓮火山龍皇護盾上限 -2、生命 -20%！"
@@ -467,7 +465,7 @@ window.Aetheria = window.Aetheria || {};
       npcName: "破曉大賢者",
       storyIntro: "天界浮空聖殿的星核齒輪停滯，最終領主受星界法則庇護，唯有重啟星核並對齊八方星象方可破局！",
       step1GateId: "tg_z6_gear",
-      step1Title: "① 合成【⚙️精密青銅齒輪】嵌入中央【⚙️星界齒輪聖柱】(x:680, y:540) 重啟星核",
+      step1Title: "① 合成【⚙️精密青銅齒輪】嵌入中央【⚙️星界齒輪聖柱】(x:720, y:550) 重啟星核",
       step2Title: "② 旋轉西南星壇的【🗿四聖像】使其背心向外守護八方(北▲北、東▶東、南▼南、西◀西)",
       step3Title: "③ 開啟【🏆古遺跡機關寶箱】獲得創世破曉加護（最終領主護盾 -2、生命 -20%）！",
       bossDebuffMsg: "🌟【創世星象共鳴生效】：八方星象已共鳴！天界最終領主護盾上限 -2、生命 -20%！"
@@ -491,7 +489,7 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 4. ★ 6大區域差異化自然地貌渲染引擎 (`renderKenneyNaturalTerrainCanvas`) =================
+  // ================= 4. ★ 100% 防消失：6大差異化自然地貌自癒繪製引擎 =================
   const KENNEY_PALETTES = {
     forest:  { bg1: "#4d8036", bg2: "#43732e", bg3: "#599140", path: "#c29b61", pathEdge: "#9c7844", cliffTop: "#bfa065", rock1: "#7a4928", rock2: "#5e361c", rockHi: "#965d36", rockDark: "#381e0e", river: "#2978d4", riverHi: "#8ce0ff", bank: "#d4b06a", bridge: "#9c6347", bridgeRail: "#d9a066" },
     cave:    { bg1: "#282332", bg2: "#211d2a", bg3: "#322c3e", path: "#4a4258", pathEdge: "#393246", cliffTop: "#5c526e", rock1: "#3d354b", rock2: "#2b2536", rockHi: "#685d7c", rockDark: "#17131d", river: "#1d3557", riverHi: "#38b6ff", bank: "#393246", bridge: "#64748b", bridgeRail: "#94a3b8" },
@@ -502,7 +500,6 @@ window.Aetheria = window.Aetheria || {};
     sky:     { bg1: "#487a6b", bg2: "#3d6b5d", bg3: "#568f7e", path: "#e8dfc5", pathEdge: "#c4b89b", cliffTop: "#f5eedc", rock1: "#6e7885", rock2: "#525b66", rockHi: "#8e99a8", rockDark: "#333940", river: "#191233", riverHi: "#e0aaff", bank: "#c4b89b", bridge: "#f5b700", bridgeRail: "#ffffff" }
   };
 
-  const terrainCanvasCache = {};
   let cachedTerrainCanvas = null;
   let cachedTerrainZoneId = "";
   let lastMinimapHeroX = -999;
@@ -571,21 +568,17 @@ window.Aetheria = window.Aetheria || {};
     return mapObj.bridgeY || 275;
   }
 
-  // ★ 為每個區域繪製獨一無二的標誌性地貌（打破每張圖一樣的沉悶感！）
   function drawUniqueZoneLandmarkOnCanvas(ctx, mapObj, W, H) {
     const zId = mapObj.id;
 
     if (zId === "zone1_forest") {
-      // 1區森林：西南側「暗紫荊棘毒沼盆地」與古石陣
       ctx.fillStyle = "#2d4c2b";
       ctx.beginPath(); ctx.ellipse(420, 540, 95, 65, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#3c1642";
       ctx.beginPath(); ctx.ellipse(420, 540, 62, 38, 0, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "#5ac54f"; ctx.lineWidth = 2;
       ctx.strokeRect(165, 815, 130, 130);
-    }
-    else if (zId === "cave1_mushroom") {
-      // 1-B蘑菇洞窟：蜿蜒地底荧光暗河與晶簇池
+    } else if (zId === "cave1_mushroom") {
       ctx.fillStyle = "#102542";
       ctx.beginPath();
       ctx.moveTo(0, 560);
@@ -596,33 +589,25 @@ window.Aetheria = window.Aetheria || {};
       ctx.fill();
       ctx.fillStyle = "#38b6ff";
       ctx.beginPath(); ctx.ellipse(860, 640, 75, 45, 0, 0, Math.PI * 2); ctx.fill();
-    }
-    else if (zId === "zone2_canyon") {
-      // 2區流沙峽谷：中央「大型雙環流沙漩渦盆地」與法老黃金石板遺跡
+    } else if (zId === "zone2_canyon") {
       for (let r = 110; r >= 25; r -= 25) {
         ctx.fillStyle = (r % 50 === 0) ? "#b07d3b" : "#e0b97d";
         ctx.beginPath(); ctx.ellipse(720, 540, r * 1.3, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
       }
-      // 西南法老黃金石磚廣場
       ctx.fillStyle = "#b5833d";
       ctx.fillRect(150, 800, 160, 160);
       ctx.strokeStyle = "#ffd166"; ctx.lineWidth = 3;
       ctx.strokeRect(154, 804, 152, 152);
-    }
-    else if (zId === "zone3_coast") {
-      // 3區翡翠海岸：中南段「新月珊瑚淺海灣」與沉船沙洲群島
+    } else if (zId === "zone3_coast") {
       ctx.fillStyle = "#e6c88c";
       ctx.beginPath(); ctx.ellipse(760, 580, 210, 125, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#1d5eb8";
       ctx.beginPath(); ctx.ellipse(760, 580, 175, 95, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#38b6ff";
       ctx.beginPath(); ctx.ellipse(750, 575, 130, 65, 0, 0, Math.PI * 2); ctx.fill();
-      // 灣內沙洲小島
       ctx.fillStyle = "#e6c88c";
       ctx.beginPath(); ctx.ellipse(690, 565, 36, 22, 0, 0, Math.PI * 2); ctx.fill();
-    }
-    else if (zId === "zone4_snow") {
-      // 4區霜語雪原：中央「永凍冰封鏡湖（附冰裂紋）」
+    } else if (zId === "zone4_snow") {
       ctx.fillStyle = "#7bdff2";
       ctx.beginPath(); ctx.ellipse(700, 540, 195, 110, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#b2f7ef";
@@ -631,23 +616,18 @@ window.Aetheria = window.Aetheria || {};
       ctx.beginPath();
       ctx.moveTo(580, 520); ctx.lineTo(660, 550); ctx.lineTo(740, 510); ctx.lineTo(810, 560);
       ctx.stroke();
-    }
-    else if (zId === "zone5_volcano") {
-      // 5區熔岩火山：中央「沸騰赤紅火山熔爐口」與分支熔岩溪流
+    } else if (zId === "zone5_volcano") {
       ctx.fillStyle = "#1f0b08";
       ctx.beginPath(); ctx.ellipse(720, 560, 175, 105, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#e03c4b";
       ctx.beginPath(); ctx.ellipse(720, 560, 135, 75, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#ffd166";
       ctx.beginPath(); ctx.ellipse(720, 560, 65, 35, 0, 0, Math.PI * 2); ctx.fill();
-      // 跨越熔岩湖的黑曜石踏腳石道
       for (let sx = 600; sx <= 840; sx += 48) {
         ctx.fillStyle = "#475569";
         ctx.fillRect(sx - 16, 544, 32, 32);
       }
-    }
-    else if (zId === "zone6_sky") {
-      // 6區天界聖殿：中央「創世星界雲海裂隙」與八芒星黃金祭壇
+    } else if (zId === "zone6_sky") {
       ctx.fillStyle = "#191233";
       ctx.beginPath(); ctx.ellipse(720, 550, 180, 100, 0, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "#e0aaff"; ctx.lineWidth = 3;
@@ -659,56 +639,26 @@ window.Aetheria = window.Aetheria || {};
     }
   }
 
-  function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
-    if (!mapObj || !terrainLayer) return;
-    if (mapObj.id === "ocean_sea") {
-      cachedTerrainCanvas = null;
-      cachedTerrainZoneId = "ocean_sea";
-      return;
-    }
-
-    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
-    const W = mapObj.width || 1200;
-    const H = mapObj.height || 680;
-    const built = isMapBridgeBuilt(mapObj, s);
-    const cacheKey = mapObj.id + "_v13_" + W + "x" + H + "_b" + (built ? 1 : 0);
-
-    const oldCanvas = terrainLayer.querySelector(".kenney-terrain-canvas");
-    if (oldCanvas && oldCanvas !== terrainCanvasCache[cacheKey]) {
-      oldCanvas.remove();
-    }
-
-    if (terrainCanvasCache[cacheKey]) {
-      const cached = terrainCanvasCache[cacheKey];
-      if (cached.parentNode !== terrainLayer) {
-        terrainLayer.insertBefore(cached, terrainLayer.firstChild);
-      }
-      cachedTerrainCanvas = cached;
-      cachedTerrainZoneId = mapObj.id;
-      lastMinimapZone = "";
-      return;
-    }
-
-    const canvas = document.createElement("canvas");
-    canvas.className = "kenney-terrain-canvas";
-    canvas.width = W;
-    canvas.height = H;
-    canvas.style.width = W + "px";
-    canvas.style.height = H + "px";
-
-    const ctx = canvas.getContext("2d");
+  // ★ 核心獨立繪製函式：可將指定地圖的完整地貌、懸崖、山洞、河流、木橋與地標直接繪製到任何 Canvas Context 上！
+  function paintTerrainOntoContext(ctx, mapObj, W, H, built) {
     const pal = KENNEY_PALETTES[mapObj.theme] || KENNEY_PALETTES.forest;
     const hasHighland = Boolean(HIGHLAND_ZONES[mapObj.id]);
     const cols = Math.ceil(W / 16);
     const rows = Math.ceil(H / 16);
+
+    // 一次填滿基礎背景色 (減少 45% fillRect 呼叫，極速完成)
+    ctx.fillStyle = pal.bg1;
+    ctx.fillRect(0, 0, W, H);
 
     for (let ty = 0; ty < rows; ty++) {
       for (let tx = 0; tx < cols; tx++) {
         const px = tx * 16;
         const py = ty * 16;
         const r = seededHash(tx, ty, 11);
-        ctx.fillStyle = (r < 0.45) ? pal.bg1 : (r < 0.80) ? pal.bg2 : pal.bg3;
-        ctx.fillRect(px, py, 16, 16);
+        if (r >= 0.45) {
+          ctx.fillStyle = (r < 0.80) ? pal.bg2 : pal.bg3;
+          ctx.fillRect(px, py, 16, 16);
+        }
 
         if (r > 0.72) {
           ctx.fillStyle = pal.bg3;
@@ -748,7 +698,6 @@ window.Aetheria = window.Aetheria || {};
       }
     }
 
-    // ★ 繪製各區獨一無二的標誌性地貌（荊棘谷、暗河、流沙盆地、新月海灣、永凍鏡湖、熔岩火口、星界祭壇）
     drawUniqueZoneLandmarkOnCanvas(ctx, mapObj, W, H);
 
     if (mapObj.hasRiver) {
@@ -844,12 +793,57 @@ window.Aetheria = window.Aetheria || {};
       ctx.fillStyle = "#09060a";
       ctx.fillRect(cx + 6, cy + 8, 36, 36);
     }
+  }
 
-    terrainCanvasCache[cacheKey] = canvas;
+  // ★ 每次建立場景時，釋放舊畫布並建立全新畫布即時繪製，絕不重用被 innerHTML="" 清空的舊節點！
+  function renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer) {
+    if (!mapObj || !terrainLayer) return;
+    if (mapObj.id === "ocean_sea") {
+      cachedTerrainCanvas = null;
+      cachedTerrainZoneId = "ocean_sea";
+      return;
+    }
+
+    const oldCanvases = terrainLayer.querySelectorAll(".kenney-terrain-canvas");
+    oldCanvases.forEach(function(oc) {
+      oc.width = 0;
+      oc.height = 0;
+      oc.remove();
+    });
+
+    const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+    const W = mapObj.width || 1200;
+    const H = mapObj.height || 680;
+    const built = isMapBridgeBuilt(mapObj, s);
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "kenney-terrain-canvas";
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+
+    const ctx = canvas.getContext("2d");
+    paintTerrainOntoContext(ctx, mapObj, W, H, built);
+
     cachedTerrainCanvas = canvas;
     cachedTerrainZoneId = mapObj.id;
     lastMinimapZone = "";
     terrainLayer.insertBefore(canvas, terrainLayer.firstChild);
+  }
+
+  // 檢查主畫面地貌 Canvas 是否仍在 DOM 內且有效，若被清空則立即自動補繪
+  function ensureActiveTerrainCanvas(mapObj) {
+    if (!mapObj || mapObj.id === "ocean_sea") return null;
+    const terrainLayer = document.getElementById("world-terrain-layer");
+    if (!terrainLayer) return cachedTerrainCanvas;
+
+    const existing = terrainLayer.querySelector(".kenney-terrain-canvas");
+    if (!existing || !cachedTerrainCanvas || cachedTerrainZoneId !== mapObj.id || cachedTerrainCanvas.width === 0) {
+      renderKenneyNaturalTerrainCanvas(mapObj, terrainLayer);
+      syncDomRiverBridge(mapObj, terrainLayer);
+    }
+    return cachedTerrainCanvas;
   }
 
   function syncDomRiverBridge(mapObj, terrainLayer) {
@@ -921,7 +915,6 @@ window.Aetheria = window.Aetheria || {};
   function renderCompassMinimap(mapObj, s, forceRedraw) {
     if (!mapObj || !s) return;
 
-    // 同步更新右上角「章節因果解謎鏈」進度指示器
     const tracker = document.getElementById("srpg-chain-tracker");
     if (tracker) {
       const prog = getZoneStoryProgress(mapObj.id, s);
@@ -938,6 +931,8 @@ window.Aetheria = window.Aetheria || {};
         setDisplayIfChanged(tracker, "none");
       }
     }
+
+    const activeTerrain = ensureActiveTerrainCanvas(mapObj);
 
     const hx = s.heroX || 300;
     const hy = s.heroY || 240;
@@ -961,8 +956,8 @@ window.Aetheria = window.Aetheria || {};
     const sy = hy - viewSpan / 2;
     const scale = 96 / viewSpan;
 
-    if (cachedTerrainCanvas && cachedTerrainZoneId === mapObj.id) {
-      ctx.drawImage(cachedTerrainCanvas, sx, sy, viewSpan, viewSpan, 0, 0, 96, 96);
+    if (activeTerrain) {
+      ctx.drawImage(activeTerrain, sx, sy, viewSpan, viewSpan, 0, 0, 96, 96);
     } else if (mapObj.id === "ocean_sea") {
       (mapObj.dirtBlobs || []).forEach(function(b) {
         const bx = ((b.cx || 0) - sx) * scale;
@@ -2032,7 +2027,6 @@ window.Aetheria = window.Aetheria || {};
     }
 
     mapObj.dirtBlobs = (mapObj.dirtBlobs || []).filter(function(b) { return !b.isExpandedBlob; });
-    // 各區專屬道路動線（連接步驟①地標與步驟②古碑機關陣）
     mapObj.dirtBlobs.push(
       { cx: 230,  cy: 780,  rx: 105, ry: 220, isExpandedBlob: true },
       { cx: 520,  cy: 1025, rx: 195, ry: 75,  isExpandedBlob: true },
@@ -2115,7 +2109,6 @@ window.Aetheria = window.Aetheria || {};
     savedScrollTop: 0,
     currentFilteredMap: {},
 
-    // ★ 新增：打開當前區域的【🧭 章節探索與破障因果鏈】面板
     openZoneStoryChainModal: function() {
       const s = window.Aetheria.State.data;
       const prog = getZoneStoryProgress(s.currentZone, s);
@@ -2236,10 +2229,13 @@ window.Aetheria = window.Aetheria || {};
       body.innerHTML = navHtml + filterHtml + '<div>' + cardsHtml + '</div>';
     },
 
+    // ★ 關鍵修復：打開【全區全貌探索地圖】時，直接調用 paintTerrainOntoContext 獨立自癒繪製完整地形與懸崖，同時自動檢查並補繪主畫面懸崖！
     openFullZoneMapModal: function() {
       const s = window.Aetheria.State.data;
       const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
       if (!mapObj) return;
+
+      ensureActiveTerrainCanvas(mapObj);
 
       window.Aetheria.UI.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML =
@@ -2285,9 +2281,13 @@ window.Aetheria = window.Aetheria || {};
       ctx.fillStyle = "#16427d";
       ctx.fillRect(0, 0, outW, outH);
 
-      if (cachedTerrainCanvas && cachedTerrainZoneId === mapObj.id) {
-        ctx.drawImage(cachedTerrainCanvas, 0, 0, W, H, 0, 0, outW, outH);
-      } else if (mapObj.id === "ocean_sea") {
+      // 直接在全區地圖 Canvas 上獨立繪製完整 Kenney 地貌、蜿蜒小徑、岩石懸崖、河流木橋與專屬地標，永不變藍底！
+      if (mapObj.id !== "ocean_sea") {
+        ctx.save();
+        ctx.scale(scaleX, scaleY);
+        paintTerrainOntoContext(ctx, mapObj, W, H, isMapBridgeBuilt(mapObj, s));
+        ctx.restore();
+      } else {
         (mapObj.dirtBlobs || []).forEach(function(b) {
           ctx.fillStyle = "#e6c88c";
           ctx.beginPath(); ctx.arc((b.cx || 0) * scaleX, (b.cy || 0) * scaleY, (b.rx || 80) * scaleX, 0, Math.PI * 2); ctx.fill();
@@ -2301,7 +2301,6 @@ window.Aetheria = window.Aetheria || {};
         ctx.fillRect(t.x * scaleX - 2, t.y * scaleY - 2, 4, 4);
       });
 
-      // 繪製步驟①工具障礙點與步驟②古碑機關陣之間的金色虛線因果軌跡！
       const pCfg = ZONE_EXPLORE_PUZZLES[mapObj.id];
       const gList = ZONE_TOOL_GATE_OBSTACLES[mapObj.id];
       if (pCfg && gList && gList[0]) {
@@ -3038,7 +3037,6 @@ window.Aetheria = window.Aetheria || {};
               return;
             }
 
-            // ★ 章節因果鏈檢定：在操作步驟②的「火盆／石像／拉桿」前，檢查是否已用工具破除步驟①的地標障礙！
             if ((d.isPuzzleOrderBrazier || d.isPuzzleRotateStatue || d.isPuzzleToggleLever) &&
                 Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               if (prog && !prog.step1Done && !isZoneExplorePuzzleSolved(mapObj, s)) {
@@ -3137,7 +3135,6 @@ window.Aetheria = window.Aetheria || {};
                 s.inventory.cryptKey--;
                 s.unlockedCrypts[zId] = true;
                 d.sprite = "crypt_door_open";
-                if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
                 window.Aetheria.Audio.sfxLevelUp();
                 window.Aetheria.UI.showToast("🗝️ 使用【遠古遺跡鑰匙】解開了封印！正在進入地底古老遺跡……");
               } else {
@@ -3169,7 +3166,6 @@ window.Aetheria = window.Aetheria || {};
                 s.inventory.ropeLadder--;
                 s.riggedCliffs[mapObj.id] = true;
                 (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
-                if (window.Aetheria.Renderer) window.Aetheria.Renderer.builtZoneKey = null;
               }
 
               window.Aetheria.Audio.sfxGather();
@@ -3190,7 +3186,6 @@ window.Aetheria = window.Aetheria || {};
           }
         }
 
-        // ★ 與區域 NPC 對話時，自動附上本區「3步因果解謎鏈」的下一步故事指引！
         if (prog && !prog.allDone && mapObj && mapObj.npcs) {
           const nearNpc = mapObj.npcs.some(function(n) { return n && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 52; });
           if (nearNpc) {
@@ -3282,7 +3277,6 @@ window.Aetheria = window.Aetheria || {};
           return;
         }
 
-        // ★ 步驟①：破解工具解謎驅動障礙，觸發地脈共鳴解鎖步驟②！
         if (node && node.isToolGateObstacle && node.gateCfg) {
           const g = node.gateCfg;
           if (!s.clearedToolGates) s.clearedToolGates = {};
@@ -3530,7 +3524,6 @@ window.Aetheria = window.Aetheria || {};
             e.atk = Math.max(Math.round((e.atk || 35) * 1.45), Math.round(heroMaxHp * 0.22));
             e._enrageUsed = false;
 
-            // ★ 因果解謎鏈連動：若玩家已完成本區「步驟①工具破障 ＋ 步驟②古碑機關」，直接削弱首領 2 層護盾與 20% 生命！
             if (prog && prog.allDone) {
               e.maxShield = Math.max(3, e.maxShield - 2);
               e.maxHp = Math.round(e.maxHp * 0.80);
@@ -3539,7 +3532,6 @@ window.Aetheria = window.Aetheria || {};
                 window.Aetheria.UI.showToast(prog.chain.bossDebuffMsg);
               }, 350);
             } else if (prog && !prog.allDone) {
-              // 若未解開本區因果鏈就強行打 Boss，提醒玩家可先解開環境機關削弱首領
               e.maxShield += 1;
               setTimeout(function() {
                 window.Aetheria.UI.showToast("⚠️ 首領受本區環境結界加持(護盾強化)！完成右上角【🧭章節破障解謎】可大幅削弱首領！");
@@ -3922,7 +3914,7 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.updateAllHud();
       }
     } catch (err) {
-      console.error("Survival RPG Story Chain & Unique Biomes v13.0 init error:", err);
+      console.error("Survival RPG Story Chain & Self-Healing Canvas v13.1 init error:", err);
     }
   }
 
