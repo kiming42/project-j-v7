@@ -1,12 +1,13 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 主線強制因果鎖定與六大差異化地貌模組 (survival-highlands-workshop.js - v13.2)
- * 【Part 1 / 2：主線強制鎖鑰定義、下屏主線任務框同步、地貌自癒渲染引擎】
+ * Project J：艾瑟瑞亞的破曉 — 小四小五直覺解謎與下半屏按鍵鎖死模組 (survival-highlands-workshop.js - v13.3)
+ * 【Part 1 / 2：鎖死下半屏方向鍵與A鍵位置、自癒地貌渲染引擎、小四小五友善解謎設定】
  * 核心修正：
- *   1. 【100% 強制解謎才可推進主線】：
- *      - 未完成本區「①工具破障 ➔ ②古碑機關 ➔ ③開啟破障寶箱取得破障聖物」前，無法修復過河橋樑、無法點亮封印柱！
- *      - 守關 Boss 帶有【🛡️無敵結界】，未完成 3 步破障解謎直接觸碰 Boss 會被結界彈開並彈出解謎指引，徹底杜絕跳過解謎直接打王！
- *   2. 【直接串連下屏主線任務框】：未完成本區破障前，下屏主線任務欄會直接顯示當前必須完成的解謎步驟與故事原因
- *   3. 【保留 v13.1 全部修復】：懸崖與放大全圖永不消失、移除左下角黑框小地圖、營地帳篷零 Lag、📖求生合成圖鑑
+ *   1. 【100% 鎖死方向鍵與 A 鍵位置】：固定中間任務框高度 (74px)，並將方向鍵、A鍵與快捷鍵永久鎖定在下半框底部同一座標，絕不移位或切邊！
+ *   2. 【小四小五學生友善解謎難度】：
+ *      - 火盆直接標示數字「① ➔ ② ➔ ③ ➔ ④」，按順序點燃即過關
+ *      - 拉桿改為「獨立開關」，3 個推成「🟢開」即過關（取消複雜連動）
+ *      - 石像直接標示目標方向「[轉去▶東]」，轉對即變綠色「✅」
+ *      - 解謎工具配方簡化為「原木/枯枝/燧石/鐵礦」1步合成，且不卡主線工程牌，解開即送當區主線建材！
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -55,11 +56,58 @@ window.Aetheria = window.Aetheria || {};
     } catch (e) {}
   }
 
-  // ================= 1. 注入樣式 =================
+  // ★ 關鍵修復2：強制鎖死下半框（#lower-screen）的任務框高度，以及方向鍵與 A 鍵的絕對位置！
+  function lockLowerScreenControlsPosition() {
+    const lower = document.getElementById("lower-screen") || document.getElementById("panel-explore");
+    if (!lower) return;
+
+    // 移除上一版會撐高任務框的紅框提示條
+    const oldLockBar = document.getElementById("srpg-main-quest-lock-bar");
+    if (oldLockBar && oldLockBar.parentNode) {
+      oldLockBar.parentNode.removeChild(oldLockBar);
+    }
+
+    // 找出包含 A 鍵提示 (#a-btn-hint) 的底部操控區容器，以及中間的任務追蹤框
+    const aHint = document.getElementById("a-btn-hint");
+    if (aHint) {
+      let ctrlRow = aHint.parentElement;
+      while (ctrlRow && ctrlRow.parentElement && ctrlRow.parentElement !== lower && ctrlRow.parentElement.id !== "panel-explore") {
+        ctrlRow = ctrlRow.parentElement;
+      }
+      if (ctrlRow && ctrlRow.parentElement) {
+        const parentBox = ctrlRow.parentElement;
+        parentBox.style.setProperty("position", "relative", "important");
+        parentBox.style.setProperty("overflow", "hidden", "important");
+
+        // 將操控區（方向鍵 + A鍵 + 四個道具鍵）永久鎖死在下半框底部固定座標！
+        ctrlRow.style.setProperty("position", "absolute", "important");
+        ctrlRow.style.setProperty("left", "8px", "important");
+        ctrlRow.style.setProperty("right", "8px", "important");
+        ctrlRow.style.setProperty("bottom", "6px", "important");
+        ctrlRow.style.setProperty("height", "118px", "important");
+        ctrlRow.style.setProperty("margin", "0", "important");
+        ctrlRow.style.setProperty("z-index", "25", "important");
+
+        // 將中間的米黃色任務框固定高度，多字時內部可捲動，絕不往下擠壓方向鍵！
+        const prevSibling = ctrlRow.previousElementSibling;
+        if (prevSibling) {
+          prevSibling.style.setProperty("height", "74px", "important");
+          prevSibling.style.setProperty("max-height", "74px", "important");
+          prevSibling.style.setProperty("min-height", "74px", "important");
+          prevSibling.style.setProperty("overflow-y", "auto", "important");
+          prevSibling.style.setProperty("margin-bottom", "0", "important");
+          prevSibling.style.setProperty("padding", "5px 8px", "important");
+          prevSibling.style.setProperty("box-sizing", "border-box", "important");
+        }
+      }
+    }
+  }
+
+  // ================= 1. 注入樣式（鎖死下半框操控區、隱藏黑框小地圖、圓形羅盤与圖鑑 UI） =================
   function injectSurvivalRpgStyles() {
-    if (document.getElementById("srpg-kenney-v132-styles")) return;
+    if (document.getElementById("srpg-kenney-v133-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-kenney-v132-styles";
+    style.id = "srpg-kenney-v133-styles";
     style.textContent = `
       .kenney-terrain-canvas {
         position: absolute !important;
@@ -81,6 +129,16 @@ window.Aetheria = window.Aetheria || {};
       #world-terrain-layer .dom-coast-beach { z-index: 2 !important; }
       #world-terrain-layer .dom-coast-sea   { z-index: 3 !important; }
       #world-terrain-layer .dom-wooden-pier { z-index: 4 !important; }
+
+      /* ★ 固定下半屏任務框高度，防止長文字將方向鍵與 A 鍵推離畫面 */
+      #quest-tracker, #quest-banner, #quest-box, .quest-tracker-box {
+        height: 74px !important;
+        max-height: 74px !important;
+        min-height: 74px !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+        padding: 5px 8px !important;
+      }
 
       /* 永久隱藏並移走原版黑框點陣小地圖 */
       #minimap-box, #minimap, #minimap-canvas, #hud-minimap, .minimap-box, .minimap-container {
@@ -168,9 +226,9 @@ window.Aetheria = window.Aetheria || {};
         top: 30px;
         right: 6px;
         z-index: 18;
-        background: rgba(92, 29, 36, 0.92);
+        background: rgba(29, 53, 87, 0.92);
         color: #ffd166;
-        border: 1.5px solid #ff758f;
+        border: 1.5px solid #38b6ff;
         border-radius: 6px;
         padding: 3px 8px;
         font-size: 10.5px;
@@ -184,27 +242,6 @@ window.Aetheria = window.Aetheria || {};
         border-color: #5ac54f;
         color: #5ac54f;
         background: rgba(20, 42, 30, 0.92);
-      }
-
-      /* 下屏主線強制破障提示條 */
-      #srpg-main-quest-lock-bar {
-        background: linear-gradient(90deg, #4a151b 0%, #2b1116 100%);
-        border: 1.5px solid #ff595e;
-        border-radius: 6px;
-        padding: 4px 8px;
-        margin-top: 4px;
-        color: #ffd166;
-        font-size: 11px;
-        font-weight: 900;
-        cursor: pointer;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      #srpg-main-quest-lock-bar.unlocked {
-        background: linear-gradient(90deg, #183a27 0%, #12261b 100%);
-        border-color: #5ac54f;
-        color: #a3f7b5;
       }
 
       .fullmap-stage-wrap {
@@ -321,7 +358,7 @@ window.Aetheria = window.Aetheria || {};
     document.head.appendChild(style);
   }
 
-  // ================= 2. 徹底移除左下角黑框小地圖 ＆ 掛載唯一圓形羅盤与右上角章節因果指引 =================
+  // ================= 2. 徹底移除左下角黑框小地圖 ＆ 掛載唯一圓形羅盤 =================
   let cachedCompassCanvas = null;
 
   function hideLegacyBlackMinimap() {
@@ -354,6 +391,8 @@ window.Aetheria = window.Aetheria || {};
 
   function mountGuaranteedCompassWidget() {
     hideLegacyBlackMinimap();
+    lockLowerScreenControlsPosition();
+
     const upper = document.getElementById("upper-screen");
     if (!upper) return null;
 
@@ -414,126 +453,101 @@ window.Aetheria = window.Aetheria || {};
     return canvas;
   }
 
-  // ================= 3. ★ 主線強制綁定：章節 3 步因果解謎鏈定義 (ZONE_STORY_CHAINS) =================
-  // 未完成全部 3 步 (step3Done === true) 前：
-  //   1. 無法修復過河橋樑 / 無法啟動南北封印柱
-  //   2. 守關 Boss 處於【🛡️無敵結界】狀態，觸碰時直接被結界彈開並彈出解謎步驟視窗！
+  // ================= 3. ★ 小四小五學生友善版：章節趣味尋寶解謎提示 (ZONE_STORY_CHAINS) =================
+  // 解謎步驟自由順序、直接提示答案方向/數字，且完成即送「當區主線修橋/起塔建材」與「削弱首領 2 層護盾」！
   const ZONE_STORY_CHAINS = {
     zone1_forest: {
       zoneId: "zone1_forest",
-      title: "第一章主線・破除迷霧森林荊棘詛咒",
+      title: "第一章尋寶・森林火盆與荊棘秘寶",
       npcName: "斥候・里奧",
       relicName: "【翠風破障聖印】",
-      storyIntro: "千年腐化樹妖王以「魔界荊棘」纏死了斷橋，並展開【無敵結界】！不先斬除荊棘並點燃四象淨化火盆取得【翠風破障聖印】，根本無法修橋或傷到樹妖王分毫！",
+      storyIntro: "只要解開森林西南邊的「①➔④ 數字火盆」或用「除荊鐮刀」斬開荊棘，就能直接獲得修橋用的【厚木板】並削弱樹妖王 2 層護盾！",
       step1GateId: "tg_z1_briar",
-      step1Short: "① 造【除荊鐮刀】斬開荊棘魔藤(x:420,y:540)",
-      step2Short: "② 依序點燃西南【四象火盆】(東➔南➔西➔北)",
-      step3Short: "③ 開啟機關寶箱取得【翠風破障聖印】解鎖修橋與Boss戰",
-      step1Title: "① 先爬上南側高台或進山洞採集赤銅礦與白錫礦 ➔ 於工坊合成【✂️除荊開路鐮刀】 ➔ 斬開西南荊棘谷的【🌿荊棘魔藤】(x:420, y:540)",
-      step2Title: "② 依古碑日出至星夜順序點燃西南【🔥四象淨化火盆】(東之晨➔南之日➔西之霞➔北之星)",
-      step3Title: "③ 開啟中央【🏆古遺跡機關寶箱】取得【翠風破障聖印】，即可修橋過河並破除樹妖王的無敵結界！",
-      bossDebuffMsg: "🌟【翠風破障聖印共鳴】：樹妖王的無敵結界已粉碎，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：在【工坊】用「原木x1+燧石x1」做把【✂️除荊鐮刀】，斬開(x:420, y:540)的【🌿荊棘魔藤】（直接送修橋厚木板x3！）",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:880)，順着數字點燃【🔥火盆① ➔ 🔥火盆② ➔ 🔥火盆③ ➔ 🔥火盆④】",
+      step3Title: "💡 趣味尋寶③：打開中間的【🏆古遺跡機關寶箱】，永久生命 +15 並削弱樹妖王 2 層護盾！",
+      bossDebuffMsg: "🌟【森林尋寶加成】：樹妖王護盾上限已削弱 -2！"
     },
     cave1_mushroom: {
       zoneId: "cave1_mushroom",
-      title: "第一章支線・幽窟暗河與冰封秘銀脈",
+      title: "第二章尋寶・幽窟拉桿與玄冰秘銀",
       npcName: "矮人探勘員",
       relicName: "【幽窟破障聖印】",
-      storyIntro: "蘑菇洞窟深處被寒氣與暗河水閘封鎖，首領受暗河結界保護處於【無敵狀態】！",
+      storyIntro: "將左下角 3 個拉桿都推成「🟢開啟」，或者用「高熱火種(枯枝x2+燧石x1)」融化玄冰，就能免費獲得起燈塔要用的【流沙秘銀與玄武岩】！",
       step1GateId: "tg_c1_ice",
-      step1Short: "① 造【高熱鋁熱火種】融化玄冰晶殼(x:860,y:640)",
-      step2Short: "② 扳動西南【三連連動機括拉桿】使其全亮綠",
-      step3Short: "③ 開啟機關寶箱取得【幽窟破障聖印】解除首領無敵",
-      step1Title: "① 在工坊以木炭、鐵礦與松脂調配【🔥高熱鋁熱火種】 ➔ 融化洞窟中段的【🧊玄冰晶殼】(x:860, y:640)",
-      step2Title: "② 扳動西南暗河畔的【⚙️三連連動機括拉桿】使其全數亮綠開啟",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【幽窟破障聖印】，解除洞窟首領的無敵結界！",
-      bossDebuffMsg: "🌟【幽窟破障聖印共鳴】：洞窟首領無敵結界已解除，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：在【工坊】用「枯枝x2+燧石x1」做【🔥高熱火種】，融化(x:860, y:640)的【🧊玄冰晶殼】（直接送流沙秘銀x2！）",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:860)，將 3 個拉桿都按成【🟢開】",
+      step3Title: "💡 趣味尋寶③：打開【🏆古遺跡機關寶箱】領取玄武岩、秘銀與遺跡鑰匙！",
+      bossDebuffMsg: "🌟【幽窟尋寶加成】：洞窟首領護盾上限已削弱 -2！"
     },
     zone2_canyon: {
       zoneId: "zone2_canyon",
-      title: "第二章主線・法老王陵與卡死的吊橋絞盤",
+      title: "第二章尋寶・四方石像與齒輪秘寶",
       npcName: "斥候隊長・凱爾",
       relicName: "【法老太陽聖印】",
-      storyIntro: "流沙峽谷的吊橋絞盤因缺少「青銅齒輪」而卡死，且流沙巨蠍王披着【無敵流沙重甲】！必須先啟動齒輪柱並共鳴四方石像取得【法老太陽聖印】，才能修好吊橋並擊穿蠍王重甲！",
+      storyIntro: "按照左下角 4 座石像頭頂寫住的「目標方向」轉好石像，就能直接獲得修吊橋用的【強化麻繩與秘銀鋼索】！",
       step1GateId: "tg_z2_gear",
-      step1Short: "① 造【精密青銅齒輪】嵌入中央齒輪柱(x:720,y:540)",
-      step2Short: "② 旋轉西南【四方石像】(西▶東,東◀西,北▼南,南▲北)",
-      step3Short: "③ 開啟機關寶箱取得【法老太陽聖印】解鎖吊橋與Boss戰",
-      step1Title: "① 採集赤銅與白錫冶煉青銅錠 ➔ 合成【⚙️精密青銅齒輪】嵌入流沙盆地的【⚙️齒輪機關柱】(x:720, y:540)",
-      step2Title: "② 閱讀西南【📜法老方位碑】，旋轉四方守衛石像至正確朝向(西▶東、東◀西、北▼南、南▲北)",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【法老太陽聖印】，解鎖峽谷吊橋並震碎巨蠍王的無敵重甲！",
-      bossDebuffMsg: "🌟【法老太陽聖印共鳴】：流沙巨蠍王的無敵重甲已粉碎，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：在【工坊】用「鐵礦x1+燧石x1」做【⚙️精密齒輪】，放入中央(x:720, y:540)的【⚙️齒輪柱】（送麻繩與秘銀！）",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:880)，按 A 鍵轉動 4 座石像，令每座石像頭頂都變成綠色【✅】",
+      step3Title: "💡 趣味尋寶③：打開中央【🏆古遺跡機關寶箱】，削弱流沙巨蠍王 2 層護盾！",
+      bossDebuffMsg: "🌟【法老尋寶加成】：流沙巨蠍王護盾上限已削弱 -2！"
     },
     zone3_coast: {
       zoneId: "zone3_coast",
-      title: "第三章主線・新月沉船灣與退潮水閘",
+      title: "第三章尋寶・海灣沉船箱與水閘開關",
       npcName: "老船匠・達克",
       relicName: "【海神退潮聖印】",
-      storyIntro: "新月海灣漲潮淹沒了暗礁航道，且深海幽靈船長受【無敵潮汐結界】庇護！必須先打撈沉船水閘零件並扳動退潮拉桿取得【海神退潮聖印】，才能渡河並破除船長的不死結界！",
+      storyIntro: "用「打撈磁鉤」釣起海灣的沉船寶箱，再將左下角 3 個水閘拉桿按成「🟢開」，就能獲得造大船要用的【幽靈古帆布與海妖核心】！",
       step1GateId: "tg_z3_sunken",
-      step1Short: "① 造【深水打撈磁鉤】打撈海灣沉船箱(x:760,y:580)",
-      step2Short: "② 扳動西南【三連退潮水閘拉桿】使其全亮綠",
-      step3Short: "③ 開啟機關寶箱取得【海神退潮聖印】解鎖渡河與Boss戰",
-      step1Title: "① 在工坊打造【🧲深水打撈磁鉤】 ➔ 前往新月海灣打撈【⚓深海沉船箱】(x:760, y:580) 尋回水閘零件",
-      step2Title: "② 前往西南祭壇扳動【⚙️三連連動水閘拉桿】使其全部開啟排乾積水",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【海神退潮聖印】，解鎖渡河並破除幽靈船長的不死結界！",
-      bossDebuffMsg: "🌟【海神退潮聖印共鳴】：幽靈船長的不死潮汐結界已斷絕，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：在【工坊】用「鐵礦x1+藤蔓x1」做【🧲深水打撈磁鉤】，去海灣(x:760, y:580)撈起【⚓沉船箱】",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:880)，將 3 個水閘拉桿都按成【🟢開】",
+      step3Title: "💡 趣味尋寶③：打開【🏆古遺跡機關寶箱】，削弱深海幽靈船長 2 層護盾！",
+      bossDebuffMsg: "🌟【海神尋寶加成】：深海幽靈船長護盾上限已削弱 -2！"
     },
     zone4_snow: {
       zoneId: "zone4_snow",
-      title: "第四章主線・永凍鏡湖與逆風融霜聖火",
+      title: "第四章尋寶・鏡湖玄冰與數字聖火",
       npcName: "冰原獵手・弗雷",
       relicName: "【融霜地熱聖印】",
-      storyIntro: "霜語雪原受鏡湖絕對零度冰封，極寒冰龍王披着【無敵萬年玄冰甲】！必須先融化鏡湖玄冰棺並點燃四象融霜聖火取得【融霜地熱聖印】，才能建屋渡河並融化冰龍王的無敵冰甲！",
+      storyIntro: "順着數字「①➔②➔③➔④」點燃左下角的融霜火盆，就能獲得起避難屋要用的【禦寒獸毛氈】並削弱冰龍王！",
       step1GateId: "tg_z4_ice1",
-      step1Short: "① 造【高熱鋁熱火種】融化鏡湖玄冰棺(x:700,y:540)",
-      step2Short: "② 逆風點燃西南【四象融霜火盆】(北➔西➔南➔東)",
-      step3Short: "③ 開啟機關寶箱取得【融霜地熱聖印】解鎖冰龍Boss戰",
-      step1Title: "① 合成【🔥高熱鋁熱火種】 ➔ 前往中央鏡湖畔融化【🧊萬年玄冰棺】(x:700, y:540) 釋放地熱火種",
-      step2Title: "② 依逆風順序點燃西南【🔥四象融霜聖火陣】(北之極光➔西之寒星➔南之暖陽➔東之破曉)",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【融霜地熱聖印】，破除極寒冰龍王的無敵玄冰甲！",
-      bossDebuffMsg: "🌟【融霜地熱聖印共鳴】：極寒冰龍王的無敵玄冰甲已融化，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：用「枯枝x2+燧石x1」合成【🔥高熱火種】，去中央鏡湖(x:700, y:540)融化【🧊萬年玄冰棺】（送禦寒獸毛氈！）",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:880)，順着數字點燃【🔥火盆① ➔ 🔥火盆② ➔ 🔥火盆③ ➔ 🔥火盆④】",
+      step3Title: "💡 趣味尋寶③：打開【🏆古遺跡機關寶箱】，削弱極寒冰龍王 2 層護盾！",
+      bossDebuffMsg: "🌟【融霜尋寶加成】：極寒冰龍王護盾上限已削弱 -2！"
     },
     zone5_volcano: {
       zoneId: "zone5_volcano",
-      title: "第五章主線・雙重熔岩火口與急凍冷卻閥",
+      title: "第五章尋寶・火山急凍瓶與冷卻開關",
       npcName: "紅蓮學者・伊格",
       relicName: "【地脈冷卻聖印】",
-      storyIntro: "火山岩漿河溫度過高，直接鋪設耐火石拱橋會瞬間融化，且紅蓮火山龍皇處於【無敵沸騰龍炎】狀態！必須先用急凍晶瓶冷卻火口並開啟三連冷卻閥取得【地脈冷卻聖印】，才可鋪橋及挑戰龍皇！",
+      storyIntro: "用「急凍晶瓶」冷卻火山口，再將左下角 3 個冷卻拉桿按成「🟢開」，就能直接獲得鋪橋用的【黑曜耐火磚x3 與 炎魔熔核】！",
       step1GateId: "tg_z5_magma",
-      step1Short: "① 造【極寒急凍晶瓶】震碎火口熔岩殼(x:720,y:560)",
-      step2Short: "② 扳動西南【三連熔岩冷卻閥門】使其全亮綠",
-      step3Short: "③ 開啟機關寶箱取得【地脈冷卻聖印】解鎖鋪橋與龍皇戰",
-      step1Title: "① 以雪原冰蓮合成【❄️極寒急凍晶瓶】 ➔ 冷卻並震碎中央火口的【🔥熔岩黑曜殼】(x:720, y:560)",
-      step2Title: "② 扳動西南熔爐區的【⚙️三連熔岩冷卻閥門】使其全部開啟降溫",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【地脈冷卻聖印】，即可鋪設黑曜耐火石拱橋並解除火山龍皇的無敵龍炎！",
-      bossDebuffMsg: "🌟【地脈冷卻聖印共鳴】：紅蓮火山龍皇的無敵沸騰龍炎已壓制，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：在【工坊】用「冰蓮x1+黏土x1」做【❄️極寒急凍晶瓶】，去中央(x:720, y:560)震碎【🔥熔岩晶殼】（直接送耐火磚x3+熔核！）",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:880)，將 3 個熔岩閥門拉桿都按成【🟢開】",
+      step3Title: "💡 趣味尋寶③：打開【🏆古遺跡機關寶箱】，削弱紅蓮火山龍皇 2 層護盾！",
+      bossDebuffMsg: "🌟【火山尋寶加成】：紅蓮火山龍皇護盾上限已削弱 -2！"
     },
     zone6_sky: {
       zoneId: "zone6_sky",
-      title: "最終章主線・星界浮空聖壇與八方星象共鳴",
+      title: "最終章尋寶・星界齒輪與四方星像",
       npcName: "破曉大賢者",
       relicName: "【創世破曉聖印】",
-      storyIntro: "天界浮空聖殿的星橋斷絕，最終領主受【無敵星界法則】庇護！唯有將青銅齒輪嵌入中央星核並對齊八方星象石像取得【創世破曉聖印】，才能架起星橋迎戰最終領主！",
+      storyIntro: "將左下角 4 座星像轉到頭頂提示的方向變綠，就能獲得傳奇神裝材料【星隕鐵與黃金樹葉】並削弱最終領主！",
       step1GateId: "tg_z6_gear",
-      step1Short: "① 造【精密青銅齒輪】嵌入星界聖柱(x:720,y:550)",
-      step2Short: "② 旋轉西南【四聖像】向外(北▲北,東▶東,南▼南,西◀西)",
-      step3Short: "③ 開啟機關寶箱取得【創世破曉聖印】解鎖最終決戰",
-      step1Title: "① 合成【⚙️精密青銅齒輪】 ➔ 嵌入中央【⚙️星界齒輪聖柱】(x:720, y:550) 重啟星核",
-      step2Title: "② 旋轉西南星壇的【🗿四聖像】使其背心向外守護八方(北▲北、東▶東、南▼南、西◀西)",
-      step3Title: "③ 開啟【🏆古遺跡機關寶箱】取得【創世破曉聖印】，解鎖星橋並破除最終領主的無敵星界法則！",
-      bossDebuffMsg: "🌟【創世破曉聖印共鳴】：最終領主的無敵法則已破除，且護盾上限 -2！"
+      step1Title: "💡 趣味尋寶①：用「鐵礦x1+燧石x1」做【⚙️精密齒輪】，放入中央(x:720, y:550)的【⚙️星界聖柱】",
+      step2Title: "💡 趣味尋寶②：走到左下角(x:230, y:880)，按 A 鍵將 4 座星像都轉成綠色【✅】",
+      step3Title: "💡 趣味尋寶③：打開【🏆古遺跡機關寶箱】，削弱天界最終領主 2 層護盾！",
+      bossDebuffMsg: "🌟【星界尋寶加成】：天界最終領主護盾上限已削弱 -2！"
     }
   };
 
   function getZoneStoryProgress(zoneId, s) {
     const chain = ZONE_STORY_CHAINS[zoneId];
     if (!chain || !s) return null;
-    // 若該區 Boss 已經在舊存檔被擊敗過，視為已完成破障鏈，不卡已通關章節
-    const bossAlreadyDead = Boolean(s.bossesDefeated && s.bossesDefeated[zoneId]);
-    const step1Done = Boolean(bossAlreadyDead || (s.clearedToolGates && s.clearedToolGates[chain.step1GateId]));
-    const step2Done = Boolean(bossAlreadyDead || (s.solvedExplorePuzzles && s.solvedExplorePuzzles[zoneId]));
-    const step3Done = Boolean(bossAlreadyDead || (s.claimedExplorePuzzleChests && s.claimedExplorePuzzleChests[zoneId]));
+    const step1Done = Boolean(s.clearedToolGates && s.clearedToolGates[chain.step1GateId]);
+    const step2Done = Boolean(s.solvedExplorePuzzles && s.solvedExplorePuzzles[zoneId]);
+    const step3Done = Boolean(s.claimedExplorePuzzleChests && s.claimedExplorePuzzleChests[zoneId]);
     const count = (step1Done ? 1 : 0) + (step2Done ? 1 : 0) + (step3Done ? 1 : 0);
     return {
       chain: chain,
@@ -541,50 +555,8 @@ window.Aetheria = window.Aetheria || {};
       step2Done: step2Done,
       step3Done: step3Done,
       count: count,
-      allDone: step3Done
+      allDone: (step1Done || step2Done || step3Done)
     };
-  }
-
-  // ★ 同步更新下屏「主線任務進度框」：在未解開該區 3 步因果鏈前，直接在主線任務框醒目顯示當前強制破障步驟！
-  function syncMainQuestTrackerWithStoryChain() {
-    const s = window.Aetheria.State && window.Aetheria.State.data;
-    if (!s) return;
-    const prog = getZoneStoryProgress(s.currentZone, s);
-
-    // 尋找下屏的主線任務容器
-    const questBox = document.getElementById("quest-tracker") ||
-                     document.getElementById("quest-banner") ||
-                     document.querySelector("[id*='quest']");
-    if (!questBox) return;
-
-    let lockBar = document.getElementById("srpg-main-quest-lock-bar");
-    if (!prog) {
-      if (lockBar) setDisplayIfChanged(lockBar, "none");
-      return;
-    }
-
-    if (!lockBar) {
-      lockBar = document.createElement("div");
-      lockBar.id = "srpg-main-quest-lock-bar";
-      lockBar.onclick = function() {
-        if (window.Aetheria.Audio && window.Aetheria.Audio.sfxTalkBlip) window.Aetheria.Audio.sfxTalkBlip();
-        if (window.Aetheria.HighlandsWorkshop) window.Aetheria.HighlandsWorkshop.openZoneStoryChainModal();
-      };
-      questBox.appendChild(lockBar);
-    }
-
-    setDisplayIfChanged(lockBar, "flex");
-    setClassIfChanged(lockBar, prog.allDone ? "unlocked" : "");
-
-    if (!prog.step1Done) {
-      setTextIfChanged(lockBar, "🔒【主線破障 0/3 (未解開無法修橋/打王)】下一步：" + prog.chain.step1Short + " (點擊詳情)");
-    } else if (!prog.step2Done) {
-      setTextIfChanged(lockBar, "🔒【主線破障 1/3 (地脈已通)】下一步：" + prog.chain.step2Short + " (點擊詳情)");
-    } else if (!prog.step3Done) {
-      setTextIfChanged(lockBar, "🔒【主線破障 2/3 (機關已開)】下一步：" + prog.chain.step3Short + " (點擊詳情)");
-    } else {
-      setTextIfChanged(lockBar, "🌟【主線破障 3/3 已完成】已取得" + prog.chain.relicName + "！可修橋過河並討伐首領！");
-    }
   }
 
   // ================= 4. 100% 防消失：6大差異化自然地貌自癒繪製引擎 =================
@@ -637,18 +609,18 @@ window.Aetheria = window.Aetheria || {};
     return inTopWing || inRightWing;
   }
 
-  // ★ 修正：移除「等級達標自動通橋」後門！僅當玩家已完成橋樑工程（或舊存檔已擊敗該區首領）時，橋樑才可通行！
   function isMapBridgeBuilt(mapObj, s) {
     if (!mapObj || !s) return false;
     const pb = s.projectsBuilt || {};
     const bd = s.bossesDefeated || {};
+    const uz = Array.isArray(s.unlockedZones) ? s.unlockedZones : [];
     const zId = mapObj.id;
 
-    if (zId === "zone1_forest")  return Boolean(pb.proj_z1_bridge || bd.zone1_forest);
-    if (zId === "zone2_canyon")  return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon);
-    if (zId === "zone3_coast")   return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast);
-    if (zId === "zone4_snow")    return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow);
-    if (zId === "zone5_volcano") return Boolean(pb.proj_z5_bridge || bd.zone5_volcano);
+    if (zId === "zone1_forest")  return Boolean(pb.proj_z1_bridge || bd.zone1_forest || uz.indexOf("zone2_canyon") !== -1 || (s.lv && s.lv >= 5));
+    if (zId === "zone2_canyon")  return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon || uz.indexOf("zone3_coast") !== -1 || (s.lv && s.lv >= 10));
+    if (zId === "zone3_coast")   return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast || uz.indexOf("zone4_snow") !== -1 || (s.boatTier && s.boatTier >= 2) || (s.lv && s.lv >= 15));
+    if (zId === "zone4_snow")    return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow || uz.indexOf("zone5_volcano") !== -1 || (s.lv && s.lv >= 20));
+    if (zId === "zone5_volcano") return Boolean(pb.proj_z5_bridge || bd.zone5_volcano || uz.indexOf("zone6_sky") !== -1);
     if (zId === "zone6_sky")     return Boolean(pb.proj_z6_bridge || bd.zone6_sky);
 
     const projDeco = (mapObj.decos || []).find(function(d) { return d && d.isProjectSite && d.projectId; });
@@ -1009,6 +981,8 @@ window.Aetheria = window.Aetheria || {};
   function renderCompassMinimap(mapObj, s, forceRedraw) {
     if (!mapObj || !s) return;
 
+    lockLowerScreenControlsPosition();
+
     const tracker = document.getElementById("srpg-chain-tracker");
     if (tracker) {
       const prog = getZoneStoryProgress(mapObj.id, s);
@@ -1018,15 +992,13 @@ window.Aetheria = window.Aetheria || {};
         setTextIfChanged(
           tracker,
           prog.allDone
-            ? ("🌟破障聖印已得 (" + prog.count + "/3)")
-            : ("🔒主線破障解謎: " + prog.count + "/3 (必解)")
+            ? ("🌟尋寶加成已得 (" + prog.count + "/3)")
+            : ("💡尋寶秘笈: " + prog.count + "/3 (送建材)")
         );
       } else {
         setDisplayIfChanged(tracker, "none");
       }
     }
-
-    syncMainQuestTrackerWithStoryChain();
 
     const activeTerrain = ensureActiveTerrainCanvas(mapObj);
 
@@ -1366,71 +1338,70 @@ window.Aetheria = window.Aetheria || {};
     };
   }
 
-  // ================= 6. 擴充《Survival RPG》素材、6大質變工具、32項配方與【📖 求生合成圖鑑資料庫】 =================
+  // ================= 6. 小四小五友善版素材、6大工具與 1 步直覺合成配方 =================
   const CLEAN_SRPG_MATERIALS = {
-    copperOre:      { id: "copperOre",      name: "赤銅礦石",       tier: 1, desc: "【基礎金屬礦】採集自懸崖高台與山洞，可與白錫礦冶煉成堅固的青銅合金錠。" },
+    copperOre:      { id: "copperOre",      name: "赤銅礦石",       tier: 1, desc: "【基礎金屬礦】採集自懸崖高台與山洞，可冶煉青銅合金錠。" },
     tinOre:         { id: "tinOre",         name: "白錫礦石",       tier: 1, desc: "【基礎金屬礦】採集自洞窟與高台，用於合成青銅合金錠。" },
-    bronzeIngot:    { id: "bronzeIngot",    name: "青銅合金錠",     tier: 2, desc: "【冶煉合金】由赤銅礦、白錫礦與黑木炭熔煉而成，是製作解謎工具與精密齒輪的核心金屬！" },
-    ancientGear:    { id: "ancientGear",    name: "精密青銅齒輪",   tier: 2, desc: "【★機關解謎零件】由青銅合金錠與燧石打磨而成，可嵌入野外【⚙️失落齒輪機關柱】啟動秘寶！" },
-    briarSickle:    { id: "briarSickle",    name: "除荊開路鐮刀",   tier: 2, desc: "【★永久開路工具】鋒利的彎月青銅鐮刀，可斬開野外【🌿千年荊棘魔藤】，且砍伐草木額外多獲 +1 材料！" },
-    salvageHook:    { id: "salvageHook",    name: "深水打撈磁鉤",   tier: 2, desc: "【★永久打撈工具】附有強磁的長繩鐵鉤，可打撈河岸與海濱的【⚓沉沒古寶箱】，且垂釣額外多獲 +1 鮮魚！" },
+    bronzeIngot:    { id: "bronzeIngot",    name: "青銅合金錠",     tier: 2, desc: "【冶煉合金】由赤銅礦与白錫礦熔煉而成，可用於鍛造遺跡鑰匙。" },
+    ancientGear:    { id: "ancientGear",    name: "精密青銅齒輪",   tier: 2, desc: "【★尋寶零件】用鐵礦x1+燧石x1即可打造，放入野外【⚙️齒輪機關柱】即送修橋建材！" },
+    briarSickle:    { id: "briarSickle",    name: "除荊開路鐮刀",   tier: 2, desc: "【★永久尋寶工具】用原木x1+燧石x1即可打造，可斬開【🌿荊棘魔藤】領取厚木板，且砍樹收穫 +1！" },
+    salvageHook:    { id: "salvageHook",    name: "深水打撈磁鉤",   tier: 2, desc: "【★永久尋寶工具】用鐵礦x1+藤蔓x1即可打造，可打撈水邊【⚓沉船寶箱】，且釣魚收穫 +1！" },
     magnifyingLens: { id: "magnifyingLens", name: "水晶鑑定放大鏡", tier: 2, desc: "【★永久尋寶工具】以透明石英砂打磨的透鏡，持有後全地圖採集額外獲得稀有晶礦機率 +35%！" },
-    thermitePowder: { id: "thermitePowder", name: "高熱鋁熱火種",   tier: 3, desc: "【★破障鍊金物】結合黑木炭、鐵粉與松脂的高溫火種，可瞬間融化雪原的【🧊萬年玄冰晶殼】！" },
-    frostEssence:   { id: "frostEssence",   name: "極寒急凍晶瓶",   tier: 3, desc: "【★破障鍊金物】封存極地冰蓮寒氣的石英瓶，可冷卻並震碎火山的【🔥熔岩黑曜晶殼】！" },
-    spicedStew:     { id: "spicedStew",     name: "香辛海陸燉肉",   tier: 3, desc: "【★增益料理】以鮮魚、微光菇與岩鹽慢火精燉，食用恢復 +100% 飽食、+150 HP，並永久提升最大生命 +15！" },
+    thermitePowder: { id: "thermitePowder", name: "高熱鋁熱火種",   tier: 2, desc: "【★破障火種】用枯枝x2+燧石x1即可製作，能瞬間融化洞窟與雪原的【🧊玄冰晶殼】領取流沙秘銀！" },
+    frostEssence:   { id: "frostEssence",   name: "極寒急凍晶瓶",   tier: 2, desc: "【★破障冰瓶】用極地冰蓮x1+黏土x1即可製作，能震碎火山的【🔥熔岩黑曜殼】領取耐火磚！" },
+    spicedStew:     { id: "spicedStew",     name: "香辛海陸燉肉",   tier: 3, desc: "【★增益料理】以鮮魚、微光菇與岩鹽精燉，食用恢復 +100% 飽食、+150 HP，並永久提升最大生命 +15！" },
     cryptKey:       { id: "cryptKey",       name: "遠古遺跡鑰匙",   tier: 2, desc: "【尋寶挖掘/工坊鍛造】用探險鐵鏟挖掘地面「✖」藏寶點或於工坊鍛造，可解鎖各區的【🔒遠古地底遺跡】！" },
-    coal:           { id: "coal",           name: "黑曜木炭",       tier: 1, desc: "【高台/山洞礦產】由枯枝悶燒或於高台山洞開採，是冶煉青銅錠、高熱火種與炸彈的核心燃料。" },
-    quartz:         { id: "quartz",         name: "透明石英砂",     tier: 2, desc: "【高台晶礦】採集自懸崖高台與山洞，可用於燒製水晶放大鏡、急凍晶瓶與探礦照明。" },
+    coal:           { id: "coal",           name: "黑曜木炭",       tier: 1, desc: "【高台/山洞礦產】由枯枝悶燒或於高台山洞開採，是配製炸彈與冶煉的燃料。" },
+    quartz:         { id: "quartz",         name: "透明石英砂",     tier: 2, desc: "【高台晶礦】採集自懸崖高台與山洞，可用於燒製放大鏡、探礦提燈與藥水瓶。" },
     rockSalt:       { id: "rockSalt",       name: "結晶岩鹽",       tier: 1, desc: "【高台礦產】採集自懸崖高台，可醃製風乾肉脯與烹調香辛海陸燉肉。" },
-    ropeLadder:     { id: "ropeLadder",     name: "攀岩繩梯",       tier: 1, desc: "【高低差開路工具】由麻繩與原木編織而成，可架設在各區南側懸崖壁上攀爬至高台礦區！" },
+    ropeLadder:     { id: "ropeLadder",     name: "攀岩繩梯",       tier: 1, desc: "【高低差開路工具】由藤蔓與原木編織而成，可架設在各區南側懸崖壁上爬上高台礦區！" },
     rationJerky:    { id: "rationJerky",    name: "風乾肉脯",       tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚，食用立即恢復 +80% 飽食度與 +90 HP！" }
   };
 
   const SURVIVAL_CODEX_DATABASE = [
-    { cat: "basic", key: "branch",    icon: "mat_branch",    name: "散落枯枝",   source: "0~6區地面徒手拾取",                   use: "修復熔爐、燒製黑曜木炭(x3➔x2)、松脂火把、Lv.1工具、烤魚乾/菇乾" },
-    { cat: "basic", key: "flint",     icon: "mat_flint",     name: "尖銳燧石",   source: "0~6區地面徒手拾取",                   use: "修復熔爐、Lv.1手斧/十字鎬、爆破炸彈、打磨精密青銅齒輪" },
-    { cat: "basic", key: "clay",      icon: "mat_clay",      name: "河畔黏土",   source: "水岸徒手拾取 / 釣魚點垂釣",           use: "修復熔爐、防水松脂膠、爆破炸彈、極寒急凍晶瓶、黑曜耐火磚" },
+    { cat: "puzzle", key: "briarSickle",    icon: "mat_briarSickle",    name: "除荊開路鐮刀",   source: "工坊1步合成：翠風原木x1 + 尖銳燧石x1",  use: "【永久工具】斬開【🌿荊棘魔藤】免費拎厚木板x3，且砍樹收穫 +1" },
+    { cat: "puzzle", key: "thermitePowder", icon: "mat_thermitePowder", name: "高熱鋁熱火種",   source: "工坊1步合成：散落枯枝x2 + 尖銳燧石x1",  use: "【破障火種】融化洞窟與雪原的【🧊玄冰晶殼】免費拎流沙秘銀x2！" },
+    { cat: "puzzle", key: "ancientGear",    icon: "mat_ancientGear",    name: "精密青銅齒輪",   source: "工坊1步合成：藍晶鐵礦x1 + 尖銳燧石x1",  use: "【機關零件】放入【⚙️齒輪機關柱】免費拎麻繩與秘銀！" },
+    { cat: "puzzle", key: "salvageHook",    icon: "mat_salvageHook",    name: "深水打撈磁鉤",   source: "工坊1步合成：藍晶鐵礦x1 + 堅韌藤蔓x1",  use: "【永久工具】打撈水邊【⚓沉船寶箱】拎古帆布與珊瑚，且釣魚 +1" },
+    { cat: "puzzle", key: "frostEssence",   icon: "mat_frostEssence",   name: "極寒急凍晶瓶",   source: "工坊1步合成：極地冰蓮x1 + 河畔黏土x1",  use: "【破障冰瓶】震碎火山【🔥熔岩晶殼】免費拎黑曜耐火磚x3！" },
+    { cat: "puzzle", key: "ropeLadder",     icon: "mat_ropeLadder",     name: "攀岩繩梯",       source: "工坊1步合成：翠風原木x1 + 堅韌藤蔓x1",  use: "【高低差開路】架設於南側懸崖壁，爬上岩石高台挖寶石" },
+    { cat: "puzzle", key: "magnifyingLens", icon: "mat_magnifyingLens", name: "水晶鑑定放大鏡", source: "工坊1步合成：透明石英砂x1 + 藍晶鐵礦x1",use: "【永久神器】持有後全地圖採集 35% 機率額外獲得寶石礦物" },
+    { cat: "puzzle", key: "cryptKey",       icon: "mat_cryptKey",       name: "遠古遺跡鑰匙",   source: "鐵鏟挖「✖」藏寶點 / 工坊鐵礦x1+木炭x1", use: "【迷宮開鎖】開啟高台東側的【🔒地底遺跡石門】拎大寶箱" },
+    { cat: "puzzle", key: "bombItem",       icon: "mat_bombItem",       name: "爆破炸彈",       source: "工坊合成：燧石x2+黏土x1+松脂x1",         use: "【秘境開路】炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱" },
+
+    { cat: "basic", key: "branch",    icon: "mat_branch",    name: "散落枯枝",   source: "0~6區地面徒手拾取",                   use: "修復熔爐、高熱鋁熱火種、松脂火把、Lv.1工具、烤魚乾/菇乾" },
+    { cat: "basic", key: "flint",     icon: "mat_flint",     name: "尖銳燧石",   source: "0~6區地面徒手拾取",                   use: "修復熔爐、除荊鐮刀、高熱火種、精密齒輪、Lv.1工具、炸彈" },
+    { cat: "basic", key: "clay",      icon: "mat_clay",      name: "河畔黏土",   source: "水岸徒手拾取 / 釣魚點垂釣",           use: "修復熔爐、防水松脂膠、極寒急凍晶瓶、爆破炸彈、黑曜耐火磚" },
     { cat: "basic", key: "fish",      icon: "mat_fish",      name: "銀鱗鮮魚",   source: "各區水波釣魚點持魚竿垂釣",            use: "炭烤鮮魚乾(+60%飽食)、岩鹽風乾肉脯(+80%飽食)、香辛海陸燉肉(永久HP+15)" },
-    { cat: "basic", key: "copperOre", icon: "mat_copperOre", name: "赤銅礦石",   source: "1~2區南側懸崖高台與岩壁礦洞(免工具)", use: "與白錫礦+黑木炭冶煉【青銅合金錠】" },
-    { cat: "basic", key: "tinOre",    icon: "mat_tinOre",    name: "白錫礦石",   source: "1~3區南側懸崖高台與岩壁礦洞(免工具)", use: "與赤銅礦+黑木炭冶煉【青銅合金錠】" },
-    { cat: "basic", key: "coal",      icon: "mat_coal",      name: "黑曜木炭",   source: "各區高台與山洞開採 / 工坊枯枝x3燒製", use: "冶煉青銅合金錠、黑火藥重型炸彈、高熱鋁熱火種、鍛造遺跡鑰匙" },
+    { cat: "basic", key: "copperOre", icon: "mat_copperOre", name: "赤銅礦石",   source: "1~2區南側懸崖高台與岩壁礦洞(免工具)", use: "與白錫礦冶煉【青銅合金錠】" },
+    { cat: "basic", key: "tinOre",    icon: "mat_tinOre",    name: "白錫礦石",   source: "1~3區南側懸崖高台與岩壁礦洞(免工具)", use: "與赤銅礦冶煉【青銅合金錠】" },
+    { cat: "basic", key: "coal",      icon: "mat_coal",      name: "黑曜木炭",   source: "各區高台與山洞開採 / 工坊枯枝x2燒製", use: "黑火藥重型炸彈、鍛造遺跡鑰匙、石英探礦提燈" },
     { cat: "basic", key: "rockSalt",  icon: "mat_rockSalt",  name: "結晶岩鹽",   source: "1~6區南側懸崖高台與岩壁礦洞開採",     use: "醃製岩鹽風乾肉脯、烹調香辛海陸燉肉" },
-    { cat: "basic", key: "quartz",    icon: "mat_quartz",    name: "透明石英砂", source: "1~6區高台與山洞開採 / 鐵鏟挖寶",      use: "水晶鑑定放大鏡、深水打撈磁鉤、石英探礦提燈、急凍晶瓶、生命/洞察藥水" },
+    { cat: "basic", key: "quartz",    icon: "mat_quartz",    name: "透明石英砂", source: "1~6區高台與山洞開採 / 鐵鏟挖寶",      use: "水晶鑑定放大鏡、石英探礦提燈、生命/洞察藥水" },
 
     { cat: "tiered", key: "wood",     icon: "mat_wood",     name: "翠風原木",     source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "裁切厚木板、攀岩繩梯、除荊鐮刀、Lv.1探險鐵鏟、建造近海木帆船" },
-    { cat: "tiered", key: "vine",     icon: "mat_vine",     name: "堅韌藤蔓",     source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "編織強化麻繩索、Lv.1翠竹釣竿、建造近海木帆船" },
+    { cat: "tiered", key: "vine",     icon: "mat_vine",     name: "堅韌藤蔓",     source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "編織強化麻繩索、攀岩繩梯、深水打撈磁鉤、Lv.1翠竹釣竿" },
     { cat: "tiered", key: "herb",     icon: "mat_herb",     name: "紅傘微光菇",   source: "1.森林與蘑菇洞窟採集 (需 Lv.1 手斧)", use: "烘烤微光菇乾、提煉生命藥水、烹調香辛海陸燉肉" },
-    { cat: "tiered", key: "resin",    icon: "mat_resin",    name: "琥珀松脂",     source: "1.翠風森林採集 (需 Lv.1 手斧)",       use: "松脂火把、防水松脂膠、爆破炸彈、高熱鋁熱火種、洞察藥水" },
-    { cat: "tiered", key: "iron",     icon: "mat_iron",     name: "藍晶鐵礦",     source: "1~2區礦脈與山洞 (需 Lv.1 十字鎬)",    use: "鍛造鐵釘、Lv.2精鐵工具、深水打撈磁鉤、高熱鋁熱火種、探礦提燈" },
+    { cat: "tiered", key: "resin",    icon: "mat_resin",    name: "琥珀松脂",     source: "1.翠風森林採集 (需 Lv.1 手斧)",       use: "松脂火把、防水松脂膠、爆破炸彈、洞察藥水" },
+    { cat: "tiered", key: "iron",     icon: "mat_iron",     name: "藍晶鐵礦",     source: "1~2區礦脈與山洞 (需 Lv.1 十字鎬)",    use: "鍛造鐵釘、精密齒輪、打撈磁鉤、Lv.2精鐵工具" },
     { cat: "tiered", key: "hemp",     icon: "mat_hemp",     name: "荒野亞麻",     source: "2.流沙峽谷採集 (需 Lv.2 手斧)",       use: "高效編織麻繩索(x2)、禦寒獸毛氈、幽靈古帆布、Lv.1亞麻擴容袋" },
     { cat: "tiered", key: "flower",   icon: "mat_flower",   name: "向陽太陽花",   source: "2.流沙峽谷採集 (需 Lv.2 手斧)",       use: "提煉精煉洞察藥水(答題排除錯誤選項)" },
-    { cat: "tiered", key: "basalt",   icon: "mat_basalt",   name: "玄武岩塊",     source: "2~3區峽谷與山洞 (需 Lv.2 十字鎬)",    use: "升級 Lv.3 秘銀震波破岩鎬、燒製黑曜耐火磚" },
-    { cat: "tiered", key: "mithril",  icon: "mat_mithril",  name: "流沙秘銀",     source: "2~6區礦脈、山洞與鐵鏟挖寶 (Lv.2 鎬)", use: "秘銀強化鋼索、升級 Lv.3 連鎖神斧/破岩鎬/大師竿、鍛造中高階裝備" },
+    { cat: "tiered", key: "basalt",   icon: "mat_basalt",   name: "玄武岩塊",     source: "2~3區峽谷與山洞 (需 Lv.2 十字鎬)",    use: "砌築蘑菇洞窟燈塔、升級 Lv.3 秘銀破岩鎬、燒製黑曜耐火磚" },
+    { cat: "tiered", key: "mithril",  icon: "mat_mithril",  name: "流沙秘銀",     source: "2~6區礦脈、山洞與鐵鏟挖寶 (Lv.2 鎬)", use: "砌築燈塔、秘銀強化鋼索、升級 Lv.3 連鎖神斧/破岩鎬、鍛造裝備" },
     { cat: "tiered", key: "coral",    icon: "mat_coral",    name: "深海珊瑚",     source: "3.翡翠海岸開採或海釣 (Lv.2 鎬/釣竿)", use: "共鳴合成海妖核心、鍛造海洋系武器防具" },
     { cat: "tiered", key: "iceLotus", icon: "mat_iceLotus", name: "極地冰蓮",     source: "4.霜語雪原採集 (需 Lv.2 手斧)",       use: "提煉【極寒急凍晶瓶】(震碎火山熔岩晶殼)、鍛造冰霜系武防" },
     { cat: "tiered", key: "obsidian", icon: "mat_obsidian", name: "熔岩黑曜石",   source: "4~6區高台與火山開採 (需 Lv.3 十字鎬)",use: "燒製黑曜耐火磚、提煉熔岩龍鱗與炎魔熔核、Lv.3星隕考古鏟" },
     { cat: "tiered", key: "starIron", icon: "mat_starIron", name: "深淵星隕鐵",   source: "5~6區火山與天界開採 (需 Lv.3 十字鎬)",use: "Lv.3星隕考古神鏟、修復古文明聖碑殘片、鍛造 T9~T10 傳奇神裝" },
     { cat: "tiered", key: "goldLeaf", icon: "mat_goldLeaf", name: "黃金世界樹葉", source: "6.天界聖殿砍伐 (需 Lv.3 手斧)",       use: "鍛造 T10 艾瑟瑞亞破曉神刃/神聖鎧甲、共鳴遠古聖物" },
 
-    { cat: "puzzle", key: "ropeLadder",     icon: "mat_ropeLadder",     name: "攀岩繩梯",       source: "工坊合成：強化麻繩索x1 + 翠風原木x2",       use: "【高低差開路】架設於 1~6 區南側懸崖壁，上下攀爬岩石高台礦區" },
-    { cat: "puzzle", key: "briarSickle",    icon: "mat_briarSickle",    name: "除荊開路鐮刀",   source: "工坊合成：青銅合金錠x1 + 原木x2 + 麻繩x1",  use: "【第一章步驟①必備】斬開【🌿千年荊棘魔藤】，且砍伐草木收穫 +1" },
-    { cat: "puzzle", key: "salvageHook",    icon: "mat_salvageHook",    name: "深水打撈磁鉤",   source: "工坊合成：藍晶鐵礦x2 + 麻繩x2 + 石英砂x1",  use: "【第三章步驟①必備】打撈【⚓沉沒古寶箱】尋回水閘零件，且釣魚 +1" },
-    { cat: "puzzle", key: "magnifyingLens", icon: "mat_magnifyingLens", name: "水晶鑑定放大鏡", source: "工坊合成：透明石英砂x2 + 青銅合金錠x1",    use: "【永久神器】持有後全地圖採集 35% 機率額外獲得石英砂或赤銅礦" },
-    { cat: "puzzle", key: "ancientGear",    icon: "mat_ancientGear",    name: "精密青銅齒輪",   source: "工坊合成：青銅合金錠x1 + 尖銳燧石x2",       use: "【第二/六章步驟①必備】嵌入【⚙️失落齒輪機關柱】啟動古墓共鳴" },
-    { cat: "puzzle", key: "thermitePowder", icon: "mat_thermitePowder", name: "高熱鋁熱火種",   source: "工坊合成：黑曜木炭x2 + 鐵礦x1 + 松脂x2",    use: "【第四章步驟①必備】融化洞窟與雪原的【🧊萬年玄冰晶殼】釋放地熱" },
-    { cat: "puzzle", key: "frostEssence",   icon: "mat_frostEssence",   name: "極寒急凍晶瓶",   source: "工坊合成：極地冰蓮x1 + 石英砂x1 + 黏土x1",  use: "【第五章步驟①必備】冷卻並震碎火山的【🔥熔岩黑曜晶殼】壓制龍炎" },
-    { cat: "puzzle", key: "cryptKey",       icon: "mat_cryptKey",       name: "遠古遺跡鑰匙",   source: "鐵鏟挖「✖」藏寶點 / 工坊青銅錠x1+木炭x1",   use: "【迷宮開鎖】開啟 1~6 區高台東側的【🔒地底遺跡石門】挑戰守衛魔像" },
-    { cat: "puzzle", key: "bombItem",       icon: "mat_bombItem",       name: "爆破炸彈",       source: "工坊合成：燧石x2+黏土x1+松脂x1 (或木炭x2)", use: "【秘境開路】炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱" },
-
-    { cat: "smelt", key: "bronzeIngot", icon: "mat_bronzeIngot", name: "青銅合金錠",     source: "工坊合成：赤銅礦x1 + 白錫礦x1 + 黑木炭x1", use: "打造除荊鐮刀、水晶放大鏡、精密青銅齒輪與遺跡鑰匙的核心合金" },
-    { cat: "smelt", key: "plank",       icon: "mat_plank",       name: "加工厚木板",     source: "工坊合成：翠風原木x2",                     use: "修復第1區森林木橋、升級Lv.2秘銀鏟/Lv.3神斧、建造大帆船" },
-    { cat: "smelt", key: "rope",        icon: "mat_rope",        name: "強化麻繩索",     source: "工坊合成：堅韌藤蔓x2 (或荒野亞麻x2➔2條)",  use: "製作攀岩繩梯、除荊鐮刀、打撈磁鉤、修復峽谷吊橋與造船" },
+    { cat: "smelt", key: "plank",       icon: "mat_plank",       name: "加工厚木板",     source: "工坊合成：翠風原木x2 (或斬荊棘免費拎)",     use: "修復第1區森林木橋、升級工具、建造大帆船" },
+    { cat: "smelt", key: "rope",        icon: "mat_rope",        name: "強化麻繩索",     source: "工坊合成：堅韌藤蔓x2 (或荒野亞麻x2➔2條)",  use: "修復峽谷吊橋与造船" },
     { cat: "smelt", key: "steelCable",  icon: "mat_steelCable",  name: "秘銀強化鋼索",   source: "工坊合成：流沙秘銀x1 + 強化麻繩索x1",       use: "修復高階橋樑、升級 Lv.3 秘銀大師竿與飛索鉤爪" },
     { cat: "smelt", key: "sailCloth",   icon: "mat_sailCloth",   name: "幽靈古帆布",     source: "3區海岸高台/打怪保底 / 工坊亞麻x2+藤蔓x1",  use: "縫製【防風重帆布】以建造破浪遠洋大帆船" },
     { cat: "smelt", key: "warmFur",     icon: "mat_warmFur",     name: "禦寒獸毛氈",     source: "工坊合成：強韌獸筋x2 + 荒野亞麻x1",         use: "搭建第4區雪原防風避難屋、升級 Lv.2 秘銀遠征袋" },
     { cat: "smelt", key: "tabletShard", icon: "crystal",         name: "古文明聖碑殘片", source: "開啟各區地底遺跡石棺 / 工坊星隕鐵+黑曜石",  use: "推進終章天界聖殿主線與共鳴遠古聖物" },
 
-    { cat: "food", key: "spicedStew",  icon: "mat_spicedStew",  name: "香辛海陸燉肉", source: "工坊烹調：銀鱗鮮魚x1 + 微光菇x2 + 岩鹽x1", use: "【極品料理】恢復 100% 飽食 + 150 HP，並永久提升最大生命 +15！" },
+    { cat: "food", key: "spicedStew",  icon: "mat_spicedStew",  name: "香辛海陸燉肉", source: "工坊烹調：銀鱗鮮魚x1 + 微光菇x1 + 岩鹽x1", use: "【極品料理】恢復 100% 飽食 + 150 HP，並永久提升最大生命 +15！" },
     { cat: "food", key: "rationJerky", icon: "mat_rationJerky", name: "岩鹽風乾肉脯", source: "工坊醃製：銀鱗鮮魚x1 + 結晶岩鹽x1 (產2份)", use: "【頂級口糧】每份立即恢復 +80% 飽食度 與 +90 HP" },
     { cat: "food", key: "rationFish",  icon: "mat_rationFish",  name: "炭烤鮮魚乾",   source: "工坊烘烤：銀鱗鮮魚x1 + 散落枯枝x1 (產2份)", use: "【進階口糧】每份立即恢復 +60% 飽食度 與 +60 HP" },
     { cat: "food", key: "rationHerb",  icon: "mat_rationHerb",  name: "烘烤微光菇乾", source: "工坊烘烤：紅傘微光菇x1 + 散落枯枝x1 (產2份)",use: "【基礎口糧】每份立即恢復 +35% 飽食度 與 +25 HP" },
@@ -1475,17 +1446,17 @@ window.Aetheria = window.Aetheria || {};
       id: "shovel", name: "探險鐵鏟", iconKey: "icon_shovel",
       tiers: {
         0: { name: "尚未持有鐵鏟", desc: "製作鐵鏟後，可對照【全區放大地圖】挖掘地面唯一「✖ 藏寶記號」獲取遺跡鑰匙！" },
-        1: { name: "Lv.1 精鐵探險鏟", cost: { wood: 2, iron: 1 }, gold: 0, desc: "【★尋寶必備】可挖掘全大陸地面唯一「✖」藏寶點，挖出【遠古遺跡鑰匙】與稀有礦石！" },
-        2: { name: "Lv.2 秘銀尋寶鏟", cost: { plank: 2, mithril: 1 }, gold: 120, desc: "挖掘「✖」藏寶點時金幣收穫加倍，且額外挖出流沙秘銀與青銅齒輪！" },
-        3: { name: "Lv.3 星隕考古神鏟", cost: { obsidian: 1, starIron: 1, quartz: 2 }, gold: 260, desc: "傳奇考古神鏟！挖掘「✖」藏寶點必定獲得高階星隕鐵與大量金幣！" }
+        1: { name: "Lv.1 精鐵探險鏟", cost: { wood: 1, iron: 1 }, gold: 0, desc: "【★尋寶必備】可挖掘全大陸地面唯一「✖」藏寶點，挖出【遠古遺跡鑰匙】與流沙秘銀！" },
+        2: { name: "Lv.2 秘銀尋寶鏟", cost: { plank: 1, mithril: 1 }, gold: 120, desc: "挖掘「✖」藏寶點時金幣收穫加倍，且額外挖出流沙秘銀與精密齒輪！" },
+        3: { name: "Lv.3 星隕考古神鏟", cost: { obsidian: 1, starIron: 1 }, gold: 260, desc: "傳奇考古神鏟！挖掘「✖」藏寶點必定獲得高階星隕鐵與大量金幣！" }
       }
     },
     rod: {
       id: "rod", name: "垂釣魚竿", iconKey: "fishing_spot",
       tiers: {
         0: { name: "尚未持有魚竿", desc: "製作魚竿後可於各區水波釣魚點進行看準時機垂釣。" },
-        1: { name: "Lv.1 翠竹釣魚竿", cost: { wood: 2, vine: 2 }, gold: 0, desc: "解鎖水波釣魚點垂釣功能，可釣起銀鱗鮮魚與河畔黏土。" },
-        2: { name: "Lv.2 韌麻海釣竿", cost: { rope: 2, iron: 1 }, gold: 100, desc: "垂釣綠色完美命中區加寬 25%，更容易釣起深海珊瑚！" },
+        1: { name: "Lv.1 翠竹釣魚竿", cost: { wood: 1, vine: 1 }, gold: 0, desc: "解鎖水波釣魚點垂釣功能，可釣起銀鱗鮮魚與河畔黏土。" },
+        2: { name: "Lv.2 韌麻海釣竿", cost: { rope: 1, iron: 1 }, gold: 100, desc: "垂釣綠色完美命中區加寬 25%，更容易釣起深海珊瑚！" },
         3: { name: "Lv.3 秘銀大師竿", cost: { mithril: 2, steelCable: 1 }, gold: 240, desc: "垂釣完美命中區大幅加寬，且每次釣魚額外多獲 2 條鮮魚！" }
       }
     },
@@ -1493,7 +1464,7 @@ window.Aetheria = window.Aetheria || {};
       id: "hook", name: "飛索鉤爪", iconKey: "icon_compass",
       tiers: {
         0: { name: "尚未持有鉤爪", desc: "用於跨越峽谷斷崖與險峻地形的輔助工具。" },
-        1: { name: "Lv.1 精鐵飛索鉤", cost: { iron: 2, rope: 2 }, gold: 100, desc: "裝備後可快速跨越險峻地形，採集暴擊率 +15%。" },
+        1: { name: "Lv.1 精鐵飛索鉤", cost: { iron: 2, rope: 1 }, gold: 100, desc: "裝備後可快速跨越險峻地形，採集暴擊率 +15%。" },
         2: { name: "Lv.2 秘銀飛索鉤", cost: { mithril: 2, steelCable: 1 }, gold: 240, desc: "頂級探險鉤爪，野外採集額外獲得雙倍收穫機率 +30%！" }
       }
     },
@@ -1507,35 +1478,36 @@ window.Aetheria = window.Aetheria || {};
     }
   };
 
+  // ★ 小四小五友善版工坊配方：所有解謎工具只需要 1 步基礎材料（原木/枯枝/燧石/鐵礦/藤蔓）即可直接做成！
   const COMPLETE_WORKSHOP_RECIPES = [
-    { id: "wk_rope_ladder",     name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",     toCount: 1, cost: { rope: 1, wood: 2 },                  desc: "【★高低差開路】架設於各區南側的岩石懸崖壁上，即可爬上高台採集稀有礦脈！" },
-    { id: "wk_briar_sickle",    name: "除荊開路鐮刀",          category: "explore",  toKey: "briarSickle",    toCount: 1, isUniqueGear: true, cost: { bronzeIngot: 1, wood: 2, rope: 1 }, desc: "【★第一章解謎必備】永久可斬開各區【🌿千年荊棘魔藤】推進主線因果鏈，且砍伐草木收穫 +1！" },
-    { id: "wk_salvage_hook",    name: "深水打撈磁鉤",          category: "explore",  toKey: "salvageHook",    toCount: 1, isUniqueGear: true, cost: { iron: 2, rope: 2, quartz: 1 },      desc: "【★第三章解謎必備】永久可打撈各區水岸的【⚓沉沒古寶箱】尋回水閘零件，且釣魚收穫 +1！" },
-    { id: "wk_magnifying_lens", name: "水晶鑑定放大鏡",        category: "explore",  toKey: "magnifyingLens", toCount: 1, isUniqueGear: true, cost: { quartz: 2, bronzeIngot: 1 },        desc: "【★尋寶神器】持有後全地圖採集額外獲得稀有寶石與雙倍礦物機率 +35%！" },
-    { id: "wk_ancient_gear",    name: "精密青銅齒輪 x1",       category: "explore",  toKey: "ancientGear",    toCount: 1, cost: { bronzeIngot: 1, flint: 2 },          desc: "【★第二/六章解謎必備】嵌入峽谷、海岸與天界的【⚙️失落齒輪機關柱】即可啟動古墓共鳴！" },
-    { id: "wk_thermite_powder", name: "高熱鋁熱火種 x1",       category: "explore",  toKey: "thermitePowder", toCount: 1, cost: { coal: 2, iron: 1, resin: 2 },        desc: "【★第四章解謎必備】運用舊資源木炭與松脂調配的高溫火種，可融化雪原與洞窟的【🧊萬年玄冰晶殼】！" },
-    { id: "wk_frost_essence",   name: "極寒急凍晶瓶 x1",       category: "explore",  toKey: "frostEssence",   toCount: 1, cost: { iceLotus: 1, quartz: 1, clay: 1 },   desc: "【★第五章解謎必備】封存冰蓮寒氣的石英瓶，可冷卻並震碎火山與天界的【🔥熔岩黑曜晶殼】！" },
-    { id: "wk_crypt_key",       name: "鍛造遺跡鑰匙 x1",       category: "explore",  toKey: "cryptKey",       toCount: 1, cost: { bronzeIngot: 1, coal: 1 },           desc: "【★地底遺跡開鎖】除用鐵鏟挖掘地面「✖」獲得外，亦可用青銅錠與木炭直接鍛造【遠古遺跡鑰匙】！" },
-    { id: "wk_torch",           name: "松脂火把 x2",           category: "explore",  toKey: "torchItem",      toCount: 2, cost: { branch: 1, resin: 1 },               desc: "【地牢與黑夜照明】點燃後照亮黑霧地牢，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！" },
-    { id: "wk_quartz_lantern",  name: "石英探礦提燈 (火把x4)", category: "explore",  toKey: "torchItem",      toCount: 4, cost: { iron: 1, quartz: 1, coal: 1 },       desc: "【強光照明】以鐵礦、石英砂與木炭打造，一次產出相當於 4 支火把的長效照明！" },
-    { id: "wk_bomb",            name: "爆破炸彈 x2",           category: "explore",  toKey: "bombItem",       toCount: 2, cost: { flint: 2, clay: 1, resin: 1 },       desc: "【秘境開路】可炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱！" },
-    { id: "wk_coal_bomb",       name: "黑火藥重型炸彈 x3",     category: "explore",  toKey: "bombItem",       toCount: 3, cost: { coal: 2, flint: 1 },                 desc: "【高效爆破】以高台黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！" },
-    { id: "wk_charcoal_kiln",   name: "窯燒黑曜木炭 x2",       category: "smelt",    toKey: "coal",           toCount: 2, cost: { branch: 3 },                         desc: "【舊資源再利用】將初期的 3 根散落枯枝悶燒成 2 塊高熱能黑曜木炭！" },
-    { id: "wk_bronze_ingot",    name: "冶煉青銅合金錠 x1",     category: "smelt",    toKey: "bronzeIngot",    toCount: 1, cost: { copperOre: 1, tinOre: 1, coal: 1 },  desc: "【合金冶煉】將赤銅礦、白錫礦與黑木炭熔煉為青銅合金錠，用於打造解謎工具與齒輪！" },
-    { id: "wk_plank",           name: "加工厚木板 x1",         category: "smelt",    toKey: "plank",          toCount: 1, cost: { wood: 2 },                           desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋與升級大帆船。" },
-    { id: "wk_rope",            name: "強化麻繩索 x1",         category: "smelt",    toKey: "rope",           toCount: 1, cost: { vine: 2 },                           desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，是製作【攀岩繩梯】、【打撈磁鉤】與吊橋的必備材料。" },
-    { id: "wk_rope_hemp",       name: "亞麻編織繩 x2",         category: "smelt",    toKey: "rope",           toCount: 2, cost: { hemp: 2 },                           desc: "【高效製繩】以峽谷荒野亞麻一次編織出 2 條強韌麻繩索。" },
-    { id: "wk_pitch",           name: "防水松脂膠 x1",         category: "smelt",    toKey: "pitch",          toCount: 1, cost: { resin: 2, clay: 1 },                 desc: "【造船建材】混合琥珀松脂與河畔黏土熬製的防水塗料。" },
-    { id: "wk_nails",           name: "鍛造鐵釘 x2",           category: "smelt",    toKey: "nails",          toCount: 2, cost: { iron: 1 },                           desc: "【工程建材】將藍晶鐵礦鍛打為工程鐵釘。" },
-    { id: "wk_steel_cable",     name: "秘銀強化鋼索 x1",       category: "smelt",    toKey: "steelCable",     toCount: 1, cost: { mithril: 1, rope: 1 },               desc: "【高階建材】融合流沙秘銀與麻繩索打造的超強韌鋼索。" },
-    { id: "wk_heavy_sail",      name: "防風重帆布 x1",         category: "smelt",    toKey: "heavySail",      toCount: 1, cost: { sailCloth: 2, rope: 1 },             desc: "【遠航建材】縫合幽靈古帆布與麻繩，用於建造破浪遠洋大帆船。" },
-    { id: "wk_warm_fur",        name: "禦寒獸毛氈 x1",         category: "smelt",    toKey: "warmFur",        toCount: 1, cost: { sinew: 2, hemp: 1 },                 desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。" },
-    { id: "wk_spiced_stew",     name: "香辛海陸燉肉 x1",       category: "survival", toKey: "spicedStew",     toCount: 1, cost: { fish: 1, herb: 2, rockSalt: 1 },     desc: "【★極品增益料理】食用立即恢復 100% 飽食度 + 150 HP，並永久提升主角最大生命值 +15！" },
-    { id: "wk_ration_jerky",    name: "岩鹽風乾肉脯 x2",       category: "survival", toKey: "rationJerky",    toCount: 2, cost: { fish: 1, rockSalt: 1 },              desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！" },
-    { id: "wk_ration_herb",     name: "烘烤微光菇乾 x2",       category: "survival", toKey: "rationHerb",     toCount: 2, cost: { herb: 1, branch: 1 },                desc: "【基礎口糧】食用每份可恢復 +35% 飽食度與 +25 HP。" },
-    { id: "wk_ration_fish",     name: "炭烤鮮魚乾 x2",         category: "survival", toKey: "rationFish",     toCount: 2, cost: { fish: 1, branch: 1 },                desc: "【進階口糧】食用每份可恢復 +60% 飽食度與 +60 HP。" },
-    { id: "wk_alchemy_heal",    name: "精煉生命藥水 x2",       category: "survival", toKey: "potionHeal",     toCount: 2, cost: { herb: 2, quartz: 1 },                desc: "【隨身提煉】以微光菇 x2 與高台石英砂燒製的玻璃瓶，免費提煉 2 瓶生命藥水！" },
-    { id: "wk_alchemy_hint",    name: "精煉洞察藥水 x2",       category: "survival", toKey: "potionHint",     toCount: 2, cost: { flower: 1, resin: 1, quartz: 1 },    desc: "【隨身提煉】以太陽花、松脂與高台石英砂提煉 2 瓶洞察藥水！" }
+    { id: "wk_rope_ladder",     name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",     toCount: 1, cost: { wood: 1, vine: 1 },           desc: "【★高低差開路】用原木x1+藤蔓x1即可製作！架設在南側懸崖壁上爬上高台礦區！" },
+    { id: "wk_briar_sickle",    name: "除荊開路鐮刀",          category: "explore",  toKey: "briarSickle",    toCount: 1, isUniqueGear: true, cost: { wood: 1, flint: 1 }, desc: "【★尋寶工具：斬荊棘】用原木x1+燧石x1即可打造！永久可斬開【🌿荊棘魔藤】免費拎厚木板x3！" },
+    { id: "wk_thermite_powder", name: "高熱鋁熱火種 x2",       category: "explore",  toKey: "thermitePowder", toCount: 2, cost: { branch: 2, flint: 1 },        desc: "【★尋寶火種：融玄冰】用枯枝x2+燧石x1即可製作！可融化洞窟與雪原的【🧊玄冰晶殼】免費拎流沙秘銀！" },
+    { id: "wk_ancient_gear",    name: "精密青銅齒輪 x2",       category: "explore",  toKey: "ancientGear",    toCount: 2, cost: { iron: 1, flint: 1 },          desc: "【★尋寶零件：開齒輪柱】用鐵礦x1+燧石x1即可打造！放入【⚙️齒輪機關柱】免費拎麻繩與秘銀！" },
+    { id: "wk_salvage_hook",    name: "深水打撈磁鉤",          category: "explore",  toKey: "salvageHook",    toCount: 1, isUniqueGear: true, cost: { iron: 1, vine: 1 },  desc: "【★尋寶工具：撈沉船箱】用鐵礦x1+藤蔓x1即可打造！永久可打撈水邊【⚓沉船寶箱】！" },
+    { id: "wk_frost_essence",   name: "極寒急凍晶瓶 x2",       category: "explore",  toKey: "frostEssence",   toCount: 2, cost: { iceLotus: 1, clay: 1 },       desc: "【★尋寶冰瓶：碎熔岩殼】用冰蓮x1+黏土x1即可製作！可震碎火山【🔥熔岩晶殼】免費拎耐火磚x3！" },
+    { id: "wk_magnifying_lens", name: "水晶鑑定放大鏡",        category: "explore",  toKey: "magnifyingLens", toCount: 1, isUniqueGear: true, cost: { quartz: 1, iron: 1 },desc: "【★尋寶神器】持有後全地圖採集額外獲得稀有寶石與雙倍礦物機率 +35%！" },
+    { id: "wk_crypt_key",       name: "鍛造遺跡鑰匙 x1",       category: "explore",  toKey: "cryptKey",       toCount: 1, cost: { iron: 1, coal: 1 },           desc: "【★地底遺跡開鎖】除用鐵鏟挖掘地面「✖」獲得外，亦可用鐵礦x1+木炭x1直接鍛造！" },
+    { id: "wk_torch",           name: "松脂火把 x3",           category: "explore",  toKey: "torchItem",      toCount: 3, cost: { branch: 1, resin: 1 },        desc: "【地牢與黑夜照明】點燃後照亮黑霧蘑菇洞窟，並在黑夜戰鬥直接燒毀夜魔 1 層暗夜護盾！" },
+    { id: "wk_quartz_lantern",  name: "石英探礦提燈 (火把x5)", category: "explore",  toKey: "torchItem",      toCount: 5, cost: { quartz: 1, coal: 1 },         desc: "【強光照明】以石英砂與木炭打造，一次產出 5 支長效照明火把！" },
+    { id: "wk_bomb",            name: "爆破炸彈 x2",           category: "explore",  toKey: "bombItem",       toCount: 2, cost: { flint: 2, clay: 1 },          desc: "【秘境開路】可炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱！" },
+    { id: "wk_coal_bomb",       name: "黑火藥重型炸彈 x3",     category: "explore",  toKey: "bombItem",       toCount: 3, cost: { coal: 1, flint: 1 },          desc: "【高效爆破】以高台黑曜木炭調配火藥，一次大量製造 3 顆爆破炸彈！" },
+    { id: "wk_charcoal_kiln",   name: "窯燒黑曜木炭 x2",       category: "smelt",    toKey: "coal",           toCount: 2, cost: { branch: 2 },                  desc: "【舊資源再利用】將 2 根散落枯枝悶燒成 2 塊黑曜木炭！" },
+    { id: "wk_bronze_ingot",    name: "冶煉青銅合金錠 x1",     category: "smelt",    toKey: "bronzeIngot",    toCount: 1, cost: { copperOre: 1, tinOre: 1 },    desc: "【合金冶煉】將赤銅礦與白錫礦熔煉為青銅合金錠。" },
+    { id: "wk_plank",           name: "加工厚木板 x1",         category: "smelt",    toKey: "plank",          toCount: 1, cost: { wood: 2 },                    desc: "【工程建材】將 2 塊翠風原木裁切為堅固的厚木板，用於修橋與升級大帆船。" },
+    { id: "wk_rope",            name: "強化麻繩索 x1",         category: "smelt",    toKey: "rope",           toCount: 1, cost: { vine: 2 },                    desc: "【工程建材】將 2 條堅韌藤蔓編織為麻繩索，用於修復峽谷吊橋與造船。" },
+    { id: "wk_rope_hemp",       name: "亞麻編織繩 x2",         category: "smelt",    toKey: "rope",           toCount: 2, cost: { hemp: 2 },                    desc: "【高效製繩】以峽谷荒野亞麻一次編織出 2 條強韌麻繩索。" },
+    { id: "wk_pitch",           name: "防水松脂膠 x1",         category: "smelt",    toKey: "pitch",          toCount: 1, cost: { resin: 2, clay: 1 },          desc: "【造船建材】混合琥珀松脂與河畔黏土熬製的防水塗料。" },
+    { id: "wk_nails",           name: "鍛造鐵釘 x2",           category: "smelt",    toKey: "nails",          toCount: 2, cost: { iron: 1 },                    desc: "【工程建材】將藍晶鐵礦鍛打為工程鐵釘。" },
+    { id: "wk_steel_cable",     name: "秘銀強化鋼索 x1",       category: "smelt",    toKey: "steelCable",     toCount: 1, cost: { mithril: 1, rope: 1 },        desc: "【高階建材】融合流沙秘銀與麻繩索打造的超強韌鋼索。" },
+    { id: "wk_heavy_sail",      name: "防風重帆布 x1",         category: "smelt",    toKey: "heavySail",      toCount: 1, cost: { sailCloth: 2, rope: 1 },      desc: "【遠航建材】縫合幽靈古帆布與麻繩，用於建造破浪遠洋大帆船。" },
+    { id: "wk_warm_fur",        name: "禦寒獸毛氈 x1",         category: "smelt",    toKey: "warmFur",        toCount: 1, cost: { sinew: 2, hemp: 1 },          desc: "【極地建材】搭建雪原防風避難屋與高階防寒護甲的保暖毛氈。" },
+    { id: "wk_spiced_stew",     name: "香辛海陸燉肉 x1",       category: "survival", toKey: "spicedStew",     toCount: 1, cost: { fish: 1, herb: 1, rockSalt: 1 }, desc: "【★極品增益料理】食用立即恢復 100% 飽食度 + 150 HP，並永久提升主角最大生命值 +15！" },
+    { id: "wk_ration_jerky",    name: "岩鹽風乾肉脯 x2",       category: "survival", toKey: "rationJerky",    toCount: 2, cost: { fish: 1, rockSalt: 1 },       desc: "【頂級口糧】以高台結晶岩鹽醃製鮮魚，食用每份恢復 +80% 飽食度與 +90 HP！" },
+    { id: "wk_ration_herb",     name: "烘烤微光菇乾 x2",       category: "survival", toKey: "rationHerb",     toCount: 2, cost: { herb: 1, branch: 1 },         desc: "【基礎口糧】食用每份可恢復 +35% 飽食度與 +25 HP。" },
+    { id: "wk_ration_fish",     name: "炭烤鮮魚乾 x2",         category: "survival", toKey: "rationFish",     toCount: 2, cost: { fish: 1, branch: 1 },         desc: "【進階口糧】食用每份可恢復 +60% 飽食度與 +60 HP。" },
+    { id: "wk_alchemy_heal",    name: "精煉生命藥水 x2",       category: "survival", toKey: "potionHeal",     toCount: 2, cost: { herb: 2, quartz: 1 },         desc: "【隨身提煉】以微光菇 x2 與高台石英砂燒製的玻璃瓶，免費提煉 2 瓶生命藥水！" },
+    { id: "wk_alchemy_hint",    name: "精煉洞察藥水 x2",       category: "survival", toKey: "potionHint",     toCount: 2, cost: { flower: 1, resin: 1, quartz: 1 }, desc: "【隨身提煉】以太陽花、松脂與高台石英砂提煉 2 瓶洞察藥水！" }
   ];
 
   const REMOVED_DUPLICATE_WEAPON_IDS = ["w_srpg_machete", "w_srpg_quartz_blade", "w_srpg_highland_axe"];
@@ -1572,16 +1544,16 @@ window.Aetheria = window.Aetheria || {};
         costMap = { obsidian: 1, basalt: 1, clay: 1 };
         descText = "【★六章拱橋建材】以熔岩黑曜石、玄武岩與黏土燒製的耐火石磚，用於鋪設火山石拱橋！";
       } else if (mName.indexOf("龍鱗") !== -1 && !existingOutKeys[mKey]) {
-        costMap = { obsidian: 1, coal: 2 };
+        costMap = { obsidian: 1, coal: 1 };
         descText = "【★六章任務保底】除討伐火山魔物與採集高台獲得外，亦可用黑曜石與黑木炭直接提煉【" + mName + "】！";
       } else if (mName.indexOf("熔核") !== -1 && !existingOutKeys[mKey]) {
-        costMap = { obsidian: 2, mithril: 1, coal: 2 };
+        costMap = { obsidian: 1, mithril: 1 };
         descText = "【★六章任務保底】除擊敗火山精英/領主掉落外，亦可在工坊凝聚黑曜石與秘銀直接合成【" + mName + "】！";
       } else if (mName.indexOf("海妖") !== -1 && !existingOutKeys[mKey]) {
-        costMap = { coral: 2, mithril: 1, quartz: 1 };
-        descText = "【★遠洋大帆船核心保底】除擊敗深海頭目與沉船墓地獲得外，亦可用深海珊瑚與秘銀共鳴合成【" + mName + "】！";
+        costMap = { coral: 1, mithril: 1 };
+        descText = "【★遠洋大帆船核心保底】除擊敗深海頭目獲得外，亦可用深海珊瑚與秘銀共鳴合成【" + mName + "】！";
       } else if (mName.indexOf("帆布") !== -1 && mKey !== "heavySail" && !existingOutKeys[mKey]) {
-        costMap = { hemp: 2, vine: 1 };
+        costMap = { hemp: 1, vine: 1 };
         count = 2;
         descText = "【★四章海岸建材保底】以荒野亞麻與藤蔓編織【" + mName + "】，不用再苦刷海岸怪物掉落！";
       } else if (mName.indexOf("獸筋") !== -1 && !existingOutKeys[mKey]) {
@@ -1589,10 +1561,10 @@ window.Aetheria = window.Aetheria || {};
         count = 2;
         descText = "【★五章雪原建材保底】以強化麻繩浸潤琥珀松脂製成【" + mName + "】，輕鬆合成禦寒獸毛氈！";
       } else if ((mName.indexOf("聖碑") !== -1 || mName.indexOf("殘片") !== -1) && !existingOutKeys[mKey]) {
-        costMap = { starIron: 1, obsidian: 1, quartz: 1 };
+        costMap = { starIron: 1, quartz: 1 };
         descText = "【★終章聖碑保底】除開啟各區地底遺跡石棺獲得外，亦可用星隕鐵與石英砂修復合成【" + mName + "】！";
       } else if ((mName.indexOf("浮空") !== -1 || mName.indexOf("天界") !== -1 || mName.indexOf("星輝") !== -1) && !existingOutKeys[mKey]) {
-        costMap = { starIron: 1, quartz: 2 };
+        costMap = { starIron: 1, quartz: 1 };
         descText = "【★終章天界建材保底】以深淵星隕鐵與透明石英砂鍛造【" + mName + "】！";
       }
 
@@ -1636,13 +1608,14 @@ window.Aetheria = window.Aetheria || {};
       if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
       if (!s.projectsBuilt) s.projectsBuilt = {};
 
-      // 僅在該區 Boss 確定已被擊敗過時，才回溯標記橋樑已通（不依賴等級自動開橋，確保未打通章節必先解謎！）
-      if (s.bossesDefeated && s.bossesDefeated.zone1_forest) s.projectsBuilt.proj_z1_bridge = true;
-      if (s.bossesDefeated && s.bossesDefeated.zone2_canyon) {
+      if ((s.lv && s.lv >= 5) || (s.bossesDefeated && s.bossesDefeated.zone1_forest)) {
+        s.projectsBuilt.proj_z1_bridge = true;
+      }
+      if ((s.lv && s.lv >= 10) || (s.bossesDefeated && s.bossesDefeated.zone2_canyon)) {
         s.projectsBuilt.proj_z2_rope = true;
         s.projectsBuilt.proj_z2_bridge = true;
       }
-      if (s.bossesDefeated && s.bossesDefeated.zone3_coast) {
+      if ((s.lv && s.lv >= 15) || (s.bossesDefeated && s.bossesDefeated.zone3_coast)) {
         s.projectsBuilt.proj_z3_raft = true;
         s.projectsBuilt.proj_z3_bridge = true;
       }
@@ -1677,9 +1650,9 @@ window.Aetheria = window.Aetheria || {};
         return r && REMOVED_BLOAT_RECIPE_IDS.indexOf(r.id) === -1;
       });
       COMPLETE_WORKSHOP_RECIPES.concat(dynamicGuaranteedRecipes).forEach(function(rec) {
-        if (!Data.WORKSHOP_RECIPES.some(function(r) { return r.id === rec.id; })) {
-          Data.WORKSHOP_RECIPES.push(rec);
-        }
+        const idx = Data.WORKSHOP_RECIPES.findIndex(function(r) { return r.id === rec.id; });
+        if (idx !== -1) Data.WORKSHOP_RECIPES[idx] = rec;
+        else Data.WORKSHOP_RECIPES.push(rec);
       });
     } else {
       Data.WORKSHOP_RECIPES = COMPLETE_WORKSHOP_RECIPES.concat(dynamicGuaranteedRecipes);
@@ -1749,83 +1722,93 @@ window.Aetheria = window.Aetheria || {};
     return campMap;
   }
 
-  // ================= 8. 現場機關陣與 4 大「工具解謎驅動障礙」 =================
+  // ================= 8. ★ 小四小五學生友善版：直覺數字火盆、獨立拉桿與目標方向石像 =================
   const DIR_SYMBOLS = ["▲北", "▶東", "▼南", "◀西"];
 
+  // 解開工具尋寶點即送當區主線急需建材（如厚木板、流沙秘銀、麻繩、古帆布、獸毛氈、耐火磚）！
   const ZONE_TOOL_GATE_OBSTACLES = {
     zone1_forest: [
-      { id: "tg_z1_briar",  x: 420, y: 540, gateType: "briar",  sprite: "gate_briar_vines",  name: "🌿荊棘魔藤[步驟①:需鐮刀]", reqKey: "briarSickle",    consume: false, rewardGold: 220, rewardMats: { copperOre: 3, tinOre: 2, herb: 4 } },
-      { id: "tg_z1_sunken", x: 985, y: 480, gateType: "sunken", sprite: "gate_sunken_chest", name: "⚓沉沒寶箱[需打撈鉤]",     reqKey: "salvageHook",    consume: false, rewardGold: 260, rewardMats: { mithril: 2, quartz: 2, fish: 4 } }
+      { id: "tg_z1_briar",  x: 420, y: 540, gateType: "briar",  sprite: "gate_briar_vines",  name: "🌿荊棘魔藤[用除荊鐮刀]", reqKey: "briarSickle",    consume: false, rewardGold: 220, rewardMats: { plank: 3, rope: 2, herb: 3 } },
+      { id: "tg_z1_sunken", x: 985, y: 480, gateType: "sunken", sprite: "gate_sunken_chest", name: "⚓沉沒寶箱[用打撈磁鉤]", reqKey: "salvageHook",    consume: false, rewardGold: 260, rewardMats: { iron: 3, quartz: 2, fish: 4 } }
     ],
     cave1_mushroom: [
-      { id: "tg_c1_ice",    x: 860, y: 640, gateType: "ice",    sprite: "gate_element_geode",name: "🧊玄冰晶殼[步驟①:需鋁熱火種]", reqKey: "thermitePowder", consume: true,  rewardGold: 320, rewardMats: { mithril: 3, cryptKey: 1 } },
-      { id: "tg_c1_briar",  x: 680, y: 480, gateType: "briar",  sprite: "gate_briar_vines",  name: "🌿幽窟魔藤[需鐮刀]",         reqKey: "briarSickle",    consume: false, rewardGold: 250, rewardMats: { tinOre: 3, coal: 3, quartz: 2 } }
+      { id: "tg_c1_ice",    x: 860, y: 640, gateType: "ice",    sprite: "gate_element_geode",name: "🧊玄冰晶殼[用高熱火種]", reqKey: "thermitePowder", consume: true,  rewardGold: 320, rewardMats: { mithril: 2, basalt: 2, cryptKey: 1 } },
+      { id: "tg_c1_briar",  x: 680, y: 480, gateType: "briar",  sprite: "gate_briar_vines",  name: "🌿幽窟魔藤[用除荊鐮刀]", reqKey: "briarSickle",    consume: false, rewardGold: 250, rewardMats: { basalt: 2, clay: 3, resin: 3 } }
     ],
     zone2_canyon: [
-      { id: "tg_z2_gear",   x: 720, y: 540, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️齒輪機關柱[步驟①:需青銅齒輪]", reqKey: "ancientGear",    consume: true,  rewardGold: 300, rewardMats: { mithril: 3, basalt: 3, cryptKey: 1 } },
-      { id: "tg_z2_sunken", x: 985, y: 520, gateType: "sunken", sprite: "gate_sunken_chest", name: "⚓峽谷沉寶[需打撈鉤]",           reqKey: "salvageHook",    consume: false, rewardGold: 280, rewardMats: { copperOre: 3, tinOre: 3, quartz: 2 } }
+      { id: "tg_z2_gear",   x: 720, y: 540, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️齒輪機關柱[用精密齒輪]", reqKey: "ancientGear",    consume: true,  rewardGold: 300, rewardMats: { rope: 3, steelCable: 2, mithril: 2 } },
+      { id: "tg_z2_sunken", x: 985, y: 520, gateType: "sunken", sprite: "gate_sunken_chest", name: "⚓峽谷沉寶[用打撈磁鉤]",   reqKey: "salvageHook",    consume: false, rewardGold: 280, rewardMats: { mithril: 2, basalt: 3, cryptKey: 1 } }
     ],
     zone3_coast: [
-      { id: "tg_z3_sunken", x: 760, y: 580, gateType: "sunken", sprite: "gate_sunken_chest", name: "⚓深海沉船箱[步驟①:需打撈鉤]", reqKey: "salvageHook",    consume: false, rewardGold: 360, rewardMats: { coral: 3, sailCloth: 2, cryptKey: 1 } },
-      { id: "tg_z3_gear",   x: 560, y: 660, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️海神齒輪柱[需青銅齒輪]",     reqKey: "ancientGear",    consume: true,  rewardGold: 340, rewardMats: { coral: 3, mithril: 2 } }
+      { id: "tg_z3_sunken", x: 760, y: 580, gateType: "sunken", sprite: "gate_sunken_chest", name: "⚓深海沉船箱[用打撈磁鉤]", reqKey: "salvageHook",    consume: false, rewardGold: 360, rewardMats: { heavySail: 2, sailCloth: 3, pitch: 2 } },
+      { id: "tg_z3_gear",   x: 560, y: 660, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️海神齒輪柱[用精密齒輪]", reqKey: "ancientGear",    consume: true,  rewardGold: 340, rewardMats: { coral: 3, plank: 3, cryptKey: 1 } }
     ],
     zone4_snow: [
-      { id: "tg_z4_ice1",   x: 700, y: 540, gateType: "ice",    sprite: "gate_element_geode",name: "🧊萬年玄冰棺[步驟①:需鋁熱火種]", reqKey: "thermitePowder", consume: true,  rewardGold: 420, rewardMats: { iceLotus: 3, sinew: 3, obsidian: 2 } },
-      { id: "tg_z4_briar",  x: 880, y: 660, gateType: "briar",  sprite: "gate_briar_vines",  name: "🌿霜棘魔藤[需鐮刀]",             reqKey: "briarSickle",    consume: false, rewardGold: 380, rewardMats: { iceLotus: 2, coal: 4, cryptKey: 1 } }
+      { id: "tg_z4_ice1",   x: 700, y: 540, gateType: "ice",    sprite: "gate_element_geode",name: "🧊萬年玄冰棺[用高熱火種]", reqKey: "thermitePowder", consume: true,  rewardGold: 420, rewardMats: { warmFur: 2, sinew: 3, iceLotus: 3 } },
+      { id: "tg_z4_briar",  x: 880, y: 660, gateType: "briar",  sprite: "gate_briar_vines",  name: "🌿霜棘魔藤[用除荊鐮刀]",   reqKey: "briarSickle",    consume: false, rewardGold: 380, rewardMats: { iceLotus: 3, obsidian: 2, cryptKey: 1 } }
     ],
     zone5_volcano: [
-      { id: "tg_z5_magma",  x: 720, y: 560, gateType: "magma",  sprite: "gate_element_geode",name: "🔥熔岩黑曜殼[步驟①:需急凍晶瓶]", reqKey: "frostEssence",   consume: true,  rewardGold: 480, rewardMats: { obsidian: 3, starIron: 2, cryptKey: 1 } },
-      { id: "tg_z5_gear",   x: 880, y: 660, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️熔爐齒輪柱[需青銅齒輪]",       reqKey: "ancientGear",    consume: true,  rewardGold: 450, rewardMats: { obsidian: 3, basalt: 3 } }
+      { id: "tg_z5_magma",  x: 720, y: 560, gateType: "magma",  sprite: "gate_element_geode",name: "🔥熔岩黑曜殼[用急凍晶瓶]", reqKey: "frostEssence",   consume: true,  rewardGold: 480, rewardMats: { obsidian: 3, starIron: 2, cryptKey: 1 } },
+      { id: "tg_z5_gear",   x: 880, y: 660, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️熔爐齒輪柱[用精密齒輪]", reqKey: "ancientGear",    consume: true,  rewardGold: 450, rewardMats: { obsidian: 3, mithril: 3 } }
     ],
     zone6_sky: [
-      { id: "tg_z6_gear",   x: 720, y: 550, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️星界齒輪聖柱[步驟①:需青銅齒輪]", reqKey: "ancientGear",    consume: true,  rewardGold: 600, rewardMats: { starIron: 3, goldLeaf: 2, tabletShard: 1 } },
-      { id: "tg_z6_magma",  x: 880, y: 660, gateType: "magma",  sprite: "gate_element_geode",name: "🔥星核晶殼[需急凍晶瓶]",           reqKey: "frostEssence",   consume: true,  rewardGold: 600, rewardMats: { starIron: 3, goldLeaf: 2 } }
+      { id: "tg_z6_gear",   x: 720, y: 550, gateType: "gear",   sprite: "gate_gear_pillar",  name: "⚙️星界齒輪柱[用精密齒輪]", reqKey: "ancientGear",    consume: true,  rewardGold: 600, rewardMats: { starIron: 3, goldLeaf: 2, tabletShard: 1 } },
+      { id: "tg_z6_magma",  x: 880, y: 660, gateType: "magma",  sprite: "gate_element_geode",name: "🔥星核晶殼[用急凍晶瓶]",   reqKey: "frostEssence",   consume: true,  rewardGold: 600, rewardMats: { starIron: 3, goldLeaf: 2 } }
     ]
   };
 
+  // ★ 小四小五直覺謎題：火盆直接標示「火盆①➔④」、拉桿獨立開關、石像直接標示「[轉去▶東]」！
   const ZONE_EXPLORE_PUZZLES = {
     zone1_forest: {
       type: "brazier_order", cx: 230, cy: 880,
-      riddle: "📜【森林古碑謎語 (步驟②)】：「先以除荊鐮刀斬開荊棘谷(步驟①)，再依日出至星夜點燃聖火：東之晨(1) ➔ 南之日(2) ➔ 西之霞(3) ➔ 北之星(4)！」",
+      riddle: "📜【森林小提示】：「請順着數字次序，由 ① 到 ④ 點燃四個火盆（火盆① ➔ 火盆② ➔ 火盆③ ➔ 火盆④），就能打開中間的寶箱！」",
       items: [
-        { dx: 64, dy: 0, order: 1, label: "東之晨" }, { dx: 0, dy: 58, order: 2, label: "南之日" },
-        { dx: -64, dy: 0, order: 3, label: "西之霞" }, { dx: 0, dy: -58, order: 4, label: "北之星" }
+        { dx: 64,  dy: 0,   order: 1, label: "火盆①(東)" },
+        { dx: 0,   dy: 58,  order: 2, label: "火盆②(南)" },
+        { dx: -64, dy: 0,   order: 3, label: "火盆③(西)" },
+        { dx: 0,   dy: -58, order: 4, label: "火盆④(北)" }
       ]
     },
     cave1_mushroom: {
       type: "lever_toggle", cx: 230, cy: 860,
-      riddle: "📜【礦洞機關銘文 (步驟②)】：「先以鋁熱火種融化玄冰晶殼(步驟①)，再扳動三座連動機括（①動①②、②動①②③、③動②③）使其全部開啟！」"
+      riddle: "📜【礦洞小提示】：「走到下面 3 個拉桿旁邊按 A 鍵，將『拉桿①、拉桿②、拉桿③』全部變成綠色【🟢開】，就能打開中間的寶箱！」"
     },
     zone2_canyon: {
       type: "statue_rotate", cx: 230, cy: 880,
-      riddle: "📜【法老方位碑 (步驟②)】：「先將青銅齒輪嵌入流沙盆地機關柱(步驟①)，再令四方石像共鳴：西衛望東(▶東)、東衛望西(◀西)、北衛望南(▼南)、南衛望北(▲北)！」",
+      riddle: "📜【石像小提示】：「走到每座石像旁按 A 鍵轉動方向，只要 4 座石像都轉去頭頂寫住的目標方向變成綠色【✅】，寶箱就會打開！」",
       statues: [
-        { dx: -64, dy: 0, initDir: 0, targetDir: 1, name: "西衛" }, { dx: 64, dy: 0, initDir: 1, targetDir: 3, name: "東衛" },
-        { dx: 0, dy: -58, initDir: 3, targetDir: 2, name: "北衛" }, { dx: 0, dy: 58, initDir: 2, targetDir: 0, name: "南衛" }
+        { dx: -64, dy: 0,   initDir: 0, targetDir: 1, name: "西衛" },
+        { dx: 64,  dy: 0,   initDir: 1, targetDir: 3, name: "東衛" },
+        { dx: 0,   dy: -58, initDir: 3, targetDir: 2, name: "北衛" },
+        { dx: 0,   dy: 58,  initDir: 2, targetDir: 0, name: "南衛" }
       ]
     },
     zone3_coast: {
       type: "lever_toggle", cx: 230, cy: 880,
-      riddle: "📜【沉船水閘銘文 (步驟②)】：「先用深水打撈磁鉤於新月海灣撈起沉船箱(步驟①)，再令三座連動水閘同時處於【🟢開啟】斷絕幽靈船長的潮汐加護！」"
+      riddle: "📜【水閘小提示】：「走到下面 3 個水閘拉桿旁按 A 鍵，將 3 個拉桿全部變成綠色【🟢開】，就能打開中間的海神寶箱！」"
     },
     zone4_snow: {
       type: "brazier_order", cx: 230, cy: 880,
-      riddle: "📜【冰原融霜碑 (步驟②)】：「先用高熱鋁熱火種融化鏡湖玄冰棺(步驟①)，再逆風點燃四聖火：北之極光(1) ➔ 西之寒星(2) ➔ 南之暖陽(3) ➔ 東之破曉(4)！」",
+      riddle: "📜【冰原小提示】：「請順着數字次序，由 ① 到 ④ 點燃四個融霜火盆（火盆① ➔ 火盆② ➔ 火盆③ ➔ 火盆④），就能打開寶箱！」",
       items: [
-        { dx: 0, dy: -58, order: 1, label: "北之極光" }, { dx: -64, dy: 0, order: 2, label: "西之寒星" },
-        { dx: 0, dy: 58, order: 3, label: "南之暖陽" },  { dx: 64, dy: 0, order: 4, label: "東之破曉" }
+        { dx: 0,   dy: -58, order: 1, label: "火盆①(北)" },
+        { dx: -64, dy: 0,   order: 2, label: "火盆②(西)" },
+        { dx: 0,   dy: 58,  order: 3, label: "火盆③(南)" },
+        { dx: 64,  dy: 0,   order: 4, label: "火盆④(東)" }
       ]
     },
     zone5_volcano: {
       type: "lever_toggle", cx: 230, cy: 880,
-      riddle: "📜【熔岩閥門銘文 (步驟②)】：「先用極寒急凍晶瓶震碎火口熔岩殼(步驟①)，再令三座連動熔岩閥同時處於【🟢開啟】壓制火山龍皇的沸騰龍炎！」"
+      riddle: "📜【火山小提示】：「走到下面 3 個冷卻閥門拉桿旁按 A 鍵，將 3 個拉桿全部變成綠色【🟢開】，就能打開寶箱拎耐火磚！」"
     },
     zone6_sky: {
       type: "statue_rotate", cx: 230, cy: 880,
-      riddle: "📜【天界星象碑 (步驟②)】：「先將青銅齒輪嵌入中央星界聖柱(步驟①)，再令四聖像背心向外守護八方：北像朝北(▲北)、東像朝東(▶東)、南像朝南(▼南)、西像朝西(◀西)！」",
+      riddle: "📜【星象小提示】：「按 A 鍵轉動 4 座星像，令每座星像都對準頭頂寫住的目標方向變成綠色【✅】，就能打開天界寶箱！」",
       statues: [
-        { dx: 0, dy: -58, initDir: 2, targetDir: 0, name: "北像" }, { dx: 64, dy: 0, initDir: 3, targetDir: 1, name: "東像" },
-        { dx: 0, dy: 58, initDir: 0, targetDir: 2, name: "南像" },  { dx: -64, dy: 0, initDir: 1, targetDir: 3, name: "西像" }
+        { dx: 0,   dy: -58, initDir: 2, targetDir: 0, name: "北像" },
+        { dx: 64,  dy: 0,   initDir: 3, targetDir: 1, name: "東像" },
+        { dx: 0,   dy: 58,  initDir: 0, targetDir: 2, name: "南像" },
+        { dx: -64, dy: 0,   initDir: 1, targetDir: 3, name: "西像" }
       ]
     }
   };
@@ -1900,7 +1883,7 @@ window.Aetheria = window.Aetheria || {};
         });
       });
     } else if (pCfg.type === "lever_toggle") {
-      const initStates = solved ? [true, true, true] : [true, false, false];
+      const initStates = solved ? [true, true, true] : [false, false, false];
       [-56, 0, 56].forEach(function(dx, idx) {
         const isOn = initStates[idx];
         mapObj.decos.push({
@@ -2195,7 +2178,7 @@ window.Aetheria = window.Aetheria || {};
     return mapObj;
   }
 
-  // ================= 10. 章節因果鏈詳情視窗、全區放大地圖、【📖 求生合成圖鑑】與格仔工坊 =================
+  // ================= 10. 尋寶秘笈視窗、全區放大地圖、【📖 求生合成圖鑑】與格仔工坊 =================
   const WorkshopUIManager = {
     curTab: "workshop",
     curSubFilter: "all",
@@ -2214,28 +2197,28 @@ window.Aetheria = window.Aetheria || {};
 
       const c = prog.chain;
       window.Aetheria.UI.setActivePanel("panel-modal");
-      document.getElementById("modal-title").innerHTML = "🔒 " + c.title + " (" + prog.count + "/3)";
+      document.getElementById("modal-title").innerHTML = "💡 " + c.title + " (" + prog.count + "/3)";
 
       const body = document.getElementById("modal-body");
       body.innerHTML =
         '<div class="sys-card-scroll" style="margin-bottom:8px;">' +
-          '<b>🗣️ ' + c.npcName + '的緊急情報（主線必解）：</b>' +
+          '<b>🗣️ ' + c.npcName + '的尋寶小貼士：</b>' +
           '<div style="font-size:12px; color:#5c3824; margin-top:3px;">「' + c.storyIntro + '」</div>' +
         '</div>' +
         '<div class="codex-card ' + (prog.step1Done ? 'owned' : '') + '">' +
-          '<b style="color:' + (prog.step1Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step1Done ? '✅ 步驟① 已完成' : '🔒 步驟① (工具破障 - 必解)') + '</b>' +
+          '<b style="color:' + (prog.step1Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step1Done ? '✅ 已完成' : '🎁 工具尋寶 (直接送主線建材)') + '</b>' +
           '<div style="font-size:12px; color:#ffffff; margin-top:3px;">' + c.step1Title + '</div>' +
         '</div>' +
         '<div class="codex-card ' + (prog.step2Done ? 'owned' : '') + '">' +
-          '<b style="color:' + (prog.step2Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step2Done ? '✅ 步驟② 已完成' : '🔒 步驟② (古碑機關 - 必解)') + '</b>' +
+          '<b style="color:' + (prog.step2Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step2Done ? '✅ 已完成' : '🎁 趣味機關 (隨時可解)') + '</b>' +
           '<div style="font-size:12px; color:#ffffff; margin-top:3px;">' + c.step2Title + '</div>' +
         '</div>' +
         '<div class="codex-card ' + (prog.step3Done ? 'owned' : '') + '">' +
-          '<b style="color:' + (prog.step3Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step3Done ? ('✅ 步驟③ 已取得' + c.relicName) : ('🔒 步驟③ (取得' + c.relicName + '解鎖修橋與首領戰)')) + '</b>' +
+          '<b style="color:' + (prog.step3Done ? '#5ac54f' : '#ffd166') + ';">' + (prog.step3Done ? '✅ 已領取寶箱' : '🎁 機關秘寶箱 (削弱首領護盾)') + '</b>' +
           '<div style="font-size:12px; color:#ffffff; margin-top:3px;">' + c.step3Title + '</div>' +
         '</div>' +
         '<div style="display:flex; gap:6px; margin-top:10px;">' +
-          '<button class="na-btn highlight" style="flex:1; padding:8px;" onclick="Aetheria.UI.openForgeModal(\'workshop\')">🔨 打開隨身工坊打造工具</button>' +
+          '<button class="na-btn highlight" style="flex:1; padding:8px;" onclick="Aetheria.UI.openForgeModal(\'workshop\')">🔨 打開工坊(1步合成工具)</button>' +
           '<button class="na-btn" style="flex:1; padding:8px;" onclick="Aetheria.HighlandsWorkshop.openFullZoneMapModal()">🗺️ 查看全區全貌地圖</button>' +
         '</div>';
     },
@@ -2274,7 +2257,7 @@ window.Aetheria = window.Aetheria || {};
       const navHtml =
         '<div style="display:flex; gap:6px; margin-bottom:8px;">' +
           '<button class="na-btn highlight" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.UI.openForgeModal(\'workshop\')">🔨 前往隨身工坊合成</button>' +
-          '<button class="na-btn" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">🔒 本區主線破障流程</button>' +
+          '<button class="na-btn" style="flex:1; padding:5px; font-size:11.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">💡 本區尋寶小貼士</button>' +
         '</div>';
 
       let cardsHtml = "";
@@ -2345,8 +2328,8 @@ window.Aetheria = window.Aetheria || {};
         chainBanner.style.marginBottom = "6px";
         chainBanner.innerHTML =
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b style="color:#ffd166; font-size:12px;">🔒 ' + prog.chain.title + ' (' + prog.count + '/3)</b>' +
-            '<button class="na-btn" style="padding:2px 8px; font-size:10.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">必解詳情</button>' +
+            '<b style="color:#ffd166; font-size:12px;">💡 ' + prog.chain.title + ' (' + prog.count + '/3)</b>' +
+            '<button class="na-btn" style="padding:2px 8px; font-size:10.5px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">尋寶貼士</button>' +
           '</div>' +
           '<div style="font-size:11px; color:#cbd5e1; margin-top:2px;">' +
             (!prog.step1Done ? prog.chain.step1Title : (!prog.step2Done ? prog.chain.step2Title : prog.chain.step3Title)) +
@@ -2467,18 +2450,18 @@ window.Aetheria = window.Aetheria || {};
       legend.className = "fullmap-legend-bar";
       legend.innerHTML =
         '<span>⚪ <b>你的位置</b></span>' +
-        '<span>🩷 <b>步驟①工具破障點</b></span>' +
-        '<span>🟨 <b>步驟②古碑機關陣</b></span>' +
+        '<span>🩷 <b>工具尋寶點(送建材)</b></span>' +
+        '<span>🟨 <b>趣味機關寶箱</b></span>' +
         '<span><b style="color:#e03c4b; background:#ffd166; padding:0 3px; border-radius:50%;">✖</b> <b>唯一挖寶點</b></span>' +
         '<span>🟪 <b>地底遺跡門</b></span>' +
-        '<span>🔴 <b>區域首領(需破障)</b></span>';
+        '<span>🔴 <b>區域首領</b></span>';
       body.appendChild(legend);
 
       canvas.onclick = function(ev) {
         const rect = canvas.getBoundingClientRect();
         const clickX = Math.round(((ev.clientX - rect.left) / rect.width) * W);
         const clickY = Math.round(((ev.clientY - rect.top) / rect.height) * H);
-        window.Aetheria.UI.showToast("🧭 地圖座標 (" + clickX + ", " + clickY + ")｜必須先完成「🩷步驟① ➔ 🟨步驟② ➔ 🏆開箱」才可修橋及挑戰 🔴首領！");
+        window.Aetheria.UI.showToast("🧭 地圖座標 (" + clickX + ", " + clickY + ")｜前往 🩷工具尋寶點與 🟨趣味機關陣可免費拎大量修橋建材！");
       };
     },
 
@@ -2960,7 +2943,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.HighlandsWorkshop = WorkshopUIManager;
 
-  // ================= 11. 掛載系統（主線強制破障鎖定 + Boss 無敵結界彈開 + 橋樑通行） =================
+  // ================= 11. 掛載系統（獨立拉桿 + 直覺數字火盆 + 目標石像 + 下半屏按鍵永久鎖死） =================
   function hookSystemsForHighlandsAndWorkshop() {
     const St   = window.Aetheria.State;
     const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
@@ -2970,6 +2953,7 @@ window.Aetheria = window.Aetheria || {};
     const UI   = window.Aetheria.UI;
 
     lockHintElementSetter();
+    lockLowerScreenControlsPosition();
 
     if (St && St.recalcMaxHp) {
       const origMaxHp = St.recalcMaxHp.bind(St);
@@ -3026,14 +3010,8 @@ window.Aetheria = window.Aetheria || {};
         const prevX = s.heroX, prevY = s.heroY, prevZone = s.currentZone;
         const curMap = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
 
-        // 僅當本區已修好橋（且已完成 3 步破障解謎或舊存檔已擊敗該區 Boss）時，才允許走過河道橋面
-        const prog = curMap ? getZoneStoryProgress(curMap.id, s) : null;
-        const canCrossBridge = Boolean(
-          curMap && curMap.hasRiver && isMapBridgeBuilt(curMap, s) && (!prog || prog.allDone)
-        );
-
         let bypassedRiverForBridge = false;
-        if (canCrossBridge) {
+        if (curMap && curMap.hasRiver && isMapBridgeBuilt(curMap, s)) {
           const bY = getMapBridgeY(curMap);
           if (s.heroY >= Math.min(195, bY - 55) && s.heroY <= Math.max(355, bY + 55)) {
             bypassedRiverForBridge = true;
@@ -3090,7 +3068,6 @@ window.Aetheria = window.Aetheria || {};
         const s = window.Aetheria.State.data;
         if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
         const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
-        const prog = mapObj ? getZoneStoryProgress(mapObj.id, s) : null;
 
         if (mapObj) {
           if (mapObj.id === "camp_hub" && mapObj.portals) {
@@ -3130,43 +3107,18 @@ window.Aetheria = window.Aetheria || {};
             const d = mapObj.decos[i];
             if (!d) continue;
 
-            // ★ 強制鎖鑰1：若玩家未完成本區 3 步破障解謎 (!prog.allDone)，試圖修橋 (isProjectSite) 或點亮南北封印柱時，直接攔截並彈出破障流程面板！
-            const isBridgeOrSealSite = Boolean(
-              !d.isHighlandElement && (
-                d.isProjectSite ||
-                d.projectId ||
-                d.isSealPillar ||
-                (d.sprite && String(d.sprite).indexOf("seal_pillar") !== -1)
-              )
-            );
-            if (isBridgeOrSealSite && prog && !prog.allDone && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 54) {
-              window.Aetheria.Audio.sfxWrong();
-              WorkshopUIManager.openZoneStoryChainModal();
-              window.Aetheria.UI.showToast("🔒 【主線環境鎖死】" + prog.chain.storyIntro);
-              return;
-            }
-
             if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               window.Aetheria.Audio.sfxTalkBlip();
               window.Aetheria.UI.showToast(d.riddleText || "古老的機關銘文。");
               return;
             }
 
-            if ((d.isPuzzleOrderBrazier || d.isPuzzleRotateStatue || d.isPuzzleToggleLever) &&
-                Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
-              if (prog && !prog.step1Done && !isZoneExplorePuzzleSolved(mapObj, s)) {
-                window.Aetheria.Audio.sfxWrong();
-                WorkshopUIManager.openZoneStoryChainModal();
-                window.Aetheria.UI.showToast("🔒 【步驟①尚未完成】地脈被阻斷！請先完成：" + prog.chain.step1Short);
-                return;
-              }
-            }
-
+            // ★ 小四小五友善版：火盆順着數字 ①➔②➔③➔④ 點燃即可，且不強制要求先做步驟①！
             if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               if (isZoneExplorePuzzleSolved(mapObj, s)) {
                 const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
                 if (pChest) { Exp.harvestNode(pChest); return; }
-                window.Aetheria.UI.showToast("✨ 此處四象火盆陣已解開並取得破障聖印！");
+                window.Aetheria.UI.showToast("✨ 四個火盆已經點亮並領取過寶箱了！");
                 return;
               }
               const nextOrder = (mapObj._brazierStep || 0) + 1;
@@ -3176,27 +3128,27 @@ window.Aetheria = window.Aetheria || {};
                 if (nextOrder >= 4) {
                   s.solvedExplorePuzzles[mapObj.id] = true;
                   window.Aetheria.State.save();
-                  syncMainQuestTrackerWithStoryChain();
                   window.Aetheria.Audio.sfxLevelUp();
-                  window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・請開中央寶箱!", "#5ac54f", true);
-                  window.Aetheria.UI.showToast("🎉 【主線破障 2/3 完成】四象聖火共鳴！請立即按 A 鍵開啟中央【古遺跡機關寶箱】取得" + (prog ? prog.chain.relicName : "破障聖印") + "！");
+                  window.Aetheria.UI.spawnFloatingText("🔓火盆①~④全亮!再按A開箱!", "#5ac54f", true);
+                  window.Aetheria.UI.showToast("🎉 太棒了！四個火盆全部點亮！再按一次 A 鍵即可打開中間的【古遺跡機關寶箱】！");
                 } else {
-                  window.Aetheria.UI.showToast("🔥 點燃【" + d.brazierLabel + "】(" + nextOrder + "/4)！請繼續點燃下一座！");
+                  window.Aetheria.UI.showToast("🔥 成功點燃【" + d.brazierLabel + "】！下一個請找【火盆" + ["①","②","③","④"][nextOrder] + "】！");
                 }
               } else {
                 mapObj._brazierStep = 0;
                 (mapObj.decos || []).forEach(function(bd) { if (bd.isPuzzleOrderBrazier) { bd.lit = false; bd.sprite = "brazier_off"; } });
                 window.Aetheria.Audio.sfxWrong();
-                window.Aetheria.UI.showToast("⚠️ 點燃順序錯誤！聖火已全部熄滅重置，請先閱讀左上方的【📜古碑謎語】！");
+                window.Aetheria.UI.showToast("💡 次序不對喔！請先找【火盆①】開始，順着 ① ➔ ② ➔ ③ ➔ ④ 點燃！");
               }
               return;
             }
 
+            // ★ 小四小五友善版：石像頭頂直接顯示目標方向，轉對 4 座即過關！
             if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               if (isZoneExplorePuzzleSolved(mapObj, s)) {
                 const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
                 if (pChest) { Exp.harvestNode(pChest); return; }
-                window.Aetheria.UI.showToast("✨ 四方守衛石像已共鳴並取得破障聖印！");
+                window.Aetheria.UI.showToast("✨ 四座石像已經轉好並領取過寶箱了！");
                 return;
               }
               d.curDir = ((d.curDir || 0) + 1) % 4;
@@ -3205,39 +3157,42 @@ window.Aetheria = window.Aetheria || {};
               if (allStatues.length > 0 && allStatues.every(function(sd) { return sd.curDir === sd.targetDir; })) {
                 s.solvedExplorePuzzles[mapObj.id] = true;
                 window.Aetheria.State.save();
-                syncMainQuestTrackerWithStoryChain();
                 window.Aetheria.Audio.sfxLevelUp();
-                window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・請開中央寶箱!", "#5ac54f", true);
-                window.Aetheria.UI.showToast("🎉 【主線破障 2/3 完成】四方石像共鳴！請立即按 A 鍵開啟中央【古遺跡機關寶箱】取得" + (prog ? prog.chain.relicName : "破障聖印") + "！");
+                window.Aetheria.UI.spawnFloatingText("🔓四座石像全綠!再按A開箱!", "#5ac54f", true);
+                window.Aetheria.UI.showToast("🎉 太厲害了！四座石像方向全部正確！再按一次 A 鍵即可打開中間的【古遺跡機關寶箱】！");
               } else {
-                window.Aetheria.UI.showToast("🗿 旋轉【" + d.statueName + "】朝向為：" + DIR_SYMBOLS[d.curDir]);
+                const isRight = (d.curDir === d.targetDir);
+                window.Aetheria.UI.showToast(
+                  isRight
+                    ? ("✅ 【" + d.statueName + "】已轉對方向(" + DIR_SYMBOLS[d.curDir] + ")！快去轉其他石像吧！")
+                    : ("🗿 轉動【" + d.statueName + "】為 " + DIR_SYMBOLS[d.curDir] + "（目標是轉去 " + DIR_SYMBOLS[d.targetDir] + " 喔！）")
+                );
               }
               return;
             }
 
+            // ★ 小四小五友善版：拉桿改為「獨立開關」（按哪個就開哪個），3 個都推成綠色【🟢開】即開寶箱！
             if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) {
               if (isZoneExplorePuzzleSolved(mapObj, s)) {
                 const pChest = (mapObj.nodes || []).find(function(n) { return n && n.isExplorePuzzleChest && !n.opened; });
                 if (pChest) { Exp.harvestNode(pChest); return; }
-                window.Aetheria.UI.showToast("✨ 三連拉桿機關已解開並取得破障聖印！");
+                window.Aetheria.UI.showToast("✨ 三個拉桿已經全部開啟並領取過寶箱了！");
                 return;
               }
-              const allLevers = (mapObj.decos || []).filter(function(ld) { return ld.isPuzzleToggleLever; });
-              const toggleTargets = (d.leverIdx === 0) ? [0, 1] : (d.leverIdx === 1) ? [0, 1, 2] : [1, 2];
-              allLevers.forEach(function(ld) {
-                if (toggleTargets.indexOf(ld.leverIdx) !== -1) {
-                  ld.leverOn = !ld.leverOn;
-                  ld.sprite = ld.leverOn ? "lever_on" : "lever_off";
-                }
-              });
+              d.leverOn = !d.leverOn;
+              d.sprite = d.leverOn ? "lever_on" : "lever_off";
               window.Aetheria.Audio.sfxGather();
+
+              const allLevers = (mapObj.decos || []).filter(function(ld) { return ld.isPuzzleToggleLever; });
               if (allLevers.length > 0 && allLevers.every(function(ld) { return ld.leverOn; })) {
                 s.solvedExplorePuzzles[mapObj.id] = true;
                 window.Aetheria.State.save();
-                syncMainQuestTrackerWithStoryChain();
                 window.Aetheria.Audio.sfxLevelUp();
-                window.Aetheria.UI.spawnFloatingText("🔓步驟②完成・請開中央寶箱!", "#5ac54f", true);
-                window.Aetheria.UI.showToast("🎉 【主線破障 2/3 完成】三座連動拉桿全部開啟！請立即按 A 鍵開啟中央【古遺跡機關寶箱】取得" + (prog ? prog.chain.relicName : "破障聖印") + "！");
+                window.Aetheria.UI.spawnFloatingText("🔓三個拉桿全開!再按A開箱!", "#5ac54f", true);
+                window.Aetheria.UI.showToast("🎉 太棒了！三個拉桿全部變成【🟢開】！再按一次 A 鍵即可打開中間的【古遺跡機關寶箱】！");
+              } else {
+                const onCount = allLevers.filter(function(ld) { return ld.leverOn; }).length;
+                window.Aetheria.UI.showToast("⚙️ 已切換拉桿（目前 " + onCount + "/3 個開啟），把 3 個都變成【🟢開】就能開寶箱！");
               }
               return;
             }
@@ -3279,7 +3234,7 @@ window.Aetheria = window.Aetheria || {};
               if (!s.riggedCliffs[mapObj.id]) {
                 if ((s.inventory.ropeLadder || 0) <= 0) {
                   window.Aetheria.Audio.sfxWrong();
-                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🔨加工】合成【攀岩繩梯 x1】(麻繩x1+原木x2) 架設！");
+                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🔨加工】用「原木x1+藤蔓x1」合成【攀岩繩梯 x1】架設！");
                   return;
                 }
                 s.inventory.ropeLadder--;
@@ -3302,16 +3257,6 @@ window.Aetheria = window.Aetheria || {};
               window.Aetheria.UI.updateAllHud();
               return;
             }
-          }
-        }
-
-        if (prog && !prog.allDone && mapObj && mapObj.npcs) {
-          const nearNpc = mapObj.npcs.some(function(n) { return n && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 52; });
-          if (nearNpc) {
-            setTimeout(function() {
-              const nextStepTxt = !prog.step1Done ? prog.chain.step1Short : (!prog.step2Done ? prog.chain.step2Short : prog.chain.step3Short);
-              window.Aetheria.UI.showToast("🗣️ " + prog.chain.npcName + "：『" + prog.chain.storyIntro + " 下一步：" + nextStepTxt + "』");
-            }, 350);
           }
         }
 
@@ -3349,11 +3294,11 @@ window.Aetheria = window.Aetheria || {};
               const n = mapObj.nodes[j];
               if (!n || n.opened) continue;
               if (n.isExplorePuzzleChest && Math.hypot(s.heroX - n.x, s.heroY - n.y) < (puzzleDone ? 78 : 44)) {
-                setTextIfChanged(hintEl, "取破障聖印");
+                setTextIfChanged(hintEl, "開啟秘寶箱");
                 return;
               }
               if (n.isToolGateObstacle && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 52) {
-                setTextIfChanged(hintEl, "工具破障");
+                setTextIfChanged(hintEl, "工具尋寶");
                 return;
               }
               if (n.isBuriedSpot && Math.hypot(s.heroX - n.x, s.heroY - n.y) < 42) {
@@ -3366,10 +3311,10 @@ window.Aetheria = window.Aetheria || {};
             for (let i = 0; i < mapObj.decos.length; i++) {
               const d = mapObj.decos[i];
               if (!d) continue;
-              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) { setTextIfChanged(hintEl, "閱讀古碑"); return; }
-              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "取破障聖印" : "點燃火盆"); return; }
-              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "取破障聖印" : "旋轉石像"); return; }
-              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { setTextIfChanged(hintEl, puzzleDone ? "取破障聖印" : "扳動拉桿"); return; }
+              if (d.isExplorePuzzleTablet && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44) { setTextIfChanged(hintEl, "看尋寶提示"); return; }
+              if (d.isPuzzleOrderBrazier && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "點燃火盆"); return; }
+              if (d.isPuzzleRotateStatue && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)  { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "轉動石像"); return; }
+              if (d.isPuzzleToggleLever && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 44)   { setTextIfChanged(hintEl, puzzleDone ? "開啟秘寶箱" : "開啟拉桿"); return; }
               if (d.isCryptEntrance && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 62) {
                 const open = Boolean(s.unlockedCrypts && s.unlockedCrypts[d.zoneId || mapObj.id]);
                 setTextIfChanged(hintEl, open ? "進入遺跡" : "鑰匙開鎖");
@@ -3411,8 +3356,7 @@ window.Aetheria = window.Aetheria || {};
 
           if (haveCnt <= 0) {
             window.Aetheria.Audio.sfxWrong();
-            WorkshopUIManager.openZoneStoryChainModal();
-            window.Aetheria.UI.showToast("🔒 【" + g.name + "】阻擋了地脈！請先在【工坊 ➔ 🧗解謎工具/開路】合成【" + reqName + "】前來破解！");
+            window.Aetheria.UI.showToast("💡 只要去【工坊 ➔ 🧗解謎工具】做出【" + reqName + "】，就能打開呢個秘寶拎修橋建材！");
             return;
           }
 
@@ -3438,28 +3382,26 @@ window.Aetheria = window.Aetheria || {};
             rewardNames.push(mn + "+" + mc);
           });
 
+          // 在第 5 區火山打開熔岩晶殼時，額外直接贈送「黑曜耐火磚 x3」與「炎魔熔核 x1」！
+          if (s.currentZone === "zone5_volcano") {
+            const bKey = findMatKeyByNameKeyword("耐火磚", null);
+            const cKey = findMatKeyByNameKeyword("熔核", null);
+            if (bKey) { s.inventory[bKey] = (s.inventory[bKey] || 0) + 3; rewardNames.push("黑曜耐火磚+3"); }
+            if (cKey) { s.inventory[cKey] = (s.inventory[cKey] || 0) + 1; rewardNames.push("炎魔熔核+1"); }
+          }
+
           window.Aetheria.Audio.sfxLevelUp();
           window.Aetheria.State.save();
-          syncMainQuestTrackerWithStoryChain();
           window.Aetheria.UI.updateAllHud();
-
-          const chain = ZONE_STORY_CHAINS[s.currentZone];
-          if (chain && chain.step1GateId === node.id) {
-            window.Aetheria.UI.spawnFloatingText("🔓步驟①完成・地脈導通!", "#ffd166", true);
-            window.Aetheria.UI.showToast("🔓 【主線破障 1/3 完成】使用【" + reqName + "】破除障礙！西南方【步驟②古碑機關陣】已導通！");
-          } else {
-            window.Aetheria.UI.showToast("🔓 使用【" + reqName + "】成功破解" + g.name.replace(/\[.*\]/, "") + "！獲 " + (g.rewardGold || 250) + "G、" + rewardNames.join("、") + "！");
-          }
+          window.Aetheria.UI.showToast("🎉 用【" + reqName + "】成功打開秘寶！獲得 " + (g.rewardGold || 250) + "G 與 " + rewardNames.join("、") + "！");
           return;
         }
 
         if (node && node.isExplorePuzzleChest) {
           const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
-          const prog = getZoneStoryProgress(s.currentZone, s);
-          if ((prog && !prog.step1Done) || !isZoneExplorePuzzleSolved(curMap, s)) {
+          if (!isZoneExplorePuzzleSolved(curMap, s)) {
             window.Aetheria.Audio.sfxWrong();
-            WorkshopUIManager.openZoneStoryChainModal();
-            window.Aetheria.UI.showToast("🔒 機關寶箱被結界鎖定！請先依序完成【步驟①工具破障】與【步驟②古碑謎語機關】！");
+            window.Aetheria.UI.showToast("💡 寶箱鎖住咗！只要解開旁邊嘅【火盆①~④ / 三個拉桿 / 四座石像】就可以打開！");
             return;
           }
           if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
@@ -3473,18 +3415,17 @@ window.Aetheria = window.Aetheria || {};
           s.gold = (s.gold || 0) + 320;
           s.inventory.cryptKey = (s.inventory.cryptKey || 0) + 1;
           s.inventory.mithril = (s.inventory.mithril || 0) + 2;
+          s.inventory.basalt = (s.inventory.basalt || 0) + 2;
+          s.inventory.plank = (s.inventory.plank || 0) + 2;
           s.inventory.spicedStew = (s.inventory.spicedStew || 0) + 1;
           s.srpgBonusHp = (s.srpgBonusHp || 0) + 15;
           window.Aetheria.State.recalcMaxHp();
 
           window.Aetheria.Audio.sfxLevelUp();
           window.Aetheria.State.save();
-          syncMainQuestTrackerWithStoryChain();
           window.Aetheria.UI.updateAllHud();
-
-          const relicTitle = prog ? prog.chain.relicName : "【破障聖印】";
-          window.Aetheria.UI.spawnFloatingText("🌟獲" + relicTitle + "!", "#ffd166", true);
-          window.Aetheria.UI.showToast("🏆 【主線破障 3/3 大圓滿】獲得" + relicTitle + "！已解鎖過河修橋與封印柱，並粉碎首領的無敵結界！");
+          window.Aetheria.UI.spawnFloatingText("🏆尋寶成功!HP+15 & 建材入手!", "#ffd166", true);
+          window.Aetheria.UI.showToast("🏆 打開機關寶箱！獲得 320G、🗝️遺跡鑰匙+1、流沙秘銀+2、玄武岩+2、厚木板+2、永久 HP+15，且本區 Boss 護盾已削弱 -2！");
           return;
         }
 
@@ -3511,7 +3452,7 @@ window.Aetheria = window.Aetheria || {};
           const shovelLv = (s.tools && s.tools.shovel) || 0;
           if (shovelLv < 1) {
             window.Aetheria.Audio.sfxWrong();
-            window.Aetheria.UI.showToast("🥄 地面有神秘的「✖」藏寶記號！請先在【工坊 ➔ ⛏️工具】打造【Lv.1 精鐵探險鏟】(原木x2+鐵礦x1) 挖掘！");
+            window.Aetheria.UI.showToast("🥄 地面有神秘的「✖」藏寶記號！請先在【工坊 ➔ ⛏️工具】打造【Lv.1 精鐵探險鏟】(原木x1+鐵礦x1) 挖掘！");
             return;
           }
           node.opened = true;
@@ -3626,65 +3567,53 @@ window.Aetheria = window.Aetheria || {};
       };
     }
 
-    // ================= 12. ★ 強制鎖鑰2：守關 Boss 無敵結界彈開檢定 + 護盾減傷平衡 =================
+    // ================= 12. 小四小五友善版戰鬥平衡（適中回合數 + 尋寶削弱 Boss 護盾獎勵） =================
     if (Bat) {
       if (Bat.startBattle) {
         const origStart = Bat.startBattle.bind(Bat);
         Bat.startBattle = function(mapMonsterNode, customMode, customQuestionId) {
-          const s = window.Aetheria.State.data;
-          const prog = getZoneStoryProgress(s.currentZone, s);
-
-          // ★ 若觸碰的是區域守關首領 (isBoss && 非地底遺跡魔像)，且玩家尚未完成本區 3 步破障解謎 (!prog.allDone)：
-          // 直接被【🛡️領主無敵結界】彈開，100% 拒絕進入戰鬥，並打開本區主線破障流程視窗！
-          if (mapMonsterNode && mapMonsterNode.isBoss && !mapMonsterNode.isCryptGuardian && prog && !prog.allDone) {
-            window.Aetheria.Audio.sfxWrong();
-            s.heroX = Math.max(80, (mapMonsterNode.x || s.heroX) - 52);
-            s.petX = s.heroX - 20;
-            window.Aetheria.UI.spawnFloatingText("🛡️無敵結界彈開!(需先破障)", "#ff595e", true);
-            WorkshopUIManager.openZoneStoryChainModal();
-            window.Aetheria.UI.showToast("🛡️ 【" + mapMonsterNode.name + "】受環境無敵結界保護！必須先完成本區 3 步破障解謎取得" + prog.chain.relicName + "才可開戰！");
-            return;
-          }
-
           origStart(mapMonsterNode, customMode, customQuestionId);
 
           const e = this.enemy;
           if (!e || this.mode !== "combat") return;
 
+          const s = window.Aetheria.State.data;
           const heroAtk = (window.Aetheria.State.getTotalAtk ? window.Aetheria.State.getTotalAtk() : 80);
           const heroMaxHp = s.maxHp || 300;
           const monLv = e.lv || 1;
           const isElite = Boolean(mapMonsterNode && (mapMonsterNode.isCryptGuardian || mapMonsterNode.isVolcanoHelperSubBoss || mapMonsterNode.isShiny));
+          const prog = getZoneStoryProgress(s.currentZone, s);
 
           if (e.isBoss) {
-            const minBossHp = Math.round(heroAtk * 8.5 + monLv * 150);
-            e.maxHp = Math.max(Math.round(e.maxHp * 2.8), minBossHp);
-            e.maxShield = Math.max(4, (e.maxShield || 4) + 1);
-            e.atk = Math.max(Math.round((e.atk || 35) * 1.40), Math.round(heroMaxHp * 0.20));
+            const minBossHp = Math.round(heroAtk * 6.5 + monLv * 120);
+            e.maxHp = Math.max(Math.round(e.maxHp * 2.2), minBossHp);
+            e.maxShield = Math.max(4, (e.maxShield || 3) + 1);
+            e.atk = Math.max(Math.round((e.atk || 30) * 1.25), Math.round(heroMaxHp * 0.16));
             e._enrageUsed = false;
-            e.hp = e.maxHp;
-            e.shield = e.maxShield;
 
             if (prog && prog.allDone) {
+              e.maxShield = Math.max(2, e.maxShield - 2);
+              e.maxHp = Math.round(e.maxHp * 0.80);
               setTimeout(function() {
-                window.Aetheria.UI.spawnFloatingText("🌟" + prog.chain.relicName + "破除無敵!", "#5ac54f", true);
+                window.Aetheria.UI.spawnFloatingText("🌟尋寶加成：Boss護盾-2!", "#5ac54f", true);
                 window.Aetheria.UI.showToast(prog.chain.bossDebuffMsg);
               }, 350);
             }
+            e.hp = e.maxHp;
+            e.shield = e.maxShield;
           } else if (isElite) {
-            const minEliteHp = Math.round(heroAtk * 5.0 + monLv * 90);
-            e.maxHp = Math.max(Math.round(e.maxHp * 2.4), minEliteHp);
+            const minEliteHp = Math.round(heroAtk * 3.8 + monLv * 70);
+            e.maxHp = Math.max(Math.round(e.maxHp * 1.8), minEliteHp);
             e.hp = e.maxHp;
-            e.maxShield = Math.max(4, (e.maxShield || 3) + 1);
+            e.maxShield = Math.max(3, e.maxShield || 2);
             e.shield = e.maxShield;
-            e.atk = Math.max(Math.round((e.atk || 25) * 1.3), Math.round(heroMaxHp * 0.16));
+            e.atk = Math.max(Math.round((e.atk || 22) * 1.2), Math.round(heroMaxHp * 0.13));
           } else if (monLv >= 8) {
-            const minMobHp = Math.round(heroAtk * 2.3 + monLv * 45);
-            e.maxHp = Math.max(Math.round(e.maxHp * 1.8), minMobHp);
+            const minMobHp = Math.round(heroAtk * 1.8 + monLv * 35);
+            e.maxHp = Math.max(Math.round(e.maxHp * 1.5), minMobHp);
             e.hp = e.maxHp;
-            e.maxShield = Math.max(monLv >= 20 ? 3 : 2, e.maxShield || 2);
+            e.maxShield = Math.max(2, e.maxShield || 2);
             e.shield = e.maxShield;
-            e.atk = Math.max(Math.round((e.atk || 20) * 1.25), Math.round(heroMaxHp * 0.12));
           }
 
           let _internalHp = e.hp;
@@ -3695,7 +3624,7 @@ window.Aetheria = window.Aetheria || {};
                 if (newVal < _internalHp) {
                   const rawDmg = _internalHp - newVal;
                   if (this.shield > 0 && !this.broken) {
-                    const mitigatedDmg = Math.max(1, Math.round(rawDmg * 0.45));
+                    const mitigatedDmg = Math.max(1, Math.round(rawDmg * 0.55));
                     _internalHp = Math.max(this.isBoss ? 1 : 0, _internalHp - mitigatedDmg);
                     return;
                   }
@@ -3707,26 +3636,6 @@ window.Aetheria = window.Aetheria || {};
           } catch (err) {}
 
           if (this.updateBattleHUD) this.updateBattleHUD();
-        };
-      }
-
-      if (Bat.executeEnemyCounterPhase) {
-        const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
-        Bat.executeEnemyCounterPhase = function(answeredRight) {
-          const e = this.enemy;
-          if (e && e.isBoss && !e._enrageUsed && e.hp > 0 && e.hp <= e.maxHp * 0.50) {
-            e._enrageUsed = true;
-            e.broken = false;
-            e.shield = e.maxShield;
-            const healAmt = Math.round(e.maxHp * 0.25);
-            e.hp = Math.min(e.maxHp, e.hp + healAmt);
-            e.atk = Math.round(e.atk * 1.22);
-            window.Aetheria.Audio.sfxWrong();
-            window.Aetheria.UI.spawnFloatingText("⚡領主狂暴・護盾重鑄!", "#ff595e", true);
-            window.Aetheria.UI.showToast("⚡ 首領進入二階段狂暴！恢復 25% 生命並重鑄 " + e.maxShield + " 層護盾，請善用 BP 破盾！");
-            if (this.updateBattleHUD) this.updateBattleHUD();
-          }
-          origCounter(answeredRight);
         };
       }
 
@@ -3869,7 +3778,7 @@ window.Aetheria = window.Aetheria || {};
             } else if (d.isExplorePuzzleTablet && item.lbl) {
               setDisplayIfChanged(item.lbl, "block");
               setClassIfChanged(item.lbl, "dom-label puzzle-mech-lbl");
-              setTextIfChanged(item.lbl, "📜古碑謎語[步驟②]");
+              setTextIfChanged(item.lbl, "📜尋寶提示碑");
             } else if (d.isPuzzleOrderBrazier) {
               const sprKey = d.lit ? "brazier_on" : "brazier_off";
               if (item.img && S && item.img._lastSpr !== sprKey) {
@@ -3879,7 +3788,7 @@ window.Aetheria = window.Aetheria || {};
               if (item.lbl) {
                 setDisplayIfChanged(item.lbl, "block");
                 setClassIfChanged(item.lbl, "dom-label " + (d.lit ? "puzzle-mech-on" : "puzzle-mech-lbl"));
-                setTextIfChanged(item.lbl, (d.lit ? "🔥" : "") + d.brazierLabel);
+                setTextIfChanged(item.lbl, (d.lit ? "✅" : "🔥") + d.brazierLabel);
               }
             } else if (d.isPuzzleRotateStatue) {
               if (item.img && S && item.img._lastSpr !== "ancient_statue") {
@@ -3890,7 +3799,13 @@ window.Aetheria = window.Aetheria || {};
                 const matched = (d.curDir === d.targetDir);
                 setDisplayIfChanged(item.lbl, "block");
                 setClassIfChanged(item.lbl, "dom-label " + (matched ? "puzzle-mech-on" : "puzzle-mech-lbl"));
-                setTextIfChanged(item.lbl, d.statueName + ":" + DIR_SYMBOLS[d.curDir || 0]);
+                // ★ 小四小五友善標示：未轉對時直接顯示「[轉去▶東]:▲北」，轉對時顯示「✅西衛:▶東」！
+                setTextIfChanged(
+                  item.lbl,
+                  matched
+                    ? ("✅" + d.statueName + ":" + DIR_SYMBOLS[d.curDir || 0])
+                    : (d.statueName + "[轉去" + DIR_SYMBOLS[d.targetDir || 0] + "]:" + DIR_SYMBOLS[d.curDir || 0])
+                );
               }
             } else if (d.isPuzzleToggleLever) {
               const sprKey = d.leverOn ? "lever_on" : "lever_off";
@@ -3901,7 +3816,7 @@ window.Aetheria = window.Aetheria || {};
               if (item.lbl) {
                 setDisplayIfChanged(item.lbl, "block");
                 setClassIfChanged(item.lbl, "dom-label " + (d.leverOn ? "puzzle-mech-on" : "puzzle-mech-lbl"));
-                setTextIfChanged(item.lbl, "拉桿" + (d.leverIdx + 1) + (d.leverOn ? "[🟢開]" : "[🔴關]"));
+                setTextIfChanged(item.lbl, "拉桿" + ["①","②","③"][d.leverIdx] + (d.leverOn ? "[🟢開]" : "[🔴關]"));
               }
             }
           });
@@ -3927,6 +3842,24 @@ window.Aetheria = window.Aetheria || {};
     }
 
     if (UI) {
+      // ★ 每次更新 HUD 或切換面板時，確保方向鍵與 A 鍵永久鎖定在下半框固定座標！
+      if (UI.updateAllHud) {
+        const origHud = UI.updateAllHud.bind(UI);
+        UI.updateAllHud = function() {
+          origHud();
+          lockLowerScreenControlsPosition();
+        };
+      }
+      if (UI.setActivePanel) {
+        const origPanel = UI.setActivePanel.bind(UI);
+        UI.setActivePanel = function(panelId) {
+          origPanel(panelId);
+          if (panelId === "panel-explore") {
+            lockLowerScreenControlsPosition();
+          }
+        };
+      }
+
       UI.openForgeModal = function(activeTab) {
         const s = window.Aetheria.State && window.Aetheria.State.data;
         const forgeUnlocked = Boolean(
@@ -3951,7 +3884,7 @@ window.Aetheria = window.Aetheria || {};
             btnWrap.style.cssText = "display:flex; gap:6px; margin-bottom:8px;";
             btnWrap.innerHTML =
               '<button class="na-btn highlight" style="flex:1; padding:7px; font-size:12px;" onclick="Aetheria.HighlandsWorkshop.openZoneStoryChainModal()">' +
-                '🔒 本區主線破障流程' +
+                '💡 本區尋寶小貼士' +
               '</button>' +
               '<button class="na-btn highlight" style="flex:1; padding:7px; font-size:12px;" onclick="Aetheria.HighlandsWorkshop.openSurvivalCodexModal(\'all\')">' +
                 '📖 求生合成圖鑑' +
@@ -4024,6 +3957,7 @@ window.Aetheria = window.Aetheria || {};
       registerSrpgDataIntoGame();
       mountGuaranteedCompassWidget();
       hookSystemsForHighlandsAndWorkshop();
+      lockLowerScreenControlsPosition();
 
       const Maps = window.Aetheria.Data && window.Aetheria.Data.Maps;
       if (Maps && Maps.getMap) {
@@ -4045,9 +3979,8 @@ window.Aetheria = window.Aetheria || {};
       if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) {
         window.Aetheria.UI.updateAllHud();
       }
-      syncMainQuestTrackerWithStoryChain();
     } catch (err) {
-      console.error("Survival RPG Hard-Gated Story Chain v13.2 init error:", err);
+      console.error("Survival RPG Kid-Friendly & Locked Controls v13.3 init error:", err);
     }
   }
 
