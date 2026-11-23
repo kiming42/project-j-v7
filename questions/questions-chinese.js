@@ -1,102 +1,530 @@
 /* ============================================================================
- * 中文科獨立題庫 (questions/questions-chinese.js)
- * 【日後新增/修改說明】：
- * 1. LESSONS 定義課次／單元清單（星象調頻會自動讀取此清單供單選/多選）。
- * 2. IDIOMS (成語) 與 WORDS (字詞) 只需填入：
- *    { unitKey: "對應課次key", word: "詞語", meaning: "解釋", s1: "例句1(用______代表空格)", s2: "例句2(用______代表空格)" }
- *    系統會自動為每個詞語生成【字詞解釋題】與【雙例句填充題】，並自動從同單元抽取干擾選項！
+ * 中文科獨立題庫 (questions/questions-chinese.js - v7.0)
+ * 教材：小四中文八課應用詞語全集（第1、3、5、7、8、9、11、13課，共 66 詞 ➔ 198 題）
+ * 支援題型：四選一字詞解釋 + 四選一例句填充(s1/s2隨機) + 單字字塊拼詞(含形近/同音干擾字)
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.QuestionBank = window.Aetheria.QuestionBank || {};
 
 window.Aetheria.QuestionBank.Chinese = {
-  // 1. 中文科課次／單元清單
   LESSONS: [
-    { key: "chi_idiom_1", name: "成語・單元一" },
-    { key: "chi_idiom_2", name: "成語・單元二" },
-    { key: "chi_les_1",   name: "字詞・第一課" },
-    { key: "chi_les_3",   name: "字詞・第三課" },
-    { key: "chi_les_5",   name: "字詞・第五課" },
-    { key: "chi_les_6",   name: "字詞・第六課" }
+    { key: "chi_4a_l1",  name: "第1課《哈利的花毛衣》" },
+    { key: "chi_4a_l3",  name: "第3課《赤道上的金牌》" },
+    { key: "chi_4a_l5",  name: "第5課《烏鴉又被騙了》" },
+    { key: "chi_4a_l7",  name: "第7課《海洋公園之行》" },
+    { key: "chi_4a_l8",  name: "第8課《米埔觀鳥》" },
+    { key: "chi_4a_l9",  name: "第9課《望梅止渴》" },
+    { key: "chi_4a_l11", name: "第11課《木偶的眼淚》" },
+    { key: "chi_4a_l13", name: "第13課《中國太空人升空》" }
   ],
 
-  // 2. 成語題庫 (共 30 個)
+  // 1. 四字成語／詞語 (15個)
   IDIOMS: [
-    // --- 成語・單元一 (15個) ---
-    { id: "ci_01", unitKey: "chi_idiom_1", word: "人聲鼎沸", meaning: "比喻人聲嘈雜，就像煮沸了水一樣。鼎，古代的煮食器具。", s1: "酒樓內______，坐滿了來吃午飯的人。", s2: "大家都在為球隊吶喊助威，觀眾席上______。" },
-    { id: "ci_02", unitKey: "chi_idiom_1", word: "水泄不通", meaning: "連一滴水也流不出去，形容包圍緊密，也形容環境極度擁擠。", s1: "警方把這幢大廈封鎖得______，躲藏在內的匪徒難以逃脫。", s2: "年三十晚，許多市民都會到年宵市場辦年貨，使場內擠得______。" },
-    { id: "ci_03", unitKey: "chi_idiom_1", word: "日積月累", meaning: "指每天、每月地不斷積累。", s1: "趙女士憑藉______的工作經驗，很快就替公司解決了這個難題。", s2: "我每天都會學習英文新詞，經過______，現在認識的詞彙量已非常豐富了。" },
-    { id: "ci_04", unitKey: "chi_idiom_1", word: "目不暇給", meaning: "形容眼前有太多美好的事物，或景物變化太快，眼睛來不及觀看。", s1: "聯歡晚會的節目既豐富又精彩，令觀眾們______。", s2: "在空中綻放的煙花色彩繽紛，形態變化多端，令人______。" },
-    { id: "ci_05", unitKey: "chi_idiom_1", word: "世外桃源", meaning: "與世隔絕、開滿桃花的樂土。比喻風景優美、人煙稀少的地方，亦比喻人們心目中的理想世界。", s1: "這裡四周鳥語花香，遠離鬧市，就像住在______。", s2: "這個城市沒遭受戰火波及，對大批流亡的難民來說就好比______。" },
-    { id: "ci_06", unitKey: "chi_idiom_1", word: "杳無人煙", meaning: "形容地方偏僻荒涼，無人居住。杳，深遠。人煙，居民。", s1: "這個村落______，很多人已經從這兒搬到其他地方居住。", s2: "政府正計劃將一些______的地區開發成新市鎮，希望增加土地供應，推動城市發展。" },
-    { id: "ci_07", unitKey: "chi_idiom_1", word: "風和日麗", meaning: "形容天氣晴朗和暖，十分宜人。", s1: "今天是______的好日子，我們一家人決定到郊野公園遊玩。", s2: "天氣真是變幻莫測，早上還是______，傍晚卻颳起了狂風暴雨。" },
-    { id: "ci_08", unitKey: "chi_idiom_1", word: "星羅棋布", meaning: "如羅列在天上的群星，分佈在棋盤上的棋子。形容事物眾多而分散排列。羅，排列；布，分佈。", s1: "表哥潛進深海裏，欣賞海底______的珊瑚和魚兒。", s2: "從高處俯瞰，下面的房屋變成了一塊塊小積木嵌在土地上，猶如______。" },
-    { id: "ci_09", unitKey: "chi_idiom_1", word: "破瓦頹垣", meaning: "指屋瓦破損，牆垣倒塌。形容破敗荒涼的景象。頹，倒塌。垣，矮牆。", s1: "地震過後，這一帶盡是______，不少居民因而流離失所。", s2: "去年這兒還有一幢幢雄偉宏偉的高樓，如今卻只留下______。" },
-    { id: "ci_10", unitKey: "chi_idiom_1", word: "氣象萬千", meaning: "形容景象千變萬化，極為壯觀。", s1: "這個新都市發展迅速，一派______的景象。", s2: "雲霧繞着山峯不斷變化，景色______，令人神往。" },
-    { id: "ci_11", unitKey: "chi_idiom_1", word: "琳琅滿目", meaning: "形容滿眼所見都是美好而珍貴的東西。琳瑯，精美的玉石。", s1: "這家博物館的展品______，吸引了不少人於假日前來參觀。", s2: "哥哥打算在這些______的商品中，選購一份送給媽媽作為生日禮物。" },
-    { id: "ci_12", unitKey: "chi_idiom_1", word: "煥然一新", meaning: "形容散發光彩，呈現出新的面貌。煥然，鮮明、光亮。", s1: "表哥到外國讀書後，改變了衣着和打扮，整個人______。", s2: "這家咖啡店經過裝修後，風格變得簡約清新，給人______的感覺。" },
-    { id: "ci_13", unitKey: "chi_idiom_1", word: "萬籟俱寂", meaning: "形容萬物無聲，一片寂靜。萬籟，自然界的各種聲音。", s1: "山林中______，彷彿萬物都沉睡了。", s2: "在這______的環境下，我放輕腳步走路，以免破壞寧靜的氣氛。" },
-    { id: "ci_14", unitKey: "chi_idiom_1", word: "歷歷在目", meaning: "清楚明白地出現在眼前。歷歷，清楚分明。", s1: "我們用望遠鏡從太平洋山頂眺望，遠處的景物全都______。", s2: "堂弟不經不覺八歲了，他嬰兒時的模樣，至今仍然______。" },
-    { id: "ci_15", unitKey: "chi_idiom_1", word: "鑼鼓喧天", meaning: "本指鑼鼓聲音大得震天。現形容氣氛非常熱鬧，景象歡樂喜慶。", s1: "龍舟比賽進行期間，城門河上______，非常熱鬧。", s2: "購物商場開幕時，請來了舞獅助興，______的盛況吸引了大批顧客。" },
-
-    // --- 成語・單元二 (15個) ---
-    { id: "ci_16", unitKey: "chi_idiom_2", word: "大快朵頤", meaning: "飽食、愉快的樣子。朵，動。頤，下巴。朵頤，動着腮頰進食。", s1: "這條街道上美食店林立，總有一家能讓你______！", s2: "爸爸媽媽帶柏軒到餐館______了一番，令他感到非常滿足。" },
-    { id: "ci_17", unitKey: "chi_idiom_2", word: "口若懸河", meaning: "說起話來像河水傾瀉一樣，說個不停。形容能言善辯。", s1: "惠萍發表意見時______，期望得到大家的認同。", s2: "售貨員______地推銷產品，吸引了很多顧客爭相購買。" },
-    { id: "ci_18", unitKey: "chi_idiom_2", word: "口蜜腹劍", meaning: "口中有蜜，肚子裏卻藏着劍。形容人把話說得動聽，事實上內心險惡，處處想陷害別人。", s1: "他這個人______，嘴上說着好聽的話，心裏卻盤算着壞主意。", s2: "騙徒大多是______的人，利用虛假動聽的話騙取別人的錢財。" },
-    { id: "ci_19", unitKey: "chi_idiom_2", word: "三緘其口", meaning: "嘴巴加了三道封條。形容說話小心謹慎或不說話。緘，封住、緊閉。", s1: "關於芷晴退學的原因，老師們都______，沒有透露半句。", s2: "你不知道事情的經過，就應該______，不要隨便發表意見。" },
-    { id: "ci_20", unitKey: "chi_idiom_2", word: "不亢不卑", meaning: "表示對別人的態度合宜，既傲慢自大，也不低聲下氣。亢，高傲。", s1: "這個人在公開場合的言行舉止______，真有教養！", s2: "我要養成______的處事態度，提升待人接物的技巧。" },
-    { id: "ci_21", unitKey: "chi_idiom_2", word: "自吹自擂", meaning: "自己吹喇叭，自己打鼓。比喻自我吹噓。擂，打鼓。", s1: "他______的舉動令人反感，其他人都不愛跟他交往。", s2: "健常在別人面前______，其實他並沒有甚麼真才實學。" },
-    { id: "ci_22", unitKey: "chi_idiom_2", word: "呆若木雞", meaning: "形容愚笨或受驚嚇而發呆的樣子。", s1: "玉儀上課時______地看着天花板，所以被老師責罵。", s2: "看到不擅廚藝的媽媽又在廚房創作新菜式，姐姐______，不知如何是好。" },
-    { id: "ci_23", unitKey: "chi_idiom_2", word: "虎視眈眈", meaning: "指像老虎般用威嚇的眼神盯着人，比喻人心裏存着不良的意圖，貪婪地注視着，等待機會搶奪。眈眈，注視的樣子。", s1: "花貓______地盯着洞口的老鼠，想要一把捉住牠。", s2: "貪吃的弟弟一直對我手上的這盒餅乾______，恨不得想要把它搶去。" },
-    { id: "ci_24", unitKey: "chi_idiom_2", word: "拐彎抹角", meaning: "比喻說話或做事繞圈子，不直接。", s1: "請你不要再______了，有甚麼事就直接告訴我吧！", s2: "麗欣說話從不______，因此大家都特別喜歡跟她聊天。" },
-    { id: "ci_25", unitKey: "chi_idiom_2", word: "神魂顛倒", meaning: "形容對某人或某事物非常着迷，以致心神不定，失去常態。", s1: "時下不少青年人______地追捧偶像，甚至為了「追星」而做出很多瘋狂行為。", s2: "俊希最近被一款新推出的電子遊戲弄得______，難怪學業成績一落千丈。" },
-    { id: "ci_26", unitKey: "chi_idiom_2", word: "規行矩步", meaning: "指嚴格地按照規矩辦事，毫不敷衍。比喻做事刻板，不知變通。規、矩，分別指圓規和角尺，代指規定、準則。", s1: "叔叔是個______的人，做事謹慎，因而深得上司欣賞。", s2: "你做事過於______了，並不適合這項講求創新思維的工作。" },
-    { id: "ci_27", unitKey: "chi_idiom_2", word: "理直氣壯", meaning: "表示因理據充分，說話充滿氣勢，無所畏懼。", s1: "我還沒見過有人可以把謊話說得這麼______呢！", s2: "只要你的觀點合理，就不妨______地向大家說出你的想法。" },
-    { id: "ci_28", unitKey: "chi_idiom_2", word: "戰戰兢兢", meaning: "因害怕而發抖。形容十分害怕或小心謹慎的樣子。", s1: "他在校長面前露出副______的樣子。", s2: "這是志恒初次公開演講，所以表現得______。" },
-    { id: "ci_29", unitKey: "chi_idiom_2", word: "信口雌黃", meaning: "比喻不顧事實，隨口亂說或隨意批評。雌黃，一種可用作原料的黃色礦物，古人用來塗改寫錯的字，作用類似現時的塗改液。", s1: "樂賢從不______，他說的話一定是有事實根據的。", s2: "你還沒弄清真相，怎麼就在這兒______，胡亂指控別人呢？" },
-    { id: "ci_30", unitKey: "chi_idiom_2", word: "顧影自憐", meaning: "形容人孤獨失意，亦可形容自我欣賞的樣子。顧，回頭看。", s1: "她想到親人已經先後離世，不免______起來。", s2: "大家都認為他表現不理想，他卻繼續______。" }
+    { id: "chi4a_05", unitKey: "chi_4a_l1",  word: "悶悶不樂", meaning: "心裏不高興、不開心的樣子。", s1: "志明在數學測驗中失手，一整天都低着頭，顯得________。", s2: "小狗生病沒精神，小明看着牠，心情也變得________。", tileDistractors: ["聞", "閃", "憂"] },
+    { id: "chi4a_06", unitKey: "chi_4a_l1",  word: "心花怒放", meaning: "形容心裏非常高興，像花朵盛開一樣。", s1: "得知自己奪得繪畫比賽冠軍，小芬高興得________。", s2: "爸爸答應暑假帶我們去日本旅行，弟弟聽後頓時________。", tileDistractors: ["努", "防", "喜"] },
+    { id: "chi4a_10", unitKey: "chi_4a_l3",  word: "不離不棄", meaning: "永遠陪伴在身邊，不會離開或放棄。", s1: "無論遇到甚麼困難，家人都會對我們________，一直在背後支持我們。", s2: "這隻忠心的小狗一直守在生病的主人身旁，________，令人感動。", tileDistractors: ["璃", "氣", "開"] },
+    { id: "chi4a_13", unitKey: "chi_4a_l3",  word: "不由自主", meaning: "控制不了自己，自然而然地做出某種動作或反應。", s1: "聽到這首輕快的音樂，大家的手腳都________地跟着節奏擺動起來。", s2: "看到這部感人的電影結局，妹妹的眼淚________地流了下來。", tileDistractors: ["油", "住", "控"] },
+    { id: "chi4a_16", unitKey: "chi_4a_l3",  word: "一鳴驚人", meaning: "平時默默無聞，一旦表現便做出令人震驚的傑出成績。", s1: "健安平時在田徑隊十分低調，沒想到在這次學界比賽中________，打破了大會紀錄。", s2: "小玲苦練鋼琴多年，首次參加公開賽便勇奪冠軍，真是________！", tileDistractors: ["鳥", "警", "奇"] },
+    { id: "chi4a_17", unitKey: "chi_4a_l3",  word: "動彈不得", meaning: "身體或物體一點兒也不能移動。", s1: "這塊大石頭實在太重了，我們幾個同學合力去推，它仍然________。", s2: "昨天運動過度，我今早起床時雙腿痠痛得幾乎________。", tileDistractors: ["重", "單", "待"] },
+    { id: "chi4a_22", unitKey: "chi_4a_l5",  word: "迫不得已", meaning: "被情況所逼，沒有別的辦法，只好這樣做。", s1: "由於暴雨引發水浸，學校在________的情況下只好宣布取消運動會。", s2: "爸爸原本答應陪我慶生，但公司突然有急事，他________才要加班。", tileDistractors: ["怕", "己", "奈"] },
+    { id: "chi4a_28", unitKey: "chi_4a_l7",  word: "狂風暴雨", meaning: "非常猛烈的大風和大雨，形容天氣極為惡劣。", s1: "八號風球懸掛期間，窗外下着________，街上的大樹被吹得東歪西倒。", s2: "剛才還是晴空萬里，轉眼間卻刮起________，幸好我們已躲進商場避雨。", tileDistractors: ["旺", "爆", "雷"] },
+    { id: "chi4a_41", unitKey: "chi_4a_l8",  word: "五光十色", meaning: "形容色彩鮮豔繁多，光彩奪目。", s1: "晚上走在維多利亞港海旁，兩岸大廈的霓虹燈________，十分迷人。", s2: "海底世界裏的珊瑚礁和熱帶魚________，看得我們目不暇給。", tileDistractors: ["六", "七", "彩"] },
+    { id: "chi4a_44", unitKey: "chi_4a_l9",  word: "烈日當空", meaning: "猛烈的太陽高高掛在天空，形容天氣極度炎熱。", s1: "今天正午時分________，馬路被曬得滾燙，行人紛紛撐起太陽傘。", s2: "雖然戶外________，但辛勤的建築工人依然堅守崗位，汗流浹背地工作。", tileDistractors: ["裂", "黨", "炎"] },
+    { id: "chi4a_45", unitKey: "chi_4a_l9",  word: "口乾舌燥", meaning: "嘴巴和舌頭都十分乾燥，形容非常口渴。", s1: "我們在炎熱的天氣下遠足了兩小時，每個人都走得________，急着找水喝。", s2: "老師連續講了三節課，說得________，下課後連忙喝了一大杯溫水。", tileDistractors: ["幹", "躁", "渴"] },
+    { id: "chi4a_49", unitKey: "chi_4a_l9",  word: "精神抖擻", meaning: "形容精神飽滿、充滿活力的樣子。", s1: "昨晚睡得十分香甜，我今天一早起床便覺得________，充滿幹勁。", s2: "儀仗隊隊員穿着整齊的制服，個個________地步操進場。", tileDistractors: ["清", "料", "數"] },
+    { id: "chi4a_52", unitKey: "chi_4a_l11", word: "好不容易", meaning: "經過很大的努力、非常困難才做到某件事。", s1: "我們排了將近兩小時的長隊，________才買到這間餅店的限量版月餅。", s2: "這道奧數題難度極高，家豪反覆計算了半小時，________才解開了答案。", tileDistractors: ["難", "辛", "苦"] },
+    { id: "chi4a_54", unitKey: "chi_4a_l11", word: "嬉皮笑臉", meaning: "形容態度輕浮、愛開玩笑、不正經的樣子。", s1: "上課時要認真聽講，切不可對着老師________，這樣非常不尊重人。", s2: "弟弟打爛了花瓶不但沒有認錯，還________地扮鬼臉，令媽媽十分生氣。", tileDistractors: ["喜", "彼", "檢"] },
+    { id: "chi4a_66", unitKey: "chi_4a_l13", word: "鍥而不捨", meaning: "比喻做事有恆心、有毅力，堅持不懈，絕不輕易放棄。", s1: "科學家憑着________的精神，經過無數次失敗後，終於成功研製出新疫苗。", s2: "學習書法沒有捷徑，只有________地每天勤加練習，字體才會越來越好。", tileDistractors: ["契", "拾", "堅"] }
   ],
 
-  // 3. 字詞題庫 (共 32 個)
+  // 2. 二至三字應用詞語 (51個)
   WORDS: [
-    // --- 字詞・第一課 (8個) ---
-    { id: "cw_01", unitKey: "chi_les_1", word: "規模", meaning: "格局、範圍。", s1: "新落成的主題公園______很大，有很多新奇的機動遊戲。", s2: "這座屋苑的______很大，有住戶專用的健身房和多種遊樂設施。" },
-    { id: "cw_02", unitKey: "chi_les_1", word: "完善", meaning: "完備美好、周全。", s1: "學校設備______，令學生有優良的學習環境。", s2: "班會主席提出的旅行計劃很______，獲得全班同學一致讚賞。" },
-    { id: "cw_03", unitKey: "chi_les_1", word: "遜色", meaning: "比較差、比不上。", s1: "弟弟雖然只有三歲，但他的畫作與小學生相比起來毫不______。", s2: "香港迪士尼樂園的遊樂設施多樣，不比其他大城市的______。" },
-    { id: "cw_04", unitKey: "chi_les_1", word: "逼真", meaning: "非常傳神、像是真的。", s1: "這個蛋糕擺設很______，我差點咬了下去。", s2: "這幅人像畫很______，我還以為是一幅照片。" },
-    { id: "cw_05", unitKey: "chi_les_1", word: "引人注目", meaning: "吸引注意。", s1: "她打扮成卡通人物的模樣，在派對上相當______。", s2: "他在行人隧道裏彈奏古箏，非常______。" },
-    { id: "cw_06", unitKey: "chi_les_1", word: "探究", meaning: "探尋、研究。", s1: "這次專題報告的主題是______唐朝的服裝禮儀。", s2: "為了______香港菜市場的現況，我們特意訪問了幾位攤檔的主人。" },
-    { id: "cw_07", unitKey: "chi_les_1", word: "體驗", meaning: "親自嘗試、親身體會。", s1: "周末，我們一家到叔叔的農場______農耕生活，明白到食物得來不易。", s2: "學校安排我們到老人院探訪長者，______義務工作的情況。" },
-    { id: "cw_08", unitKey: "chi_les_1", word: "百聞不如一見", meaning: "聽別人述說千百次，也比不上親眼看一次。", s1: "常聽說鳳凰山的景色美不勝收，今天我隨家人登上山看日出，果然______。", s2: "這位著名舞蹈員的表演十分精彩，真是______。" },
-
-    // --- 字詞・第三課 (8個) ---
-    { id: "cw_09", unitKey: "chi_les_3", word: "偶爾", meaning: "有時。", s1: "母親工作忙碌，只能______抽空帶我去遊玩。", s2: "雖然這家餐廳的食物很美味，但價格高昂，只能______前往用餐。" },
-    { id: "cw_10", unitKey: "chi_les_3", word: "耀眼", meaning: "強烈的光線令人目眩。", s1: "正午的陽光太______了，於是我把窗簾拉上。", s2: "從黑漆漆的電影院走出來，商場的燈光顯得特別______。" },
-    { id: "cw_11", unitKey: "chi_les_3", word: "反射", meaning: "光線或聲波碰上其他物件而改變方向。", s1: "清晨的葉子______陽光，在微風的吹拂下閃閃發亮。", s2: "海水______皎潔的月光，月兒彷彿在海上飄流。" },
-    { id: "cw_12", unitKey: "chi_les_3", word: "撒", meaning: "把東西散開傾落。", s1: "我往土裏______一把種子，天天澆水，種子很快就發芽了。", s2: "我不小心打翻了盒飯，飯粒______了一地。" },
-    { id: "cw_13", unitKey: "chi_les_3", word: "奪目", meaning: "光輝耀眼。", s1: "這場燈光表演燦爛______，讓人目不暇給。", s2: "這個霓虹燈藝術裝置光彩______，吸引參觀者駐足欣賞。" },
-    { id: "cw_14", unitKey: "chi_les_3", word: "猶如", meaning: "好像。", s1: "老師______海上的燈塔，為我們指引方向。", s2: "大自然______人類的母親，供給人類生命所需。" },
-    { id: "cw_15", unitKey: "chi_les_3", word: "卧", meaning: "躺下來。", s1: "他生病了，只好______在牀上休息。", s2: "我______在草地上，欣賞天空中的一片片白雲。" },
-    { id: "cw_16", unitKey: "chi_les_3", word: "璀璨", meaning: "光彩鮮明。", s1: "這所酒樓的天花安裝了大型水晶燈飾，反射着______的光芒。", s2: "各項慶祝活動中，最精彩的就是______的煙花匯演。" },
-
-    // --- 字詞・第五課 (8個) ---
-    { id: "cw_17", unitKey: "chi_les_5", word: "繁衍", meaning: "繁殖後代。", s1: "全球暖化情況嚴峻，破壞生態平衡，部分物種難以______。", s2: "______後代是動植物的本能，生命就這樣一代一代地傳承下去。" },
-    { id: "cw_18", unitKey: "chi_les_5", word: "土生土長", meaning: "在當地出生和長大。", s1: "洋紫荊是香港______的植物，又稱為「香港蘭」。", s2: "我鄰座的同學雖然是南亞裔人，但自小在香港______，因此能說流利的廣東話。" },
-    { id: "cw_19", unitKey: "chi_les_5", word: "辨認", meaning: "分別、認清楚。", s1: "班長是雀鳥愛好者，能______不同種類的鳥，我們都十分佩服他。", s2: "新老師請我們製作名牌，放在桌上，以便他______我們。" },
-    { id: "cw_20", unitKey: "chi_les_5", word: "爆發", meaning: "重大事件突然發生。", s1: "根據新聞報道，這間幼稚園______手足口病。", s2: "第二次世界大戰______後，世界各地都陷入戰亂當中。" },
-    { id: "cw_21", unitKey: "chi_les_5", word: "落地生根", meaning: "形容在某處長期定居。", s1: "爺爺年輕時從廣州南下香港，從此______。", s2: "他在數年前到加拿大留學，後來更______，在當地生活。" },
-    { id: "cw_22", unitKey: "chi_les_5", word: "遷移", meaning: "從一地遷往另一地。", s1: "這個地方經濟蕭條，導致大量人口______至外地。", s2: "每逢秋冬，燕子都會從北方______至溫暖的南方過冬。" },
-    { id: "cw_23", unitKey: "chi_les_5", word: "相映成趣", meaning: "兩種事物互相襯托，更顯趣味。", s1: "蝴蝶的翅膀斑斕奪目，與鮮豔的花朵______。", s2: "姐姐一身黑衣，妹妹一身白衣，兩人並肩站在一起，可謂______。" },
-    { id: "cw_24", unitKey: "chi_les_5", word: "得天獨厚", meaning: "天生條件優越，或自然環境特別優越。", s1: "他擁有一把______的嗓子，歌聲非常動聽。", s2: "海南______，有合適的氣候和地理，盛產水果。" },
-
-    // --- 字詞・第六課 (8個) ---
-    { id: "cw_25", unitKey: "chi_les_6", word: "偽裝", meaning: "假扮。", s1: "石頭魚能______成海底的礁石，捕獵游經身邊的小魚。", s2: "騙徒______成街頭訪問員，盜取受訪者的個人資料。" },
-    { id: "cw_26", unitKey: "chi_les_6", word: "腐朽", meaning: "木質受到侵害而遭受破壞。", s1: "由於生長環境欠佳，這棵樹早已______了。", s2: "這個古廟缺乏修葺，樑柱都______了。" },
-    { id: "cw_27", unitKey: "chi_les_6", word: "迷惑", meaning: "使人心神迷亂，不辨是非。", s1: "大部分水母的觸手有劇毒，你千萬不要被牠美麗的外表______而觸碰牠啊！", s2: "他為人奸詐，你不要被他的花言巧語______了。" },
-    { id: "cw_28", unitKey: "chi_les_6", word: "捕獵", meaning: "追捕動物。", s1: "獵豹是世界上跑得最快的動物，______能力很高。", s2: "由於人類過度______，許多動物現在已經瀕危，真令人惋惜。" },
-    { id: "cw_29", unitKey: "chi_les_6", word: "細緻", meaning: "精細。", s1: "這款模型車連座位也設計得很______，令人愛不釋手。", s2: "這件首飾的工藝______，令人讚歎。" },
-    { id: "cw_30", unitKey: "chi_les_6", word: "啃", meaning: "一點一點地咬。", s1: "弟弟一邊______玉米，一邊看電視。", s2: "小狗走到一角，______我給牠的雞腿骨。" },
-    { id: "cw_31", unitKey: "chi_les_6", word: "專業", meaning: "在某範疇具備高水平。", s1: "陳先生憑着______的知識和熟練的手藝，在行業內贏得了顯赫的名聲。", s2: "你別亂吃成藥，還是請______的醫生為你診治吧！" },
-    { id: "cw_32", unitKey: "chi_les_6", word: "斑斕", meaning: "色彩豐富、光芒燦爛。", s1: "這個具異國風情的燈罩色彩______，令我愛不釋手。", s2: "在大自然中，不少五彩______的生物都是有毒的。" }
+    // 第1課
+    { id: "chi4a_01", unitKey: "chi_4a_l1",  word: "編織", meaning: "把毛線、竹條等交錯起來製成衣物或物品。", s1: "天氣轉涼了，婆婆親手為我________了一條溫暖的紅色頸巾。", s2: "媽媽花了兩星期，終於用毛線________出一件可愛的小毛衣。", tileDistractors: ["篇", "職", "縫", "補"] },
+    { id: "chi4a_02", unitKey: "chi_4a_l1",  word: "合身", meaning: "衣服的大小、長短剛剛好適合穿著者。", s1: "這條新校裙大小剛剛好，穿在妹妹身上十分________。", s2: "哥哥長高了不少，去年的運動服現在穿起來已經不再________了。", tileDistractors: ["盒", "申", "適", "稱"] },
+    { id: "chi4a_03", unitKey: "chi_4a_l1",  word: "機會", meaning: "恰好的時機或可以做某件事的可能。", s1: "這次朗誦比賽十分難得，我一定要好好把握________，爭取佳績。", s2: "如果下星期有________到郊外野餐，我一定要約好朋友一起去。", tileDistractors: ["幾", "繪", "遇", "時"] },
+    { id: "chi4a_04", unitKey: "chi_4a_l1",  word: "交還", meaning: "把借來或拾到的東西歸還給原來的主人。", s1: "我在操場拾到一個銀包，便立刻把它________給訓導老師。", s2: "從圖書館借來的故事書快到期了，我今天放學後要記得________。", tileDistractors: ["校", "環", "歸", "送"] },
+    { id: "chi4a_07", unitKey: "chi_4a_l1",  word: "引領", meaning: "在前面帶領、引導別人前進。", s1: "導賞員手持旗幟，________着我們參觀香港歷史博物館的各個展廳。", s2: "多虧老師耐心的________，我才學會了正確的寫作方法。", tileDistractors: ["印", "鄰", "帶", "導"] },
+    { id: "chi4a_08", unitKey: "chi_4a_l1",  word: "相似", meaning: "相像、差不多，有許多共同的地方。", s1: "這對雙胞胎姊妹不但樣貌十分________，連說話的聲音也幾乎一模一樣。", s2: "這兩幅畫的構圖非常________，不仔細看還以為是同一位畫家畫的。", tileDistractors: ["箱", "以", "像", "近"] },
+    { id: "chi4a_09", unitKey: "chi_4a_l1",  word: "暖和", meaning: "溫暖、不冷，讓人感覺舒適。", s1: "冬天的早上寒風刺骨，喝一碗熱湯後，身體立刻變得________起來。", s2: "今天陽光明媚，天氣十分________，很適合到公園放風箏。", tileDistractors: ["緩", "禾", "溫", "熱"] },
+    // 第3課
+    { id: "chi4a_11", unitKey: "chi_4a_l3",  word: "撫養", meaning: "照顧並養育年幼的孩子長大成人。", s1: "父母日夜辛勞工作，就是為了把我們姊弟倆________成人。", s2: "這對好心的夫婦收養了孤兒，像親生孩子一樣悉心________他。", tileDistractors: ["無", "羊", "育", "照"] },
+    { id: "chi4a_12", unitKey: "chi_4a_l3",  word: "治療", meaning: "用藥物、手術或其他方法醫治疾病或傷患。", s1: "哥哥踢足球時扭傷了腳踝，需要定期去醫院接受物理________。", s2: "幸好表妹及早求醫並配合醫生的________，她的皮膚敏感已慢慢好轉。", tileDistractors: ["冶", "遼", "醫", "病"] },
+    { id: "chi4a_14", unitKey: "chi_4a_l3",  word: "歧視", meaning: "不平等地對待別人，看不起某些與自己不同的人。", s1: "我們應該尊重每一位傷健人士，絕不能對他們存有偏見或________。", s2: "班上來了一位新同學，大家都很友善，沒有因為他的口音而________他。", tileDistractors: ["枝", "現", "輕", "看"] },
+    { id: "chi4a_15", unitKey: "chi_4a_l3",  word: "困擾", meaning: "因難題或煩惱而感到不安、難以解決。", s1: "鄰居深夜發出的噪音一直________着我們一家，令大家難以入睡。", s2: "這道數學應用題十分複雜，________了小文整整半個小時。", tileDistractors: ["因", "憂", "煩", "難"] },
+    { id: "chi4a_18", unitKey: "chi_4a_l3",  word: "抓緊", meaning: "緊緊握住；也指牢牢把握時間或機會。", s1: "巴士開動了，站着的乘客連忙________扶手，以免失去平衡跌倒。", s2: "考試快要到了，我們必須________時間溫習，不能再偷懶了。", tileDistractors: ["爬", "堅", "握", "把"] },
+    // 第5課
+    { id: "chi4a_19", unitKey: "chi_4a_l5",  word: "聽信", meaning: "聽從並相信（多指輕易相信不實的話或謠言）。", s1: "我們做事要有自己的判斷力，切勿輕易________網上的未經證實的謠言。", s2: "農夫因為________了騙子的甜言蜜語，結果損失了一大筆積蓄。", tileDistractors: ["廳", "言", "從", "靠"] },
+    { id: "chi4a_20", unitKey: "chi_4a_l5",  word: "虛偽", meaning: "不真誠、假裝友善或做作，表裏不一。", s1: "他表面上不停稱讚別人，背後卻說人壞話，為人十分________。", s2: "我喜歡坦率真誠的朋友，最討厭那種假惺惺、________的奉承。", tileDistractors: ["慮", "為", "假", "誠"] },
+    { id: "chi4a_21", unitKey: "chi_4a_l5",  word: "品嘗", meaning: "細細地辨別食物或飲品的滋味。", s1: "來到這間百年老店，我們一定要________這裏最出名的手工蛋撻。", s2: "爺爺泡了一壺上等好茶，邀請客人坐下來慢慢________。", tileDistractors: ["晶", "常", "味", "食"] },
+    { id: "chi4a_23", unitKey: "chi_4a_l5",  word: "警惕", meaning: "對可能發生的危險或壞事保持警覺和戒備。", s1: "過馬路時我們要時刻提高________，看清左右兩旁沒有車輛才橫過。", s2: "面對陌生人突然送來的禮物，小朋友應保持________，不要隨便收下。", tileDistractors: ["驚", "踢", "覺", "戒"] },
+    { id: "chi4a_24", unitKey: "chi_4a_l5",  word: "狡猾", meaning: "詭計多端、非常奸詐，喜歡欺騙別人。", s1: "童話故事裏的狐狸通常十分________，常常想出歪點子來騙取食物。", s2: "這名________的小偷以為能瞞天過海，最終還是被機警的保安發現了。", tileDistractors: ["絞", "滑", "奸", "詐"] },
+    { id: "chi4a_25", unitKey: "chi_4a_l5",  word: "糊塗", meaning: "頭腦不清楚、不明事理，容易做錯事或弄錯事情。", s1: "我真是太________了，早上趕着出門竟然忘了把功課放進書包。", s2: "這件事牽涉到班級的公費，你可不能馬虎________，一定要算清楚帳目。", tileDistractors: ["湖", "途", "迷", "亂"] },
+    { id: "chi4a_26", unitKey: "chi_4a_l5",  word: "貪心", meaning: "不知滿足，總想得到更多不屬於自己的東西。", s1: "那隻狗十分________，嘴裏已經咬着一塊骨頭，還想搶去倒影中的另一塊。", s2: "我們做人要知足常樂，切不可過於________，否則容易因小失大。", tileDistractors: ["貧", "必", "求", "多"] },
+    // 第7課
+    { id: "chi4a_27", unitKey: "chi_4a_l7",  word: "深刻", meaning: "感受或印象非常深，長久留在記憶中難以忘記。", s1: "這次到四川探訪大熊貓的義工之旅，給我留下了非常________的印象。", s2: "經過這次忘記帶入場券的教訓，我得到了________的反思，以後必定檢查清楚。", tileDistractors: ["探", "孩", "印", "記"] },
+    { id: "chi4a_29", unitKey: "chi_4a_l7",  word: "笨拙", meaning: "動作不靈活、遲鈍，不夠熟練巧妙。", s1: "小企鵝在陸地上走起路來搖搖擺擺，顯得有點________，但十分可愛。", s2: "我剛開始學滑冰時動作非常________，沒滑幾步便摔倒在冰面上。", tileDistractors: ["本", "出", "遲", "鈍"] },
+    { id: "chi4a_30", unitKey: "chi_4a_l7",  word: "靈巧", meaning: "動作敏捷、輕快熟練，或心思巧妙。", s1: "海豚一跳進水裏就變得非常________，能輕鬆地穿梭並躍出水面。", s2: "婆婆的雙手十分________，不到十分鐘就用彩紙摺出一隻栩栩如生的紙鶴。", tileDistractors: ["零", "功", "敏", "捷"] },
+    { id: "chi4a_31", unitKey: "chi_4a_l7",  word: "精湛", meaning: "技藝、技術非常高超、精妙深厚。", s1: "雜技團演員在空中翻騰的表演技藝________，贏得全場觀眾熱烈的掌聲。", s2: "這位老師傅雕刻木器的手藝十分________，每件作品都像藝術品一樣。", tileDistractors: ["清", "甚", "高", "妙"] },
+    { id: "chi4a_32", unitKey: "chi_4a_l7",  word: "厭倦", meaning: "對某件事做久了或看多了，感到疲倦、失去興趣。", s1: "這本圖畫書十分有趣，妹妹翻看了十多遍也毫不感到________。", s2: "如果每天只做重複又單調的練習，學生很快便會對學習產生________。", tileDistractors: ["壓", "卷", "疲", "悶"] },
+    { id: "chi4a_33", unitKey: "chi_4a_l7",  word: "體會", meaning: "透過親身經歷去感受和領悟其中的道理或滋味。", s1: "親手幫忙做了一整天家務後，我終於________到媽媽平日有多辛苦。", s2: "參加這次露營活動，讓我深深________到團隊合作的重要性。", tileDistractors: ["禮", "繪", "感", "受"] },
+    // 第8課
+    { id: "chi4a_34", unitKey: "chi_4a_l8",  word: "預約", meaning: "事先約定好時間或名額。", s1: "這間主題餐廳非常受歡迎，我們必須提前一星期在網上________座位。", s2: "媽媽已經為我向牙醫________了下星期六下午檢查牙齒的時間。", tileDistractors: ["頂", "納", "先", "訂"] },
+    { id: "chi4a_35", unitKey: "chi_4a_l8",  word: "解說", meaning: "詳細地解釋和說明事物的內容或原理。", s1: "透過導賞員生動有趣的________，我們認識了不少紅樹林植物的特徵。", s2: "科學館的展板附有清晰的圖文________，方便小朋友理解展品的運作。", tileDistractors: ["角", "悅", "釋", "明"] },
+    { id: "chi4a_36", unitKey: "chi_4a_l8",  word: "盤旋", meaning: "在空中環繞着打轉飛行。", s1: "幾隻老鷹張開寬大的翅膀，在山谷上空悠閒地________，尋找地面的獵物。", s2: "海鷗在碼頭上方不斷________，不時發出清脆的鳴叫聲。", tileDistractors: ["盆", "旅", "繞", "飛"] },
+    { id: "chi4a_37", unitKey: "chi_4a_l8",  word: "柔和", meaning: "溫和、不刺眼或不刺耳，令人感到舒服。", s1: "清晨的陽光十分________，灑在平靜的湖面上，泛起點點波光。", s2: "睡前聽一會兒節奏________的純音樂，能幫助我們放鬆心情入睡。", tileDistractors: ["矛", "禾", "溫", "順"] },
+    { id: "chi4a_38", unitKey: "chi_4a_l8",  word: "扁平", meaning: "又薄又平，厚度很小。", s1: "黑臉琵鷺擁有一張長而________的嘴巴，形狀就像一把湯匙一樣。", s2: "弟弟把泥膠放在桌上用力壓，很快便壓成了一塊________的圓餅。", tileDistractors: ["偏", "評", "薄", "圓"] },
+    { id: "chi4a_39", unitKey: "chi_4a_l8",  word: "金燦燦", meaning: "形容金黃色而且光彩耀眼的樣子。", s1: "秋天來了，田野裏成熟了的稻穗一片________，在陽光下閃閃發光。", s2: "夕陽西下，餘暉把整片海面染得________的，景色美得像一幅油畫。", tileDistractors: ["全", "爛", "耀"] },
+    { id: "chi4a_40", unitKey: "chi_4a_l8",  word: "見識", meaning: "看到並了解新事物，增長知識和閱歷；也指眼界與學識。", s1: "爸爸趁着假期帶我們參觀航天展覽，好讓我們開闊眼界，增長________。", s2: "這次到米埔自然保護區觀鳥，我________了許多罕見的候鳥，大開眼界。", tileDistractors: ["貝", "織", "眼", "界"] },
+    // 第9課
+    { id: "chi4a_42", unitKey: "chi_4a_l9",  word: "攻打", meaning: "出動軍隊進攻敵人的陣地或城池。", s1: "古代將軍率領十萬大軍日夜兼程，準備________敵軍駐守的城池。", s2: "敵人企圖趁着夜色________我們的營地，幸好被巡邏的士兵及時發現。", tileDistractors: ["功", "訂", "進", "擊"] },
+    { id: "chi4a_43", unitKey: "chi_4a_l9",  word: "飛揚", meaning: "向上飄起並在空中飄動（多指塵土、旗幟、頭髮等）。", s1: "一陣狂風吹過，工地上的沙塵四處________，路人紛紛用手掩着口鼻。", s2: "運動會開幕時，操場上彩旗________，氣氛十分熱鬧。", tileDistractors: ["非", "楊", "飄", "動"] },
+    { id: "chi4a_46", unitKey: "chi_4a_l9",  word: "消沉", meaning: "情緒低落，提不起精神或失去信心。", s1: "球隊連輸兩場比賽後，隊員們的士氣變得十分________，個個垂頭喪氣。", s2: "面對暫時的失敗，我們不要意志________，應該振作起來找出改進的方法。", tileDistractors: ["稍", "枕", "低", "落"] },
+    { id: "chi4a_47", unitKey: "chi_4a_l9",  word: "激勵", meaning: "鼓舞、勉勵別人，使對方振作並努力前進。", s1: "教練在賽前說了一番充滿力量的話，大大________了全體運動員的士氣。", s2: "這本講述傷健運動員奮鬥的故事書，深深________了我要勇敢面對挑戰。", tileDistractors: ["擊", "厲", "鼓", "舞"] },
+    { id: "chi4a_48", unitKey: "chi_4a_l9",  word: "濕潤", meaning: "潮濕而不乾燥，帶有水分。", s1: "下過一場春雨後，公園裏的泥土變得十分________，空氣也清新多了。", s2: "想到酸甜多汁的梅子，士兵們嘴裏生出津液，喉嚨頓時覺得________起來。", tileDistractors: ["溫", "間", "潮", "水"] },
+    // 第11課
+    { id: "chi4a_50", unitKey: "chi_4a_l11", word: "樂呵呵", meaning: "形容笑咪咪、非常開心愉快的樣子。", s1: "爺爺看到我們一家人回來吃團年飯，高興得整晚都________的。", s2: "小弟弟拿到自己心愛的積木禮物，立刻________地跑到客廳玩起來。", tileDistractors: ["藥", "河", "笑"] },
+    { id: "chi4a_51", unitKey: "chi_4a_l11", word: "旅程", meaning: "旅行的過程或路程。", s1: "這次五日四夜的家庭旅遊十分充實，我們在________中拍下了許多珍貴的照片。", s2: "出發前，爸爸細心地規劃好每天的交通與景點，確保整趟________順利愉快。", tileDistractors: ["族", "稱", "行", "路"] },
+    { id: "chi4a_53", unitKey: "chi_4a_l11", word: "爭執", meaning: "各人堅持自己的意見而互相爭論、吵架。", s1: "兩位同學為了借用同一本圖書而發生________，班長連忙上前調解。", s2: "遇到意見不合時，我們應該冷靜溝通，不要動不動就與別人起________。", tileDistractors: ["靜", "報", "吵", "論"] },
+    { id: "chi4a_55", unitKey: "chi_4a_l11", word: "慰問", meaning: "對生病、受傷或遭遇困難的人表示關心和安撫。", s1: "表弟住院期間，同學們特意寫了一張心意卡並帶着水果去________他。", s2: "颱風過後，義工隊探訪了獨居長者，向他們送上物資和親切的________。", tileDistractors: ["衛", "間", "關", "懷"] },
+    { id: "chi4a_56", unitKey: "chi_4a_l11", word: "示範", meaning: "做出榜樣或動作，供別人觀看和學習。", s1: "體育老師先為大家________了一次標準的跳繩姿勢，再讓我們分組練習。", s2: "美術課上，老師在畫紙上一步步________如何調配水彩的深淺顏色。", tileDistractors: ["市", "犯", "榜", "樣"] },
+    { id: "chi4a_57", unitKey: "chi_4a_l11", word: "不滿", meaning: "對人或事感到不滿意、有怨言。", s1: "航班無故延誤了四小時，許多旅客都向航空公司職員表達了________。", s2: "陳老師對同學交來的草率功課深感________，要求他們重新認真書寫。", tileDistractors: ["布", "瞞", "怨", "怒"] },
+    { id: "chi4a_58", unitKey: "chi_4a_l11", word: "強大", meaning: "力量非常大、實力雄厚。", s1: "這場超強颱風的風力十分________，天文台呼籲市民留在安全的地方。", s2: "只要全體同學團結一致，我們便能匯聚成一股________的力量，克服困難。", tileDistractors: ["張", "太", "力", "雄"] },
+    // 第13課
+    { id: "chi4a_59", unitKey: "chi_4a_l13", word: "實現", meaning: "使理想、計劃或願望變成事實。", s1: "經過多年刻苦訓練，他終於________了自己代表香港參加亞運會的夢想。", s2: "我們定下學習目標後，必須付諸行動，才能一步步把計劃________。", tileDistractors: ["食", "見", "成", "真"] },
+    { id: "chi4a_60", unitKey: "chi_4a_l13", word: "發射", meaning: "用強大推力把火箭、飛船或人造衛星等送上天空。", s1: "隨着倒數聲結束，運載火箭噴出熊熊火焰，成功把神舟飛船________升空。", s2: "科學家在衛星________中心緊張地監察儀器，確保火箭準時點火升空。", tileDistractors: ["廢", "謝", "升", "推"] },
+    { id: "chi4a_61", unitKey: "chi_4a_l13", word: "返回", meaning: "回到原來的地方或出發點。", s1: "太空人圓滿完成在太空站的工作後，乘坐飛船安全________地球。", s2: "我們在山頂欣賞完日落後，便趕在天黑前沿着原路________山腳。", tileDistractors: ["反", "同", "歸", "去"] },
+    { id: "chi4a_62", unitKey: "chi_4a_l13", word: "預定", meaning: "預先規定好或安排好（時間、目標、軌道等）。", s1: "神舟飛船準確進入________軌道，地面控制中心隨即響起熱烈的掌聲。", s2: "由於交通暢順，旅遊巴比________時間提早了十五分鐘到達主題公園。", tileDistractors: ["頂", "足", "先", "排"] },
+    { id: "chi4a_63", unitKey: "chi_4a_l13", word: "漫步", meaning: "沒有目的、悠閒輕鬆地散步（也可指太空人在太空行走）。", s1: "飯後我最喜歡跟家人在海濱長廊________，吹着清涼的海風聊天。", s2: "中國太空人穿著特製的航天服走出艙門，順利在浩瀚的宇宙中進行太空________。", tileDistractors: ["慢", "布", "散", "行"] },
+    { id: "chi4a_64", unitKey: "chi_4a_l13", word: "顯著", meaning: "非常明顯、突出，容易被人看出來。", s1: "小輝每天堅持朗讀英文半小時，這學期他的口語成績有了________的進步。", s2: "這項環保政策推行一年以來，社區的塑膠垃圾量出現了________的減少。", tileDistractors: ["濕", "暑", "明", "突"] },
+    { id: "chi4a_65", unitKey: "chi_4a_l13", word: "裝載", meaning: "用車、船、飛機或飛船等交通工具盛放和運載貨物或設備。", s1: "這艘貨運飛船________了大量食物、飲用水和科學實驗器材，準備運往太空站。", s2: "碼頭上的起重機正忙着把一箱箱新鮮水果________到大型貨船上。", tileDistractors: ["壯", "裁", "運", "盛"] }
   ]
 };
+/* ============================================================================
+ * Project J：艾瑟瑞亞的破曉 — 四科題庫與詳盡錯題解析總橋接器 (question-bridge.js - v7.0)
+ * 升級：1.中文科除四選一（字詞解釋、例句填充）外，新增「中文・字塊拼詞 (chi_tile)」
+ *         透過原生 fill_blank 引擎將目標詞語拆成單字字塊＋形近/同音干擾字拼詞
+ *       2.支援 chi_fill 與 chi_tile 雙例句 (s1/s2) 每次出題隨機切換
+ * ============================================================================ */
+window.Aetheria = window.Aetheria || {};
+
+(function() {
+  const Bank = window.Aetheria.QuestionBank || {};
+  const ChiBank = Bank.Chinese || { LESSONS: [], IDIOMS: [], WORDS: [] };
+  const EngBank = Bank.English || { LESSONS: [], VOCAB: [] };
+  const HumBank = Bank.Humanities || { LESSONS: [], QUESTIONS: [], DIAGRAMS: {} };
+  const SciBank = Bank.Science || { LESSONS: [], QUESTIONS: [], DIAGRAMS: {} };
+
+  const ALL_DIAGRAMS = Object.assign({}, HumBank.DIAGRAMS || {}, SciBank.DIAGRAMS || {});
+
+  const LESSON_CATALOG = [];
+  const unitNameLookup = {};
+
+  function registerLessons(list, subjectKey) {
+    (list || []).forEach(function(l) {
+      unitNameLookup[l.key] = l.name;
+      LESSON_CATALOG.push({
+        key: l.key,
+        subject: subjectKey,
+        name: l.name,
+        count: 0
+      });
+    });
+  }
+
+  registerLessons(ChiBank.LESSONS, "chinese");
+  registerLessons(EngBank.LESSONS, "english");
+  registerLessons(HumBank.LESSONS, "humanities");
+  registerLessons(SciBank.LESSONS, "science");
+
+  const QUIZ_TYPE_CATALOG = [
+    { key: "chi_meaning", label: "中文・字詞/成語解釋" },
+    { key: "chi_fill",    label: "中文・例句填充題" },
+    { key: "chi_tile",    label: "中文・字塊拼詞" },
+    { key: "eng_spell",   label: "英文・字塊串字" },
+    { key: "eng_fill",    label: "英文・句子填充題" },
+    { key: "hum_fill",    label: "人文・填充題" },
+    { key: "hum_img_fill",label: "人文・看圖填充題" },
+    { key: "hum_classify",label: "人文・分類籃題" },
+    { key: "hum_mcq",     label: "人文・選擇題" },
+    { key: "hum_short",   label: "人文・簡答題" },
+    { key: "hum_scenario",label: "人文・情境問答題" },
+    { key: "sci_fill",    label: "科學・填充題" },
+    { key: "sci_img_fill",label: "科學・看圖填充題" },
+    { key: "sci_classify",label: "科學・分類籃題" },
+    { key: "sci_mcq",     label: "科學・選擇題" },
+    { key: "sci_short",   label: "科學・簡答題" },
+    { key: "sci_scenario",label: "科學・情境問答題" }
+  ];
+
+  function buildAutoOptions(targetItem, pool, idxSeed) {
+    let candidates = pool.filter(function(item) {
+      return item.unitKey === targetItem.unitKey && item.word !== targetItem.word;
+    });
+    if (candidates.length < 3) {
+      candidates = pool.filter(function(item) { return item.word !== targetItem.word; });
+    }
+    const distractors = [];
+    for (let i = 0; i < candidates.length && distractors.length < 3; i++) {
+      const pick = candidates[(idxSeed * 3 + i * 2) % candidates.length];
+      if (pick && distractors.indexOf(pick.word) === -1) {
+        distractors.push(pick.word);
+      }
+    }
+    const allOpts = [targetItem.word].concat(distractors);
+    const shift = idxSeed % allOpts.length;
+    return allOpts.slice(shift).concat(allOpts.slice(0, shift));
+  }
+
+  // 若中文詞語未手動指定 tileDistractors，自動從同課其他詞語抽取單字作干擾字塊
+  function buildAutoTileDistractors(targetItem, pool, idxSeed) {
+    const wordChars = Array.from(String(targetItem.word || ""));
+    const need = wordChars.length <= 2 ? 4 : 3;
+    const sameUnit = pool.filter(function(it) { return it.unitKey === targetItem.unitKey && it.word !== targetItem.word; });
+    const source = sameUnit.length >= 2 ? sameUnit : pool;
+    const charPool = [];
+    source.forEach(function(it) {
+      Array.from(String(it.word || "")).forEach(function(ch) {
+        if (wordChars.indexOf(ch) === -1 && charPool.indexOf(ch) === -1) {
+          charPool.push(ch);
+        }
+      });
+    });
+    const out = [];
+    for (let i = 0; i < charPool.length && out.length < need; i++) {
+      const ch = charPool[(idxSeed * 3 + i * 2) % charPool.length];
+      if (out.indexOf(ch) === -1) out.push(ch);
+    }
+    return out;
+  }
+
+  function buildFilledSentenceExplanation(promptText, blanksArr) {
+    let idx = 0;
+    const raw = String(promptText || "").replace(/^【[^】]+】/, "");
+    return raw.replace(/_{2,}/g, function() {
+      const ans = (blanksArr && blanksArr[idx] !== undefined) ? blanksArr[idx] : (blanksArr && blanksArr[0]) || "";
+      idx++;
+      return "「" + ans + "」";
+    });
+  }
+
+  const ALL_QUESTIONS = [];
+
+  // (A) 中文科：字詞解釋 (MCQ) + 例句填充 (MCQ) + 字塊拼詞 (fill_blank)
+  const allChiItems = (ChiBank.IDIOMS || []).concat(ChiBank.WORDS || []);
+  allChiItems.forEach(function(item, idx) {
+    const uName = item.unitName || unitNameLookup[item.unitKey] || "中文";
+    const opts1 = item.options || buildAutoOptions(item, allChiItems, idx + 1);
+    const opts2 = item.options || buildAutoOptions(item, allChiItems, idx + 3);
+    const fullEx1 = String(item.s1 || "").replace(/_{2,}/g, item.word);
+
+    if (item.meaning) {
+      ALL_QUESTIONS.push({
+        id: item.id + "_m",
+        baseId: item.id,
+        subject: "chinese",
+        subjectLabel: "中文・" + uName,
+        unitKey: item.unitKey,
+        unitName: uName,
+        qCategory: "chi_meaning",
+        type: "mcq",
+        typeLabel: "字詞解釋",
+        prompt: "【字詞解釋】「" + item.meaning + "」是哪一個詞語／成語的意思？",
+        options: opts1,
+        answer: item.word,
+        explanation: "【詞語】" + item.word + "<br>【解釋】" + item.meaning + (fullEx1 ? "<br>【例句】" + fullEx1 : "")
+      });
+    }
+
+    if (item.s1 || item.s2) {
+      const firstSent = item.s1 || item.s2;
+      ALL_QUESTIONS.push({
+        id: item.id + "_f",
+        baseId: item.id,
+        subject: "chinese",
+        subjectLabel: "中文・" + uName,
+        unitKey: item.unitKey,
+        unitName: uName,
+        qCategory: "chi_fill",
+        type: "mcq",
+        typeLabel: "填充題",
+        prompt: "【填充題】" + firstSent,
+        s1: item.s1 || firstSent,
+        s2: item.s2 || firstSent,
+        meaning: item.meaning || "",
+        options: opts2,
+        answer: item.word,
+        explanation: "【詞義解釋】" + (item.meaning || "") + "<br>【完整句子】" + String(firstSent).replace(/_{2,}/g, "「" + item.word + "」")
+      });
+
+      // 新增：單字字塊拼成字詞（依句子空格數點選正確字塊）
+      const chars = Array.from(String(item.word || ""));
+      if (chars.length >= 2) {
+        const slotStr = chars.map(function() { return "________"; }).join(" ");
+        const tileDistractors = (Array.isArray(item.tileDistractors) && item.tileDistractors.length > 0)
+          ? item.tileDistractors.slice()
+          : buildAutoTileDistractors(item, allChiItems, idx + 5);
+
+        ALL_QUESTIONS.push({
+          id: item.id + "_t",
+          baseId: item.id,
+          subject: "chinese",
+          subjectLabel: "中文・" + uName,
+          unitKey: item.unitKey,
+          unitName: uName,
+          qCategory: "chi_tile",
+          type: "fill_blank",
+          typeLabel: "字塊拼詞",
+          prompt: "【字塊拼詞】" + String(firstSent).replace(/_{2,}/g, slotStr),
+          s1: item.s1 || firstSent,
+          s2: item.s2 || firstSent,
+          meaning: item.meaning || "",
+          blanks: chars,
+          distractors: tileDistractors,
+          answer: item.word,
+          explanation: "【正確詞語】" + item.word + "<br>【詞義解釋】" + (item.meaning || "") + "<br>【完整句子】" + String(firstSent).replace(/_{2,}/g, "「" + item.word + "」")
+        });
+      }
+    }
+  });
+
+  // (B) 英文科：Vocab -> 字塊串字 + 句子填充
+  const allEngItems = EngBank.VOCAB || [];
+  allEngItems.forEach(function(item, idx) {
+    const uName = item.unitName || unitNameLookup[item.unitKey] || "English";
+    const fillOpts = (item.options && item.options.length >= 2) ? item.options : buildAutoOptions(item, allEngItems, idx + 2);
+    const fullEngSent = String(item.sentence || "").replace(/_{2,}/g, "[" + item.word + "]");
+
+    ALL_QUESTIONS.push({
+      id: item.id + "_s",
+      baseId: item.id,
+      subject: "english",
+      subjectLabel: "英文・" + uName,
+      unitKey: item.unitKey,
+      unitName: uName,
+      qCategory: "eng_spell",
+      type: "eng_tile_spell",
+      typeLabel: "字塊串字",
+      prompt: "【英文串字】" + item.meaning,
+      meaning: item.meaning,
+      answer: item.word,
+      explanation: "【英文詞彙】" + item.word + "<br>【中文解釋】" + item.meaning + (fullEngSent ? "<br>【英文例句】" + fullEngSent : "")
+    });
+
+    if (item.sentence) {
+      ALL_QUESTIONS.push({
+        id: item.id + "_f",
+        baseId: item.id,
+        subject: "english",
+        subjectLabel: "英文・" + uName,
+        unitKey: item.unitKey,
+        unitName: uName,
+        qCategory: "eng_fill",
+        type: "mcq",
+        typeLabel: "句子填充題",
+        prompt: "【填充題】" + item.sentence,
+        meaning: item.meaning,
+        options: fillOpts,
+        answer: item.word,
+        explanation: "【詞彙解釋】" + item.word + " ＝ " + item.meaning + "<br>【完整句子】" + fullEngSent
+      });
+    }
+  });
+
+  // 輔助函式：為人文科與科學科題目建立詳盡解釋
+  function buildHumSciExplanation(q) {
+    if (q.explanation) return q.explanation;
+    if (q.type === "fill_blank" || q.type === "image_fill") {
+      return "【完整概念】" + buildFilledSentenceExplanation(q.prompt, q.blanks || [q.answer]);
+    }
+    if (q.type === "classify" && q.items) {
+      const grouped = {};
+      (q.baskets || []).forEach(function(b) { grouped[b] = []; });
+      q.items.forEach(function(it) {
+        if (!grouped[it.basket]) grouped[it.basket] = [];
+        grouped[it.basket].push(it.label);
+      });
+      return Object.keys(grouped).map(function(b) {
+        return "<b>【" + b + "】</b>：" + grouped[b].join("、");
+      }).join("<br>");
+    }
+    if (q.type === "multi_mcq" && q.answers) {
+      return "【正確選項】" + q.answers.join("；") + "<br>（請留意題目要求選出所有正確的做法或特徵）";
+    }
+    if (q.type === "short_qa") {
+      return "【課本重點解析】" + (q.answer || "");
+    }
+    return "【課本知識點】題目問及「" + String(q.prompt || "").replace(/^【[^】]+】/, "") + "」，正確答案為：<b>" + (q.answer || "") + "</b>。";
+  }
+
+  // (C) 人文科
+  (HumBank.QUESTIONS || []).forEach(function(q) {
+    const uName = q.unitName || unitNameLookup[q.unitKey] || "人文科";
+    const copy = Object.assign({}, q, {
+      subject: "humanities",
+      subjectLabel: uName,
+      unitName: uName,
+      qCategory: q.qCategory || "hum_mcq"
+    });
+    if (copy.blanks && !copy.answer) {
+      copy.answer = copy.blanks.join("、");
+    }
+    copy.explanation = buildHumSciExplanation(copy);
+    ALL_QUESTIONS.push(copy);
+  });
+
+  // (D) 科學科
+  (SciBank.QUESTIONS || []).forEach(function(q) {
+    const uName = q.unitName || unitNameLookup[q.unitKey] || "科學科";
+    const copy = Object.assign({}, q, {
+      subject: "science",
+      subjectLabel: uName,
+      unitName: uName,
+      qCategory: q.qCategory || "sci_mcq"
+    });
+    if (copy.blanks && !copy.answer) {
+      copy.answer = copy.blanks.join("、");
+    }
+    copy.explanation = buildHumSciExplanation(copy);
+    ALL_QUESTIONS.push(copy);
+  });
+
+  LESSON_CATALOG.forEach(function(les) {
+    les.count = ALL_QUESTIONS.filter(function(q) { return q.unitKey === les.key; }).length;
+  });
+
+  function ensureQuizSettings(s) {
+    if (!s.activeSubjects) {
+      s.activeSubjects = { chinese: true, english: true, humanities: true, science: true };
+    }
+    if (!s.activeLessons) {
+      s.activeLessons = {};
+      LESSON_CATALOG.forEach(function(l) {
+        s.activeLessons[l.key] = true;
+      });
+    } else {
+      LESSON_CATALOG.forEach(function(l) {
+        if (s.activeLessons[l.key] === undefined) {
+          s.activeLessons[l.key] = true;
+        }
+      });
+    }
+
+    if (!s.lessonSelectMode) {
+      s.lessonSelectMode = "multi";
+    }
+
+    if (!s.activeQuizTypes) {
+      s.activeQuizTypes = {};
+      QUIZ_TYPE_CATALOG.forEach(function(t) { s.activeQuizTypes[t.key] = true; });
+    } else {
+      QUIZ_TYPE_CATALOG.forEach(function(t) {
+        if (s.activeQuizTypes[t.key] === undefined) s.activeQuizTypes[t.key] = true;
+      });
+    }
+  }
+
+  let recentIds = [];
+
+  const QuizBridge = {
+    LESSON_CATALOG: LESSON_CATALOG,
+    QUIZ_TYPE_CATALOG: QUIZ_TYPE_CATALOG,
+    DIAGRAMS: ALL_DIAGRAMS,
+    ensureQuizSettings: ensureQuizSettings,
+
+    getDiagram: function(svgKey) {
+      return ALL_DIAGRAMS[svgKey] || "";
+    },
+
+    getAllQuestions: function() {
+      return ALL_QUESTIONS;
+    },
+
+    getExplanationHtml: function(q, correctText) {
+      if (!q) return "請記住正確答案：<b>" + (correctText || "") + "</b>";
+      if (q.explanation) return q.explanation;
+      return buildHumSciExplanation(q);
+    },
+
+    pickQuestion: function(opts) {
+      opts = opts || {};
+      const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+      ensureQuizSettings(s);
+
+      if (opts.forceId) {
+        const forced = ALL_QUESTIONS.find(function(q) { return q.id === opts.forceId || q.baseId === opts.forceId; });
+        if (forced) return this.prepareQuestionInstance(forced);
+      }
+
+      let pool = ALL_QUESTIONS.filter(function(q) {
+        if (s.activeSubjects && s.activeSubjects[q.subject] === false) return false;
+        if (s.activeLessons && !s.activeLessons[q.unitKey]) return false;
+        if (s.activeQuizTypes && s.activeQuizTypes[q.qCategory] === false) return false;
+        return true;
+      });
+
+      if (pool.length === 0) {
+        pool = ALL_QUESTIONS.filter(function(q) {
+          return s.activeSubjects && s.activeSubjects[q.subject] !== false;
+        });
+        if (pool.length === 0) pool = ALL_QUESTIONS;
+      }
+
+      const freshPool = pool.filter(function(q) { return recentIds.indexOf(q.id) === -1; });
+      const finalPool = freshPool.length > 0 ? freshPool : pool;
+
+      const picked = finalPool[Math.floor(Math.random() * finalPool.length)];
+      recentIds.push(picked.id);
+      if (recentIds.length > Math.min(20, Math.floor(pool.length / 2))) {
+        recentIds.shift();
+      }
+
+      return this.prepareQuestionInstance(picked);
+    },
+
+    prepareQuestionInstance: function(q) {
+      const copy = Object.assign({}, q);
+      if (copy.qCategory === "chi_fill" && copy.s1 && copy.s2) {
+        const chosenSent = (Math.random() < 0.5) ? copy.s1 : copy.s2;
+        copy.prompt = "【填充題】" + chosenSent;
+        copy.explanation = "【詞義解釋】" + (copy.meaning || "") + "<br>【完整句子】" + String(chosenSent).replace(/_{2,}/g, "「" + copy.answer + "」");
+      } else if (copy.qCategory === "chi_tile" && copy.s1 && copy.s2) {
+        const chosenSent = (Math.random() < 0.5) ? copy.s1 : copy.s2;
+        const slotStr = (copy.blanks || Array.from(String(copy.answer || ""))).map(function() { return "________"; }).join(" ");
+        copy.prompt = "【字塊拼詞】" + String(chosenSent).replace(/_{2,}/g, slotStr);
+        copy.explanation = "【正確詞語】" + copy.answer + "<br>【詞義解釋】" + (copy.meaning || "") + "<br>【完整句子】" + String(chosenSent).replace(/_{2,}/g, "「" + copy.answer + "」");
+      }
+      if (copy.svgKey && ALL_DIAGRAMS[copy.svgKey]) {
+        copy.svgDiagram = ALL_DIAGRAMS[copy.svgKey];
+      }
+      return copy;
+    },
+
+    recordAnswer: function(qId, isCorrect) {
+      if (!window.Aetheria.State || !window.Aetheria.State.data) return;
+      const s = window.Aetheria.State.data;
+      if (!s.questionMastery) s.questionMastery = {};
+      if (!Array.isArray(s.wrongBook)) s.wrongBook = [];
+
+      if (!s.questionMastery[qId]) {
+        s.questionMastery[qId] = { stars: 0, attempts: 0 };
+      }
+      s.questionMastery[qId].attempts++;
+
+      if (isCorrect) {
+        s.questionMastery[qId].stars = Math.min(3, (s.questionMastery[qId].stars || 0) + 1);
+        s.streak = (s.streak || 0) + 1;
+        if (s.streak > (s.maxStreak || 0)) s.maxStreak = s.streak;
+        s.wrongBook = s.wrongBook.filter(function(id) { return id !== qId; });
+      } else {
+        s.streak = 0;
+        if (s.wrongBook.indexOf(qId) === -1) {
+          s.wrongBook.push(qId);
+        }
+      }
+      window.Aetheria.State.save();
+    }
+  };
+
+  window.Aetheria.QuizBridge = QuizBridge;
+})();
