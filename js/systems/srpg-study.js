@@ -1,10 +1,10 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 智慧答題雙軌解鎖與學習戰報模組 (srpg-study.js - v14.2)
- * 【File 6 / 6】獨立外掛模組，無須改動前 5 個檔案
- * 核心功能：
- *   1. 【智慧答題雙軌解鎖】：缺工具/鑰匙或機關鎖定時，可選「去工坊打造」或「答對2題智慧破障」（優先抽錯題本舊題）
- *   2. 【📊 學習成果戰報】：自動統計戰鬥詠唱與智慧答題之總正確率、連勝、分科進度條、近 7 日溫習柱狀圖、家長摘要匯出
- *   3. 【📕 錯題魔典】：自動收錄答錯題目與小四小五白話解析，支援隨時重練消滅錯題賺金幣
+ * Project J：艾瑟瑞亞的破曉 — 智慧答題雙軌解鎖與學習戰報模組 (srpg-study.js - v14.5)
+ * 【File 6 / 8】獨立外掛模組
+ * v14.5 修正 (#4)：
+ *   1. executeEnemyCounterPhase 嚴格檢查 typeof answeredRight === "boolean"，杜絕誤計答錯
+ *   2. winBattle 補記「最後一擊擊殺怪物」之答對題數與寵物經驗（附防重複計分鎖）
+ *   3. 雙軌解鎖懸崖時精準鎖定距離最近的繩梯並支援專屬 upX/upY 落點
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.SRPG = window.Aetheria.SRPG || {};
@@ -57,65 +57,31 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
   // ================= 2. 注入樣式 =================
   function injectStudyStyles() {
-    if (document.getElementById("srpg-study-v142-styles")) return;
+    if (document.getElementById("srpg-study-v145-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-study-v142-styles";
+    style.id = "srpg-study-v145-styles";
     style.textContent = `
       #srpg-study-camp-pill {
-        position: absolute;
-        top: 56px;
-        right: 6px;
-        z-index: 18;
-        background: rgba(34, 24, 62, 0.92);
-        color: #e0aaff;
-        border: 1.5px solid #c77dff;
-        border-radius: 6px;
-        padding: 3px 8px;
-        font-size: 10.5px;
-        font-weight: 900;
-        cursor: pointer;
-        pointer-events: auto;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.85);
-        display: none;
+        position: absolute; top: 56px; right: 6px; z-index: 18;
+        background: rgba(34, 24, 62, 0.92); color: #e0aaff;
+        border: 1.5px solid #c77dff; border-radius: 6px; padding: 3px 8px;
+        font-size: 10.5px; font-weight: 900; cursor: pointer; pointer-events: auto;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.85); display: none;
       }
-      .study-kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 5px;
-        margin-bottom: 8px;
-      }
-      .study-kpi-box {
-        background: #181316;
-        border: 1.5px solid #4a3e44;
-        border-radius: 7px;
-        padding: 6px 4px;
-        text-align: center;
-      }
+      .study-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-bottom: 8px; }
+      .study-kpi-box { background: #181316; border: 1.5px solid #4a3e44; border-radius: 7px; padding: 6px 4px; text-align: center; }
       .study-kpi-val { font-size: 15px; font-weight: 900; color: #ffd166; line-height: 1.2; }
       .study-kpi-lbl { font-size: 9.5px; color: #cbd5e1; margin-top: 2px; }
 
       .study-bar-row { margin-bottom: 6px; }
-      .study-bar-head {
-        display: flex; justify-content: space-between; font-size: 11.5px;
-        font-weight: 900; color: #ffffff; margin-bottom: 2px;
-      }
-      .study-bar-track {
-        width: 100%; height: 9px; background: #141013;
-        border: 1px solid #4a3e44; border-radius: 5px; overflow: hidden;
-      }
+      .study-bar-head { display: flex; justify-content: space-between; font-size: 11.5px; font-weight: 900; color: #ffffff; margin-bottom: 2px; }
+      .study-bar-track { width: 100%; height: 9px; background: #141013; border: 1px solid #4a3e44; border-radius: 5px; overflow: hidden; }
       .study-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
 
       .study-7day-chart {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 4px;
-        align-items: end;
-        height: 74px;
-        background: #141013;
-        border: 1.5px solid #4a3e44;
-        border-radius: 7px;
-        padding: 8px 6px 4px;
-        margin-bottom: 8px;
+        display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; align-items: end;
+        height: 74px; background: #141013; border: 1.5px solid #4a3e44; border-radius: 7px;
+        padding: 8px 6px 4px; margin-bottom: 8px;
       }
       .study-day-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
       .study-day-bar { width: 14px; min-height: 3px; border-radius: 3px 3px 0 0; background: #38b6ff; }
@@ -123,18 +89,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       .study-day-lbl { font-size: 9px; color: #94a3b8; margin-top: 2px; }
 
       .study-quiz-opt {
-        display: block;
-        width: 100%;
-        text-align: left;
-        background: #1c1619;
-        color: #ffffff;
-        border: 2px solid #594950;
-        border-radius: 7px;
-        padding: 8px 10px;
-        margin-bottom: 6px;
-        font-size: 12.5px;
-        font-weight: 900;
-        cursor: pointer;
+        display: block; width: 100%; text-align: left; background: #1c1619; color: #ffffff;
+        border: 2px solid #594950; border-radius: 7px; padding: 8px 10px; margin-bottom: 6px;
+        font-size: 12.5px; font-weight: 900; cursor: pointer;
       }
       .study-quiz-opt:active { transform: scale(0.98); }
       .study-quiz-opt.opt-correct { background: #183a27; border-color: #5ac54f; color: #a3f7b5; }
@@ -142,10 +99,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
       .study-track-card {
         background: linear-gradient(180deg, #211a24 0%, #141013 100%);
-        border: 2px solid #594950;
-        border-radius: 8px;
-        padding: 9px 10px;
-        margin-bottom: 8px;
+        border: 2px solid #594950; border-radius: 8px; padding: 9px 10px; margin-bottom: 8px;
       }
       .study-track-card.smart-track {
         border-color: #c77dff;
@@ -219,7 +173,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     };
   }
 
-  // 自動收集「原版遊戲題庫 + 內建香港小四小五題庫」
   function getCombinedQuestionPool() {
     const pool = [];
     const seenQ = {};
@@ -251,7 +204,8 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
   // ================= 4. 學習與雙軌解鎖主控制器 =================
   const study = {
     curReportTab: "overview",
-    activeSession: null, // { mode: "unlock" | "mistake" | "practice", targetType, targetRef, needCorrect, curCorrect, askedIds, curQ, locked, fromMistake }
+    activeSession: null,
+    _lastBattleAnswerTs: 0,
 
     recordAnswer: function(subject, isCorrect, questionObj) {
       const s = ensureStudyState();
@@ -277,7 +231,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       st.daily[today].total++;
       if (isCorrect) st.daily[today].correct++;
 
-      // 維護錯題魔典
       if (questionObj && questionObj.q) {
         const existIdx = s.srpgMistakes.findIndex(function(m) { return m.q === questionObj.q; });
         if (!isCorrect) {
@@ -297,7 +250,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             s.srpgMistakes[existIdx].wrongCount = (s.srpgMistakes[existIdx].wrongCount || 1) + 1;
           }
         } else if (existIdx !== -1) {
-          // 答對了原本在錯題本中的題目 ➔ 消滅錯題！
           s.srpgMistakes.splice(existIdx, 1);
           st.mistakesCleared = (st.mistakesCleared || 0) + 1;
         }
@@ -308,7 +260,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     },
 
-    // 挑選下一題（優先從錯題本抽取舊錯題！）
     pickNextQuestion: function(askedIds, onlyMistakes) {
       const s = ensureStudyState();
       const asked = askedIds || {};
@@ -532,7 +483,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         return;
       }
 
-      // 錯題特訓或自由溫習獎勵
       const bonusGold = sess.mode === "mistake" ? 90 : 75;
       s.gold = (s.gold || 0) + bonusGold;
       if (window.Aetheria.State && window.Aetheria.State.save) window.Aetheria.State.save();
@@ -583,7 +533,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         if (!s.solvedExplorePuzzles) s.solvedExplorePuzzles = {};
         if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
         s.solvedExplorePuzzles[mapObj.id] = true;
-        // 同步點亮現場所有機關視覺狀態
         (mapObj.decos || []).forEach(function(d) {
           if (d.isPuzzleOrderBrazier) { d.lit = true; d.sprite = "brazier_on"; }
           if (d.isPuzzleToggleLever)  { d.leverOn = true; d.sprite = "lever_on"; }
@@ -621,7 +570,8 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         s.riggedCliffs[mapObj.id] = true;
         (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
         s.onHighland = true;
-        s.heroX = ref.x; s.heroY = (ref.ladderSide === "north") ? 835 : 895;
+        s.heroX = (ref.upX !== undefined) ? ref.upX : ref.x;
+        s.heroY = (ref.upY !== undefined) ? ref.upY : ((ref.ladderSide === "north") ? 835 : 895);
         s.petX = s.heroX - 20; s.petY = s.heroY;
         window.Aetheria.UI.spawnFloatingText("🧠魔力繩梯展開!", "#e0aaff", true);
         window.Aetheria.UI.showToast("🧠 智慧魔力凝結成繩梯！已直接登上【岩石高台礦區】！");
@@ -671,7 +621,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       let contentHtml = "";
 
       if (tab === "overview") {
-        // 1. KPI 四格數據
         contentHtml +=
           '<div class="study-kpi-grid">' +
             '<div class="study-kpi-box"><div class="study-kpi-val">' + st.totalAnswered + '</div><div class="study-kpi-lbl">總答題數</div></div>' +
@@ -680,7 +629,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             '<div class="study-kpi-box"><div class="study-kpi-val" style="color:#e0aaff;">' + (st.smartUnlocks || 0) + '</div><div class="study-kpi-lbl">智慧破障</div></div>' +
           '</div>';
 
-        // 2. 近 7 日溫習柱狀圖
         const days = [];
         let maxDayCnt = 1;
         for (let i = 6; i >= 0; i--) {
@@ -705,7 +653,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
           '<div style="font-size:11.5px; font-weight:900; color:#ffd166; margin-bottom:4px;">📅 近 7 日溫習題數趨勢</div>' +
           '<div class="study-7day-chart">' + chartCols + '</div>';
 
-        // 3. 分科正確率進度條
         const allSubjects = ["中文", "英文", "數學", "常識科學", "戰鬥詠唱"];
         Object.keys(st.bySubject).forEach(function(k) {
           if (allSubjects.indexOf(k) === -1) allSubjects.push(k);
@@ -729,7 +676,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             subjBars +
           '</div>';
 
-        // 4. 家長戰報複製按鈕
         contentHtml +=
           '<div style="display:flex; gap:6px; margin-top:8px;">' +
             '<button class="na-btn highlight" style="flex:1; padding:7px; font-size:11.5px;" onclick="Aetheria.SRPG.study.copyParentSummary()">📋 複製家長戰報摘要</button>' +
@@ -738,7 +684,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
               : '') +
           '</div>';
       } else {
-        // 📕 錯題魔典分頁
         if (s.srpgMistakes.length === 0) {
           contentHtml =
             '<div class="codex-card owned" style="text-align:center; padding:18px 10px;">' +
@@ -845,7 +790,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         if (node && !node.opened) {
           if (node.reqHighland && !s.onHighland) return origHarvest(node);
 
-          // 工具障礙點 (荊棘/沉船箱/齒輪柱/玄冰/熔岩)
           if (node.isToolGateObstacle && node.gateCfg && !(s.clearedToolGates && s.clearedToolGates[node.id])) {
             const g = node.gateCfg;
             const haveCnt = (s.inventory && s.inventory[g.reqKey]) || 0;
@@ -861,7 +805,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             }
           }
 
-          // 機關寶箱尚未解開
           if (node.isExplorePuzzleChest) {
             const curMap = window.Aetheria.Data.Maps.getMap(s.currentZone);
             if (!SRPG.data.isZoneExplorePuzzleSolved(curMap, s)) {
@@ -874,7 +817,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             }
           }
 
-          // 地面✖藏寶點尚未有鐵鏟
           if (node.isBuriedSpot && !(s.dugSpots && s.dugSpots[node.id])) {
             const shovelLv = (s.tools && s.tools.shovel) || 0;
             if (shovelLv < 1) {
@@ -891,13 +833,16 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       };
     }
 
-    // 2. 掛鉤互動：缺鑰匙開地底遺跡 / 缺繩梯爬懸崖 ➔ 彈出雙軌選擇
+    // 2. 掛鉤互動：缺鑰匙開地底遺跡 / 缺繩梯爬懸崖（精準鎖定最近繩梯）➔ 彈出雙軌選擇
     if (Exp && Exp.interactNearby) {
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
         const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
         if (mapObj && mapObj.decos) {
+          let nearestLadder = null;
+          let nearestLadderDist = 68;
+
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
             if (!d) continue;
@@ -914,34 +859,64 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
               }
             }
 
-            if (d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
-              if (!(s.riggedCliffs && s.riggedCliffs[mapObj.id]) && ((s.inventory && s.inventory.ropeLadder) || 0) <= 0) {
-                study.openDualTrackModal("cliff", d, {
-                  title: "🧗 陡峭岩石懸崖",
-                  forgeTab: "workshop",
-                  toolHint: "於【隨身工坊 ➔ 🧗解謎工具】用「原木x1+藤蔓x1」合成【攀岩繩梯】即可架設攀爬。"
-                });
-                return;
+            if (d.isCliffLadderSpot) {
+              const lDist = Math.hypot(s.heroX - d.x, s.heroY - d.y);
+              if (lDist < nearestLadderDist) {
+                nearestLadderDist = lDist;
+                nearestLadder = d;
               }
             }
+          }
+
+          if (nearestLadder && !(s.riggedCliffs && s.riggedCliffs[mapObj.id]) && ((s.inventory && s.inventory.ropeLadder) || 0) <= 0) {
+            study.openDualTrackModal("cliff", nearestLadder, {
+              title: "🧗 陡峭岩石懸崖",
+              forgeTab: "workshop",
+              toolHint: "於【隨身工坊 ➔ 🧗解謎工具】用「原木x1+藤蔓x1」合成【攀岩繩梯】即可架設攀爬。"
+            });
+            return;
           }
         }
         return origInteract();
       };
     }
 
-    // 3. 自動紀錄原版戰鬥詠唱答題數據
-    if (Bat && Bat.executeEnemyCounterPhase) {
-      const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
-      Bat.executeEnemyCounterPhase = function(answeredRight) {
-        try {
-          const rawQ = this.currentQuestion || this.curQuestion || this.activeQuestion || this.question || null;
-          const normQ = rawQ ? normalizeQuestionObj(rawQ, Date.now()) : null;
-          const subj = (normQ && normQ.subject) ? normQ.subject : "戰鬥詠唱";
-          study.recordAnswer(subj, Boolean(answeredRight), normQ);
-        } catch (e) {}
-        return origCounter(answeredRight);
-      };
+    // 3. ★ v14.5 修正 #4：嚴格檢查布林值防誤計答錯，並於 winBattle 補記致勝一擊之答對統計與寵物經驗
+    if (Bat) {
+      if (Bat.executeEnemyCounterPhase) {
+        const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
+        Bat.executeEnemyCounterPhase = function(answeredRight) {
+          try {
+            if (typeof answeredRight === "boolean") {
+              const rawQ = this.currentQuestion || this.curQuestion || this.activeQuestion || this.question || null;
+              const normQ = rawQ ? normalizeQuestionObj(rawQ, Date.now()) : null;
+              const subj = (normQ && normQ.subject) ? normQ.subject : "戰鬥詠唱";
+              study._lastBattleAnswerTs = Date.now();
+              study.recordAnswer(subj, answeredRight, normQ);
+            }
+          } catch (e) {}
+          return origCounter(answeredRight);
+        };
+      }
+
+      if (Bat.winBattle) {
+        const origWin = Bat.winBattle.bind(Bat);
+        Bat.winBattle = function() {
+          try {
+            const isCombat = (this.mode === "combat");
+            const now = Date.now();
+            // 若距離上次紀錄超過 800ms，代表最後一擊直接擊殺跳過了敵方反擊階段 ➔ 補記致勝答對！
+            if (isCombat && (now - (study._lastBattleAnswerTs || 0) > 800)) {
+              const rawQ = this.currentQuestion || this.curQuestion || this.activeQuestion || this.question || null;
+              const normQ = rawQ ? normalizeQuestionObj(rawQ, now) : null;
+              const subj = (normQ && normQ.subject) ? normQ.subject : "戰鬥詠唱";
+              study._lastBattleAnswerTs = now;
+              study.recordAnswer(subj, true, normQ);
+            }
+          } catch (e) {}
+          return origWin();
+        };
+      }
     }
 
     // 4. 渲染時同步營地快捷戰報標籤
