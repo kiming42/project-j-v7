@@ -1,6 +1,7 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — SRPG 核心資料庫、樣式與像素圖示模組 (srpg-data.js - v14.0)
- * 【File 1 / 4】負責：共享工具、CSS 樣式、像素精靈快取、素材/配方/工具/謎題資料庫
+ * Project J：艾瑟瑞亞的破曉 — SRPG 核心資料庫、樣式與像素圖示模組 (srpg-data.js - v14.5)
+ * 【File 1 / 8】負責：共享工具、CSS 樣式、像素精靈快取、素材/配方/工具/謎題資料庫
+ * v14.5 修正 (#5)：移除「等級達標自動通橋」後門，避免新玩家勤力溫習升級後跳過修橋任務
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.SRPG = window.Aetheria.SRPG || {};
@@ -66,9 +67,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
   // ================= 2. 注入全域 CSS 樣式 =================
   SRPG.injectStyles = function() {
-    if (document.getElementById("srpg-modular-v140-styles")) return;
+    if (document.getElementById("srpg-modular-v145-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-modular-v140-styles";
+    style.id = "srpg-modular-v145-styles";
     style.textContent = `
       .kenney-terrain-canvas {
         position: absolute !important; left: 0 !important; top: 0 !important;
@@ -474,7 +475,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     coal:           { id: "coal",           name: "黑曜木炭",       tier: 1, desc: "【高台/山洞礦產】由枯枝悶燒或於高台山洞開採，是配製炸彈與冶煉的燃料。" },
     quartz:         { id: "quartz",         name: "透明石英砂",     tier: 2, desc: "【高台晶礦】採集自懸崖高台與山洞，可用於燒製急凍晶瓶、放大鏡、探礦提燈與藥水瓶。" },
     rockSalt:       { id: "rockSalt",       name: "結晶岩鹽",       tier: 1, desc: "【高台礦產】採集自懸崖高台，可醃製風乾肉脯與烹調香辛海陸燉肉。" },
-    ropeLadder:     { id: "ropeLadder",     name: "攀岩繩梯",       tier: 1, desc: "【高低差開路工具】由藤蔓與原木編織而成，可架設在各區南側懸崖壁上爬上高台礦區！" },
+    ropeLadder:     { id: "ropeLadder",     name: "攀岩繩梯",       tier: 1, desc: "【高低差開路工具】由藤蔓與原木編織而成，可架設在各區懸崖壁上爬上高台礦區！" },
     rationJerky:    { id: "rationJerky",    name: "風乾肉脯",       tier: 2, desc: "【頂級求生口糧】以岩鹽醃製鮮魚，食用立即恢復 +80% 飽食度與 +90 HP！" }
   };
 
@@ -484,18 +485,18 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     { cat: "puzzle", key: "ancientGear",    icon: "mat_ancientGear",    name: "精密青銅齒輪",   source: "工坊1步合成：藍晶鐵礦x1 + 尖銳燧石x1",  use: "【機關零件】放入【⚙️齒輪機關柱】免費拎麻繩與秘銀！" },
     { cat: "puzzle", key: "salvageHook",    icon: "mat_salvageHook",    name: "深水打撈磁鉤",   source: "工坊1步合成：藍晶鐵礦x1 + 堅韌藤蔓x1",  use: "【永久工具】打撈水邊【⚓沉船寶箱】拎古帆布與珊瑚，且釣魚 +1" },
     { cat: "puzzle", key: "frostEssence",   icon: "mat_frostEssence",   name: "極寒急凍晶瓶",   source: "工坊1步合成：透明石英砂x1 + 河畔黏土x1",use: "【破障冰瓶】震碎火山【🔥熔岩晶殼】免費拎黑曜耐火磚x3！" },
-    { cat: "puzzle", key: "ropeLadder",     icon: "mat_ropeLadder",     name: "攀岩繩梯",       source: "工坊1步合成：翠風原木x1 + 堅韌藤蔓x1",  use: "【高低差開路】架設於南側懸崖壁，爬上岩石高台挖寶石" },
+    { cat: "puzzle", key: "ropeLadder",     icon: "mat_ropeLadder",     name: "攀岩繩梯",       source: "工坊1步合成：翠風原木x1 + 堅韌藤蔓x1",  use: "【高低差開路】架設於懸崖壁，爬上岩石高台挖寶石" },
     { cat: "puzzle", key: "magnifyingLens", icon: "mat_magnifyingLens", name: "水晶鑑定放大鏡", source: "工坊1步合成：透明石英砂x1 + 藍晶鐵礦x1",use: "【永久神器】持有後全地圖採集 35% 機率額外獲得寶石礦物" },
-    { cat: "puzzle", key: "cryptKey",       icon: "mat_cryptKey",       name: "遠古遺跡鑰匙",   source: "鐵鏟挖「✖」藏寶點 / 工坊鐵礦x1+木炭x1", use: "【迷宮開鎖】開啟高台東側的【🔒地底遺跡石門】拎大寶箱" },
+    { cat: "puzzle", key: "cryptKey",       icon: "mat_cryptKey",       name: "遠古遺跡鑰匙",   source: "鐵鏟挖「✖」藏寶點 / 工坊鐵礦x1+木炭x1", use: "【迷宮開鎖】開啟各區的【🔒地底遺跡石門】拎大寶箱" },
     { cat: "puzzle", key: "bombItem",       icon: "mat_bombItem",       name: "爆破炸彈",       source: "工坊合成：燧石x2+黏土x1+松脂x1",         use: "【秘境開路】炸開各區與荒島地牢的「裂縫岩壁」開啟隱藏秘寶箱" },
     { cat: "basic",  key: "branch",         icon: "mat_branch",         name: "散落枯枝",       source: "0~6區地面徒手拾取",                   use: "修復熔爐、高熱鋁熱火種、松脂火把、Lv.1工具、烤魚乾/菇乾" },
     { cat: "basic",  key: "flint",          icon: "mat_flint",          name: "尖銳燧石",       source: "0~6區地面徒手拾取",                   use: "修復熔爐、除荊鐮刀、高熱火種、精密齒輪、Lv.1工具、炸彈" },
     { cat: "basic",  key: "clay",           icon: "mat_clay",           name: "河畔黏土",       source: "水岸徒手拾取 / 釣魚點垂釣",           use: "修復熔爐、防水松脂膠、極寒急凍晶瓶、爆破炸彈、黑曜耐火磚" },
     { cat: "basic",  key: "fish",           icon: "mat_fish",           name: "銀鱗鮮魚",       source: "各區水波釣魚點持魚竿垂釣",            use: "炭烤鮮魚乾(+60%飽食)、岩鹽風乾肉脯(+80%飽食)、香辛海陸燉肉(永久HP+15)" },
-    { cat: "basic",  key: "copperOre",      icon: "mat_copperOre",      name: "赤銅礦石",       source: "1~2區南側懸崖高台與岩壁礦洞(免工具)", use: "與白錫礦冶煉【青銅合金錠】" },
-    { cat: "basic",  key: "tinOre",         icon: "mat_tinOre",         name: "白錫礦石",       source: "1~3區南側懸崖高台與岩壁礦洞(免工具)", use: "與赤銅礦冶煉【青銅合金錠】" },
+    { cat: "basic",  key: "copperOre",      icon: "mat_copperOre",      name: "赤銅礦石",       source: "1~2區懸崖高台與岩壁礦洞(免工具)",     use: "與白錫礦冶煉【青銅合金錠】" },
+    { cat: "basic",  key: "tinOre",         icon: "mat_tinOre",         name: "白錫礦石",       source: "1~3區懸崖高台與岩壁礦洞(免工具)",     use: "與赤銅礦冶煉【青銅合金錠】" },
     { cat: "basic",  key: "coal",           icon: "mat_coal",           name: "黑曜木炭",       source: "各區高台與山洞開採 / 工坊枯枝x2燒製", use: "黑火藥重型炸彈、鍛造遺跡鑰匙、石英探礦提燈" },
-    { cat: "basic",  key: "rockSalt",       icon: "mat_rockSalt",       name: "結晶岩鹽",       source: "1~6區南側懸崖高台與岩壁礦洞開採",     use: "醃製岩鹽風乾肉脯、烹調香辛海陸燉肉" },
+    { cat: "basic",  key: "rockSalt",       icon: "mat_rockSalt",       name: "結晶岩鹽",       source: "1~6區懸崖高台與岩壁礦洞開採",         use: "醃製岩鹽風乾肉脯、烹調香辛海陸燉肉" },
     { cat: "basic",  key: "quartz",         icon: "mat_quartz",         name: "透明石英砂",     source: "1~6區高台與山洞開採 / 鐵鏟挖寶",      use: "極寒急凍晶瓶、水晶鑑定放大鏡、石英探礦提燈、生命/洞察藥水" },
     { cat: "tiered", key: "wood",           icon: "mat_wood",           name: "翠風原木",       source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "裁切厚木板、攀岩繩梯、除荊鐮刀、Lv.1探險鐵鏟、建造近海木帆船" },
     { cat: "tiered", key: "vine",           icon: "mat_vine",           name: "堅韌藤蔓",       source: "1.翠風森林砍伐 (需 Lv.1 手斧)",       use: "編織強化麻繩索、攀岩繩梯、深水打撈磁鉤、Lv.1翠竹釣竿" },
@@ -582,8 +583,8 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     hook: {
       id: "hook", name: "飛索鉤爪", iconKey: "icon_compass",
       tiers: {
-        0: { name: "尚未持有鉤爪", desc: "用於跨越峽谷斷崖與險峻地形的輔助工具。" },
-        1: { name: "Lv.1 精鐵飛索鉤", cost: { iron: 2, rope: 1 }, gold: 100, desc: "裝備後可快速跨越險峻地形，採集暴擊率 +15%。" },
+        0: { name: "尚未持有鉤爪", desc: "用於跨越峽谷斷崖與抵抗流沙漩渦的輔助工具。" },
+        1: { name: "Lv.1 精鐵飛索鉤", cost: { iron: 2, rope: 1 }, gold: 100, desc: "裝備後可免疫流沙漩渦吸力，採集暴擊率 +15%。" },
         2: { name: "Lv.2 秘銀飛索鉤", cost: { mithril: 2, steelCable: 1 }, gold: 240, desc: "頂級探險鉤爪，野外採集額外獲得雙倍收穫機率 +30%！" }
       }
     },
@@ -598,7 +599,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
   };
 
   db.COMPLETE_WORKSHOP_RECIPES = [
-    { id: "wk_rope_ladder",     name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",     toCount: 1, cost: { wood: 1, vine: 1 },           desc: "【★高低差開路】用原木x1+藤蔓x1即可製作！架設在南側懸崖壁上爬上高台礦區！" },
+    { id: "wk_rope_ladder",     name: "攀岩繩梯 x1",           category: "explore",  toKey: "ropeLadder",     toCount: 1, cost: { wood: 1, vine: 1 },           desc: "【★高低差開路】用原木x1+藤蔓x1即可製作！架設在懸崖壁上爬上高台礦區！" },
     { id: "wk_briar_sickle",    name: "除荊開路鐮刀",          category: "explore",  toKey: "briarSickle",    toCount: 1, isUniqueGear: true, cost: { wood: 1, flint: 1 }, desc: "【★尋寶工具：斬荊棘】用原木x1+燧石x1即可打造！永久可斬開【🌿荊棘魔藤】免費拎厚木板x3！" },
     { id: "wk_thermite_powder", name: "高熱鋁熱火種 x2",       category: "explore",  toKey: "thermitePowder", toCount: 2, cost: { branch: 2, flint: 1 },        desc: "【★尋寶火種：融玄冰】用枯枝x2+燧石x1即可製作！可融化洞窟與雪原的【🧊玄冰晶殼】免費拎流沙秘銀！" },
     { id: "wk_ancient_gear",    name: "精密青銅齒輪 x2",       category: "explore",  toKey: "ancientGear",    toCount: 2, cost: { iron: 1, flint: 1 },          desc: "【★尋寶零件：開齒輪柱】用鐵礦x1+燧石x1即可打造！放入【⚙️齒輪機關柱】免費拎麻繩與秘銀！" },
@@ -634,11 +635,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，即可免費獲得修橋用的【厚木板、麻繩】、地底遺跡鑰匙，並削弱千年樹妖王 2 層護盾！",
       step1GateId: "tg_z1_briar", step2GateId: "tg_z1_sunken",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】於工坊用(原木1+藤蔓1)造【攀岩繩梯】➔ 去南面懸崖(560,800)爬上高台", detail: "① 在【工坊➔🧗解謎工具】用「翠風原木x1+堅韌藤蔓x1」合成【攀岩繩梯】 ➔ 走到南面懸崖邊(x:560, y:800)按 A 鍵架設，即可爬上高台與進入山洞！" },
+        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】於工坊用(原木1+藤蔓1)造【攀岩繩梯】➔ 去懸崖(560,800)爬上高台", detail: "① 在【工坊➔🧗解謎工具】用「翠風原木x1+堅韌藤蔓x1」合成【攀岩繩梯】 ➔ 走到懸崖邊(x:560, y:800)按 A 鍵架設，即可爬上高台與進入山洞！" },
         { id: "gate1",  x: 420, y: 540, short: "【解題2:斬荊棘】於工坊用(原木1+燧石1)造【除荊鐮刀】➔ 去(420,540)斬開🌿荊棘魔藤(送厚木板x3)", detail: "② 在【工坊➔🧗解謎工具】用「翠風原木x1+尖銳燧石x1」合成【✂️除荊開路鐮刀】 ➔ 走到(x:420, y:540)按 A 鍵斬開【🌿荊棘魔藤】，直接送修橋厚木板x3+麻繩x2！" },
-        { id: "puzzle", x: 230, y: 880, short: "【解題3:點火盆】去左下角(230,880)順着數字點燃【🔥火盆①➔②➔③➔④】開機關寶箱", detail: "③ 走到左下角古碑陣(x:230, y:880)，順着火盆頭頂的數字次序「🔥火盆①(東) ➔ 🔥火盆②(南) ➔ 🔥火盆③(西) ➔ 🔥火盆④(北)」按 A 鍵點燃，再按中間寶箱領獎！" },
+        { id: "puzzle", x: 230, y: 880, short: "【解題3:點火盆】去機關區(230,880)順着數字點燃【🔥火盆①➔②➔③➔④】開機關寶箱", detail: "③ 走到機關區古碑陣(x:230, y:880)，順着火盆頭頂的數字次序「🔥火盆①(東) ➔ 🔥火盆②(南) ➔ 🔥火盆③(西) ➔ 🔥火盆④(北)」按 A 鍵點燃，再按中間寶箱領獎！" },
         { id: "gate2",  x: 985, y: 480, short: "【解題4:撈沉寶】於工坊用(鐵礦1+藤蔓1)造【打撈磁鉤】➔ 去河邊(985,480)撈起⚓沉沒寶箱", detail: "④ 在【工坊➔🧗解謎工具】用「藍晶鐵礦x1+堅韌藤蔓x1」合成【🧲深水打撈磁鉤】 ➔ 走到河邊水泡點(x:985, y:480)按 A 鍵撈起【⚓沉沒寶箱】！" },
-        { id: "crypt",  x: 935, y: 1015, short: "【解題5:挖地宮】於工坊➔⛏️工具造【Lv.1探險鐵鏟】➔ 挖地面「✖」拎鑰匙開(935,1015)地底遺跡", detail: "⑤ 在【工坊➔⛏️工具】用「原木x1+鐵礦x1」升級【Lv.1 精鐵探險鏟】 ➔ 對準地面「✖藏寶點」(x:265, y:625)按 A 鍵挖出【🗝️遠古遺跡鑰匙】 ➔ 開啟東南角(x:935, y:1015)的【🔒地底遺跡】！" }
+        { id: "crypt",  x: 944, y: 1015, short: "【解題5:挖地宮】於工坊➔⛏️工具造【Lv.1探險鐵鏟】➔ 挖地面「✖」拎鑰匙開(944,1015)地底遺跡", detail: "⑤ 在【工坊➔⛏️工具】用「原木x1+鐵礦x1」升級【Lv.1 精鐵探險鏟】 ➔ 對準地面「✖藏寶點」按 A 鍵挖出【🗝️遠古遺跡鑰匙】 ➔ 開啟遺跡處(x:944, y:1015)的【🔒地底遺跡】！" }
       ],
       bossDebuffMsg: "🌟【森林解題加成】：千年樹妖王護盾上限已削弱 -2！"
     },
@@ -647,11 +648,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，可直接免費獲得砌築【永明聖火燈塔】所需的【玄武岩塊、流沙秘銀、黏土與松脂】！",
       step1GateId: "tg_c1_ice", step2GateId: "tg_c1_briar",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】用【攀岩繩梯(原木1+藤蔓1)】去南面懸崖(560,800)爬上高台挖玄武岩與秘銀", detail: "① 在【工坊】合成【攀岩繩梯】(原木x1+藤蔓x1) ➔ 到洞窟南面懸崖(x:560, y:800)爬上高台與進入岩壁礦洞，直接開採燈塔所需的【玄武岩塊】與【流沙秘銀】！" },
+        { id: "cliff",  x: 352, y: 768, short: "【解題1:爬高台】用【攀岩繩梯(原木1+藤蔓1)】去懸崖(352,768)爬上高台挖玄武岩與秘銀", detail: "① 在【工坊】合成【攀岩繩梯】(原木x1+藤蔓x1) ➔ 到洞窟懸崖(x:352, y:768)爬上高台與進入岩壁礦洞，直接開採燈塔所需的【玄武岩塊】與【流沙秘銀】！" },
         { id: "gate1",  x: 860, y: 640, short: "【解題2:融玄冰】於工坊用(枯枝2+燧石1)造【高熱火種】➔ 去(860,640)融化🧊玄冰晶殼(送秘銀+玄武岩)", detail: "② 在【工坊➔🧗解謎工具】用「散落枯枝x2+尖銳燧石x1」合成【🔥高熱鋁熱火種】 ➔ 走到(x:860, y:640)按 A 鍵融化【🧊玄冰晶殼】，直接獲得流沙秘銀x2+玄武岩塊x2！" },
-        { id: "puzzle", x: 230, y: 860, short: "【解題3:開拉桿】去左下角(230,860)按 A 鍵將【拉桿①、②、③】全部推成綠色[🟢開]拎寶箱", detail: "③ 走到左下角暗河畔(x:230, y:860)，對準「拉桿①、拉桿②、拉桿③」按 A 鍵，將 3 個拉桿全部變成綠色【🟢開】，即可打開中間的機關寶箱！" },
+        { id: "puzzle", x: 810, y: 880, short: "【解題3:開拉桿】去機關區(810,880)按 A 鍵將【拉桿①、②、③】全部推成綠色[🟢開]拎寶箱", detail: "③ 走到機關區(x:810, y:880)，對準「拉桿①、拉桿②、拉桿③」按 A 鍵，將 3 個拉桿全部變成綠色【🟢開】，即可打開中間的機關寶箱！" },
         { id: "gate2",  x: 680, y: 480, short: "【解題4:斬魔藤】用【除荊鐮刀(原木1+燧石1)】去(680,480)斬開🌿幽窟魔藤(送玄武岩+黏土+松脂)", detail: "④ 帶着【✂️除荊開路鐮刀】走到洞窟中段(x:680, y:480)按 A 鍵斬開【🌿幽窟魔藤】，免費領取玄武岩塊x2+河畔黏土x3+琥珀松脂x3！" },
-        { id: "crypt",  x: 935, y: 1015, short: "【解題5:挖地宮】用【探險鐵鏟】挖地面「✖」(265,625)拎鑰匙 ➔ 開啟(935,1015)地底秘銀聖堂", detail: "⑤ 用【探險鐵鏟】挖掘洞窟地面「✖藏寶點」(x:265, y:625)取得【🗝️遠古遺跡鑰匙】 ➔ 前往東南角(x:935, y:1015)進入【🔒幽窟地底秘銀聖堂】！" }
+        { id: "crypt",  x: 608, y: 1010, short: "【解題5:挖地宮】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(608,1010)地底秘銀聖堂", detail: "⑤ 用【探險鐵鏟】挖掘洞窟地面「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 前往遺跡處(x:608, y:1010)進入【🔒幽窟地底秘銀聖堂】！" }
       ],
       bossDebuffMsg: "🌟【幽窟解題加成】：洞窟首領護盾上限已削弱 -2！"
     },
@@ -660,11 +661,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，即可獲得修復峽谷吊橋所需的【強化麻繩、秘銀鋼索】並削弱流沙巨蠍王 2 層護盾！",
       step1GateId: "tg_z2_gear", step2GateId: "tg_z2_sunken",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】用【攀岩繩梯(原木1+藤蔓1)】去南面懸崖(560,800)爬上高台挖流沙秘銀", detail: "① 用【攀岩繩梯】爬上峽谷南側高台(x:560, y:800)與岩壁礦洞，開採高純度流沙秘銀、赤銅礦與透明石英砂！" },
+        { id: "cliff",  x: 560, y: 704, short: "【解題1:爬高台】用【攀岩繩梯(原木1+藤蔓1)】去中央懸崖(560,704)爬上高台挖流沙秘銀", detail: "① 用【攀岩繩梯】爬上峽谷中央高台(x:560, y:704)與岩壁礦洞，開採高純度流沙秘銀、赤銅礦與透明石英砂！" },
         { id: "gate1",  x: 720, y: 540, short: "【解題2:嵌齒輪】於工坊用(鐵礦1+燧石1)造【精密齒輪】➔ 放入中央(720,540)⚙️齒輪柱(送麻繩+鋼索)", detail: "② 在【工坊➔🧗解謎工具】用「藍晶鐵礦x1+尖銳燧石x1」合成【⚙️精密青銅齒輪】 ➔ 走到流沙盆地中央(x:720, y:540)放入【⚙️齒輪機關柱】，直接送強化麻繩x3+秘銀鋼索x2！" },
-        { id: "puzzle", x: 230, y: 880, short: "【解題3:轉石像】去左下角(230,880)按 A 鍵將 4 座石像轉去頭頂寫住的目標方向變綠色[✅]", detail: "③ 走到左下角石像陣(x:230, y:880)，看每座石像頭頂寫住的目標（如「西衛[轉去▶東]」），按 A 鍵將 4 座石像都轉成綠色【✅】，即可打開中間的寶箱！" },
+        { id: "puzzle", x: 810, y: 970, short: "【解題3:轉石像】去機關區(810,970)按 A 鍵將 4 座石像轉去頭頂寫住的目標方向變綠色[✅]", detail: "③ 走到機關區石像陣(x:810, y:970)，看每座石像頭頂寫住的目標（如「西衛[轉去▶東]」），按 A 鍵將 4 座石像都轉成綠色【✅】，即可打開中間的寶箱！" },
         { id: "gate2",  x: 985, y: 520, short: "【解題4:撈沉寶】用【打撈磁鉤(鐵礦1+藤蔓1)】去河岸(985,520)撈起⚓峽谷沉寶", detail: "④ 帶着【🧲深水打撈磁鉤】走到峽谷東側河岸(x:985, y:520)按 A 鍵，打撈起【⚓峽谷沉寶】獲取秘銀與玄武岩！" },
-        { id: "crypt",  x: 935, y: 1015, short: "【解題5:挖王陵】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(935,1015)流沙法老王陵", detail: "⑤ 用【探險鐵鏟】挖掘地面「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟東南角(x:935, y:1015)的【🔒流沙埋沒法老王陵】！" }
+        { id: "crypt",  x: 185, y: 950, short: "【解題5:挖王陵】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(185,950)流沙法老王陵", detail: "⑤ 用【探險鐵鏟】挖掘地面「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟遺跡處(x:185, y:950)的【🔒流沙埋沒法老王陵】！" }
       ],
       bossDebuffMsg: "🌟【峽谷解題加成】：流沙巨蠍王護盾上限已削弱 -2！"
     },
@@ -673,11 +674,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，即可獲得升級遠洋大帆船所需的【防風重帆布、防水松脂膠、深海珊瑚】並削弱幽靈船長！",
       step1GateId: "tg_z3_sunken", step2GateId: "tg_z3_gear",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】用【攀岩繩梯】爬上南面懸崖(560,800)採集深海珊瑚與幽靈古帆布", detail: "① 用【攀岩繩梯】爬上海岸南側高台(x:560, y:800)與岩壁礦洞，直接採集深海珊瑚與幽靈古帆布！" },
+        { id: "cliff",  x: 520, y: 784, short: "【解題1:爬高台】用【攀岩繩梯】爬上懸崖(520,784)採集深海珊瑚與幽靈古帆布", detail: "① 用【攀岩繩梯】爬上海岸 U 型高台(x:520, y:784)與岩壁礦洞，直接採集深海珊瑚與幽靈古帆布！" },
         { id: "gate1",  x: 760, y: 580, short: "【解題2:撈沉船】用【打撈磁鉤(鐵礦1+藤蔓1)】去新月海灣(760,580)撈起⚓深海沉船箱(送重帆布)", detail: "② 帶着【🧲深水打撈磁鉤】走到中央新月海灣(x:760, y:580)按 A 鍵撈起【⚓深海沉船箱】，直接獲得防風重帆布x2+幽靈古帆布x3+防水松脂膠x2！" },
-        { id: "puzzle", x: 230, y: 880, short: "【解題3:開水閘】去左下角(230,880)將【水閘拉桿①、②、③】全部按成綠色[🟢開]拎寶箱", detail: "③ 走到左下角水閘陣(x:230, y:880)，對準 3 個水閘拉桿按 A 鍵，將它們全部推成綠色【🟢開】，即可打開中間的海神寶箱！" },
+        { id: "puzzle", x: 520, y: 1015, short: "【解題3:開水閘】去機關區(520,1015)將【水閘拉桿①、②、③】全部按成綠色[🟢開]拎寶箱", detail: "③ 走到機關區水閘陣(x:520, y:1015)，對準 3 個水閘拉桿按 A 鍵，將它們全部推成綠色【🟢開】，即可打開中間的海神寶箱！" },
         { id: "gate2",  x: 560, y: 660, short: "【解題4:嵌齒輪】用【精密齒輪(鐵礦1+燧石1)】放入(560,660)⚙️海神齒輪柱(送珊瑚+厚木板)", detail: "④ 在【工坊】用「鐵礦x1+燧石x1」合成【⚙️精密青銅齒輪】 ➔ 走到(x:560, y:660)放入【⚙️海神齒輪柱】，獲得深海珊瑚x3+厚木板x3！" },
-        { id: "crypt",  x: 935, y: 1015, short: "【解題5:挖密室】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(935,1015)海底亞特蘭蒂斯密室", detail: "⑤ 用【探險鐵鏟】挖掘海岸「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟東南角(x:935, y:1015)的【🔒海底亞特蘭蒂斯密室】！" }
+        { id: "crypt",  x: 948, y: 990, short: "【解題5:挖密室】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(948,990)海底亞特蘭蒂斯密室", detail: "⑤ 用【探險鐵鏟】挖掘海岸「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟遺跡處(x:948, y:990)的【🔒海底亞特蘭蒂斯密室】！" }
       ],
       bossDebuffMsg: "🌟【海岸解題加成】：深海幽靈船長護盾上限已削弱 -2！"
     },
@@ -686,11 +687,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，即可獲得搭建防風避難屋所需的【禦寒獸毛氈、強韌獸筋】並削弱極寒冰龍王 2 層護盾！",
       step1GateId: "tg_z4_ice1", step2GateId: "tg_z4_briar",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】用【攀岩繩梯】爬上南面懸崖(560,800)採集熔岩黑曜石、強韌獸筋與冰蓮", detail: "① 用【攀岩繩梯】爬上雪原南側高台(x:560, y:800)與岩壁礦洞，直接採集熔岩黑曜石、強韌獸筋與極地冰蓮！" },
+        { id: "cliff",  x: 720, y: 768, short: "【解題1:爬高台】用【攀岩繩梯】爬上懸崖(720,768)採集熔岩黑曜石、強韌獸筋與冰蓮", detail: "① 用【攀岩繩梯】爬上雪原東南高台(x:720, y:768)與岩壁礦洞，直接採集熔岩黑曜石、強韌獸筋與極地冰蓮！" },
         { id: "gate1",  x: 700, y: 540, short: "【解題2:融冰棺】用【高熱火種(枯枝2+燧石1)】去鏡湖(700,540)融化🧊萬年玄冰棺(送禦寒獸毛氈)", detail: "② 在【工坊】用「枯枝x2+燧石x1」合成【🔥高熱鋁熱火種】 ➔ 走到中央鏡湖(x:700, y:540)融化【🧊萬年玄冰棺】，直接送禦寒獸毛氈x2+獸筋x3！" },
-        { id: "puzzle", x: 230, y: 880, short: "【解題3:點火盆】去左下角(230,880)順着數字點燃【🔥火盆①➔②➔③➔④】開機關寶箱", detail: "③ 走到左下角融霜陣(x:230, y:880)，順着火盆頭頂數字次序「🔥火盆①(北) ➔ 🔥火盆②(西) ➔ 🔥火盆③(南) ➔ 🔥火盆④(東)」點燃，打開中間寶箱！" },
+        { id: "puzzle", x: 260, y: 960, short: "【解題3:點火盆】去機關區(260,960)順着數字點燃【🔥火盆①➔②➔③➔④】開機關寶箱", detail: "③ 走到機關區融霜陣(x:260, y:960)，順着火盆頭頂數字次序「🔥火盆①(北) ➔ 🔥火盆②(西) ➔ 🔥火盆③(南) ➔ 🔥火盆④(東)」點燃，打開中間寶箱！" },
         { id: "gate2",  x: 880, y: 660, short: "【解題4:斬霜棘】用【除荊鐮刀(原木1+燧石1)】去(880,660)斬開🌿霜棘魔藤(送冰蓮+黑曜石)", detail: "④ 帶着【✂️除荊開路鐮刀】走到(x:880, y:660)按 A 鍵斬開【🌿霜棘魔藤】，領取極地冰蓮x3+熔岩黑曜石x2！" },
-        { id: "crypt",  x: 935, y: 1015, short: "【解題5:挖神殿】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(935,1015)永凍冰河遠古神殿", detail: "⑤ 用【探險鐵鏟】挖掘雪原「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟東南角(x:935, y:1015)的【🔒永凍冰河遠古神殿】！" }
+        { id: "crypt",  x: 185, y: 690, short: "【解題5:挖神殿】用【探險鐵鏟】挖地面「✖」拎鑰匙 ➔ 開啟(185,690)永凍冰河遠古神殿", detail: "⑤ 用【探險鐵鏟】挖掘雪原「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟遺跡處(x:185, y:690)的【🔒永凍冰河遠古神殿】！" }
       ],
       bossDebuffMsg: "🌟【雪原解題加成】：極寒冰龍王護盾上限已削弱 -2！"
     },
@@ -699,9 +700,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，即可直接獲得鋪設火山石拱橋所需的【黑曜耐火磚x3、炎魔熔核x1、熔岩龍鱗x2】並削弱火山龍皇！",
       step1GateId: "tg_z5_magma", step2GateId: "tg_z5_gear",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】用【攀岩繩梯】爬上南面高台(560,800)採集熔岩龍鱗、炎魔熔核與石英砂", detail: "① 用【攀岩繩梯】爬上火山南側高台(x:560, y:800)與岩壁礦洞，直接開採【熔岩龍鱗】、【炎魔熔核】與【透明石英砂】！" },
+        { id: "cliff",  x: 352, y: 768, short: "【解題1:爬高台】用【攀岩繩梯】爬上懸崖(352,768)採集熔岩龍鱗、炎魔熔核與石英砂", detail: "① 用【攀岩繩梯】爬上火山西南高台(x:352, y:768)與岩壁礦洞，直接開採【熔岩龍鱗】、【炎魔熔核】與【透明石英砂】！" },
         { id: "gate1",  x: 720, y: 560, short: "【解題2:碎熔岩】於工坊用(石英砂1+黏土1)造【急凍晶瓶】➔ 去火口(720,560)震碎🔥熔岩殼(送耐火磚x3+熔核)", detail: "② 在【工坊➔🧗解謎工具】用「透明石英砂x1+河畔黏土x1」合成【❄️極寒急凍晶瓶】 ➔ 去中央火口(x:720, y:560)震碎【🔥熔岩黑曜殼】，直接送黑曜耐火磚x3+炎魔熔核x1！" },
-        { id: "puzzle", x: 230, y: 880, short: "【解題3:開閥門】去左下角(230,880)將【冷卻拉桿①、②、③】全部按成綠色[🟢開]拎寶箱", detail: "③ 走到左下角熔爐區(x:230, y:880)，將 3 個冷卻閥門拉桿全部按成綠色【🟢開】，即可打開中間的機關寶箱！" },
+        { id: "puzzle", x: 830, y: 930, short: "【解題3:開閥門】去機關區(830,930)將【冷卻拉桿①、②、③】全部按成綠色[🟢開]拎寶箱", detail: "③ 走到機關區熔爐閥門(x:830, y:930)，將 3 個冷卻閥門拉桿全部按成綠色【🟢開】，即可打開中間的機關寶箱！" },
         { id: "gate2",  x: 880, y: 660, short: "【解題4:嵌齒輪】用【精密齒輪(鐵礦1+燧石1)】放入(880,660)⚙️熔爐齒輪柱(送黑曜石+秘銀)", detail: "④ 用「鐵礦x1+燧石x1」合成【⚙️精密青銅齒輪】 ➔ 走到(x:880, y:660)放入【⚙️熔爐齒輪柱】，獲得熔岩黑曜石x3+流沙秘銀x3！" },
         { id: "crypt",  x: 1120, y: 240, short: "【解題5:戰龍皇】去河邊(980,240)鋪好耐火石拱橋 ➔ 過東岸(1120,240)擊敗守關領主・紅蓮火山龍皇", detail: "⑤ 集齊耐火磚後到熔岩河邊工程牌(x:980, y:240)鋪好石拱橋 ➔ 過橋到東岸(x:1120, y:240)挑戰【守關領主・紅蓮火山龍皇】！" }
       ],
@@ -712,11 +713,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       storyIntro: "完成以下解題任務，即可獲得【古文明聖碑殘片、深淵星隕鐵、黃金世界樹葉】鍛造 T10 破曉神裝並削弱最終領主！",
       step1GateId: "tg_z6_gear", step2GateId: "tg_z6_magma",
       tasks: [
-        { id: "cliff",  x: 560, y: 800, short: "【解題1:爬高台】用【攀岩繩梯】爬上南面高台(560,800)採集深淵星隕鐵與黃金世界樹葉", detail: "① 用【攀岩繩梯】爬上天界南側高台(x:560, y:800)與岩壁礦洞，開採最高階【深淵星隕鐵】與【黃金世界樹葉】！" },
+        { id: "cliff",  x: 592, y: 784, short: "【解題1:爬高台】用【攀岩繩梯】爬上懸崖(592,784)採集深淵星隕鐵與黃金世界樹葉", detail: "① 用【攀岩繩梯】爬上天界中央聖台(x:592, y:784)與岩壁礦洞，開採最高階【深淵星隕鐵】與【黃金世界樹葉】！" },
         { id: "gate1",  x: 720, y: 550, short: "【解題2:啟星柱】用【精密齒輪(鐵礦1+燧石1)】放入中央(720,550)⚙️星界齒輪柱(送聖碑殘片+星隕鐵)", detail: "② 用「鐵礦x1+燧石x1」合成【⚙️精密青銅齒輪】 ➔ 走到中央星壇(x:720, y:550)放入【⚙️星界齒輪柱】，直接獲得古文明聖碑殘片x1+深淵星隕鐵x3！" },
-        { id: "puzzle", x: 230, y: 880, short: "【解題3:轉星像】去左下角(230,880)按 A 鍵將 4 座星像轉去頭頂寫住的目標方向變綠色[✅]", detail: "③ 走到左下角星壇(x:230, y:880)，按 A 鍵將 4 座星像轉向頭頂提示的方向（北▲北、東▶東、南▼南、西◀西）全部變綠【✅】，打開寶箱！" },
+        { id: "puzzle", x: 205, y: 965, short: "【解題3:轉星像】去機關區(205,965)按 A 鍵將 4 座星像轉去頭頂寫住的目標方向變綠色[✅]", detail: "③ 走到機關區星壇(x:205, y:965)，按 A 鍵將 4 座星像轉向頭頂提示的方向（北▲北、東▶東、南▼南、西◀西）全部變綠【✅】，打開寶箱！" },
         { id: "gate2",  x: 880, y: 660, short: "【解題4:碎星核】用【急凍晶瓶(石英砂1+黏土1)】去(880,660)震碎🔥星核晶殼(送星隕鐵+金葉)", detail: "④ 用「透明石英砂x1+河畔黏土x1」合成【❄️極寒急凍晶瓶】 ➔ 走到(x:880, y:660)震碎【🔥星核晶殼】，獲得星隕鐵x3+黃金樹葉x2！" },
-        { id: "crypt",  x: 935, y: 1015, short: "【解題5:挖密室】用【探險鐵鏟】挖「✖」拎鑰匙 ➔ 開(935,1015)星界創世密室拎聖碑殘片", detail: "⑤ 用【探險鐵鏟】挖掘「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟東南角(x:935, y:1015)的【🔒星界破曉創世密室】開啟聖物石棺！" }
+        { id: "crypt",  x: 925, y: 985, short: "【解題5:挖密室】用【探險鐵鏟】挖「✖」拎鑰匙 ➔ 開(925,985)星界創世密室拎聖碑殘片", detail: "⑤ 用【探險鐵鏟】挖掘「✖藏寶點」取得【🗝️遠古遺跡鑰匙】 ➔ 開啟遺跡處(x:925, y:985)的【🔒星界破曉創世密室】開啟聖物石棺！" }
       ],
       bossDebuffMsg: "🌟【星界解題加成】：天界最終領主護盾上限已削弱 -2！"
     }
@@ -763,11 +764,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       ]
     },
     cave1_mushroom: {
-      type: "lever_toggle", cx: 230, cy: 860,
+      type: "lever_toggle", cx: 810, cy: 880,
       riddle: "📜【礦洞小提示】：「走到下面 3 個拉桿旁邊按 A 鍵，將『拉桿①、拉桿②、拉桿③』全部變成綠色【🟢開】，就能打開中間的寶箱！」"
     },
     zone2_canyon: {
-      type: "statue_rotate", cx: 230, cy: 880,
+      type: "statue_rotate", cx: 810, cy: 970,
       riddle: "📜【石像小提示】：「走到每座石像旁按 A 鍵轉動方向，只要 4 座石像都轉去頭頂寫住的目標方向變成綠色【✅】，寶箱就會打開！」",
       statues: [
         { dx: -64, dy: 0, initDir: 0, targetDir: 1, name: "西衛" }, { dx: 64, dy: 0, initDir: 1, targetDir: 3, name: "東衛" },
@@ -775,11 +776,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       ]
     },
     zone3_coast: {
-      type: "lever_toggle", cx: 230, cy: 880,
+      type: "lever_toggle", cx: 520, cy: 1015,
       riddle: "📜【水閘小提示】：「走到下面 3 個水閘拉桿旁按 A 鍵，將 3 個拉桿全部變成綠色【🟢開】，就能打開中間的海神寶箱！」"
     },
     zone4_snow: {
-      type: "brazier_order", cx: 230, cy: 880,
+      type: "brazier_order", cx: 260, cy: 960,
       riddle: "📜【冰原小提示】：「請順着數字次序，由 ① 到 ④ 點燃四個融霜火盆（火盆① ➔ 火盆② ➔ 火盆③ ➔ 火盆④），就能打開寶箱！」",
       items: [
         { dx: 0, dy: -58, order: 1, label: "火盆①(北)" }, { dx: -64, dy: 0, order: 2, label: "火盆②(西)" },
@@ -787,11 +788,11 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       ]
     },
     zone5_volcano: {
-      type: "lever_toggle", cx: 230, cy: 880,
+      type: "lever_toggle", cx: 830, cy: 930,
       riddle: "📜【火山小提示】：「走到下面 3 個冷卻閥門拉桿旁按 A 鍵，將 3 個拉桿全部變成綠色【🟢開】，就能打開寶箱拎耐火磚！」"
     },
     zone6_sky: {
-      type: "statue_rotate", cx: 230, cy: 880,
+      type: "statue_rotate", cx: 205, cy: 965,
       riddle: "📜【星象小提示】：「按 A 鍵轉動 4 座星像，令每座星像都對準頭頂寫住的目標方向變成綠色【✅】，就能打開天界寶箱！」",
       statues: [
         { dx: 0, dy: -58, initDir: 2, targetDir: 0, name: "北像" }, { dx: 64, dy: 0, initDir: 3, targetDir: 1, name: "東像" },
@@ -900,12 +901,16 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         if (!s.claimedExplorePuzzleChests) s.claimedExplorePuzzleChests = {};
         if (!s.projectsBuilt) s.projectsBuilt = {};
 
-        if ((s.lv && s.lv >= 5) || (s.bossesDefeated && s.bossesDefeated.zone1_forest)) s.projectsBuilt.proj_z1_bridge = true;
-        if ((s.lv && s.lv >= 10) || (s.bossesDefeated && s.bossesDefeated.zone2_canyon)) {
+        // ★ v14.5 修正 #5：僅以「已擊敗該區首領」或「已解鎖下一章地圖」兼容舊存檔，絕不因答題升級而自動跳過修橋任務
+        const uz = Array.isArray(s.unlockedZones) ? s.unlockedZones : [];
+        if ((s.bossesDefeated && s.bossesDefeated.zone1_forest) || uz.indexOf("zone2_canyon") !== -1) {
+          s.projectsBuilt.proj_z1_bridge = true;
+        }
+        if ((s.bossesDefeated && s.bossesDefeated.zone2_canyon) || uz.indexOf("zone3_coast") !== -1) {
           s.projectsBuilt.proj_z2_rope = true;
           s.projectsBuilt.proj_z2_bridge = true;
         }
-        if ((s.lv && s.lv >= 15) || (s.bossesDefeated && s.bossesDefeated.zone3_coast)) {
+        if ((s.bossesDefeated && s.bossesDefeated.zone3_coast) || uz.indexOf("zone4_snow") !== -1 || (s.boatTier && s.boatTier >= 2)) {
           s.projectsBuilt.proj_z3_raft = true;
           s.projectsBuilt.proj_z3_bridge = true;
         }
@@ -998,6 +1003,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       return false;
     },
 
+    // ★ v14.5 修正 #5：移除等級自動通橋條件，確保新玩家完整體驗修橋任務
     isMapBridgeBuilt: function(mapObj, s) {
       if (!mapObj || !s) return false;
       const pb = s.projectsBuilt || {};
@@ -1005,10 +1011,10 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const uz = Array.isArray(s.unlockedZones) ? s.unlockedZones : [];
       const zId = mapObj.id;
 
-      if (zId === "zone1_forest")  return Boolean(pb.proj_z1_bridge || bd.zone1_forest || uz.indexOf("zone2_canyon") !== -1 || (s.lv && s.lv >= 5));
-      if (zId === "zone2_canyon")  return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon || uz.indexOf("zone3_coast") !== -1 || (s.lv && s.lv >= 10));
-      if (zId === "zone3_coast")   return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast || uz.indexOf("zone4_snow") !== -1 || (s.boatTier && s.boatTier >= 2) || (s.lv && s.lv >= 15));
-      if (zId === "zone4_snow")    return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow || uz.indexOf("zone5_volcano") !== -1 || (s.lv && s.lv >= 20));
+      if (zId === "zone1_forest")  return Boolean(pb.proj_z1_bridge || bd.zone1_forest || uz.indexOf("zone2_canyon") !== -1);
+      if (zId === "zone2_canyon")  return Boolean(pb.proj_z2_rope || pb.proj_z2_bridge || bd.zone2_canyon || uz.indexOf("zone3_coast") !== -1);
+      if (zId === "zone3_coast")   return Boolean(pb.proj_z3_raft || pb.proj_z3_bridge || bd.zone3_coast || uz.indexOf("zone4_snow") !== -1 || (s.boatTier && s.boatTier >= 2));
+      if (zId === "zone4_snow")    return Boolean(pb.proj_z4_bridge || pb.proj_z4_shelter || bd.zone4_snow || uz.indexOf("zone5_volcano") !== -1);
       if (zId === "zone5_volcano") return Boolean(pb.proj_z5_bridge || bd.zone5_volcano || uz.indexOf("zone6_sky") !== -1);
       if (zId === "zone6_sky")     return Boolean(pb.proj_z6_bridge || bd.zone6_sky);
 
