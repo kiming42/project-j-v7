@@ -1,12 +1,11 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 六大差異化物理骨架與環境互動模組 (srpg-biomes.js - v14.4)
- * 【File 8 / 8】獨立外掛模組，無須改動前 7 個檔案
- * 核心功能：
- *   1. 【打破複製地形骨架】：7 張主要探索地圖各自擁有獨立懸崖形狀、山洞口、地底遺跡與機關陣位置
- *   2. 【7 種趣味環境互動】：
- *      - 森林「🍃順風花瓣加速」、洞窟「💧螢光菌泉回血」、峽谷「🌪️流沙漩渦吸力(鉤爪免疫)」
- *      - 海岸「🌊淺灘濺水」、雪原「⛸️鏡湖溜冰滑行」、火山「🌋間歇預警噴氣口」、天界「✨星界光速道」
- *   3. 【全系統自動對齊】：同步更新金色導航箭頭 (srpg-nav)、放大全圖、解題指引座標與防卡點保護
+ * Project J：艾瑟瑞亞的破曉 — 六大差異化物理骨架與環境互動模組 (srpg-biomes.js - v14.5)
+ * 【File 8 / 8】獨立外掛模組
+ * v14.5 修正：
+ *   1. (#1) L型與U型高台交界處重疊 16px，徹底消除高台內部的 10px 隱形牆
+ *   2. (#6) 雙繩梯互動改為搜尋距離主角「最近」的繩梯，避免靠近南梯卻被送回北梯
+ *   3. (#7) 新增探索面板活躍偵測，打開選單/工坊/戰報或戰鬥期間暫停火山噴氣扣血與環境位移
+ *   4. (#2) 防卡檢定前同步核對跨區切換，確保高台傳送至新地圖時絕不誤觸高台定位
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.SRPG = window.Aetheria.SRPG || {};
@@ -15,13 +14,13 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
   const SRPG = window.Aetheria.SRPG;
 
   // ================= 1. 7 大區域專屬物理骨架與環境互動設定 =================
-  // 注意：每個 rect 的南側會自動繪製 48px 高的立體岩壁 (y2 ~ y2+48)
+  // ★ v14.5 修正 #1：相連矩形交界處重疊 16px，確保 pad=5 碰撞界內完全連通無空氣牆
   const BIOME_LAYOUTS = {
     zone1_forest: {
       styleName: "東南L型高台・順風花谷",
       rects: [
         { x1: 400, y1: 800, x2: 896, y2: 912 },
-        { x1: 720, y1: 912, x2: 896, y2: 1056 }
+        { x1: 720, y1: 896, x2: 896, y2: 1056 }
       ],
       ladders: [
         { x: 560, y: 800, side: "north", upX: 560, upY: 836, downX: 560, downY: 770 },
@@ -50,7 +49,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       styleName: "西南雙層礦台・螢光菌泉（左右反轉）",
       rects: [
         { x1: 112, y1: 768, x2: 528, y2: 896 },
-        { x1: 112, y1: 896, x2: 304, y2: 1008 }
+        { x1: 112, y1: 880, x2: 304, y2: 1008 }
       ],
       ladders: [
         { x: 352, y: 768, side: "north", upX: 352, upY: 808, downX: 352, downY: 736 },
@@ -106,8 +105,8 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       styleName: "U型海灣雙翼懸崖・新月淺灘",
       rects: [
         { x1: 144, y1: 784, x2: 896, y2: 880 },
-        { x1: 144, y1: 880, x2: 336, y2: 1024 },
-        { x1: 704, y1: 880, x2: 896, y2: 1024 }
+        { x1: 144, y1: 864, x2: 336, y2: 1024 },
+        { x1: 704, y1: 864, x2: 896, y2: 1024 }
       ],
       ladders: [
         { x: 520, y: 784, side: "north", upX: 520, upY: 822, downX: 520, downY: 752 },
@@ -224,6 +223,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     lastHealTick: 0,
     lastVentHitTime: 0,
     lastFootFxTime: 0,
+    lastZoneId: "",
     envBadgeEl: null,
     ventDomPool: []
   };
@@ -246,7 +246,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     if (!layout || !layout.rects) return false;
     for (let i = 0; i < layout.rects.length; i++) {
       const r = layout.rects[i];
-      // 阻擋高台頂部與正下方 44px 立體岩壁區域
       if (x >= r.x1 - 8 && x <= r.x2 + 8 && y >= r.y1 - 6 && y <= r.y2 + 44) return true;
     }
     return false;
@@ -258,27 +257,33 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     return (dx * dx + dy * dy) <= 1.0;
   }
 
+  // ★ v14.5 修正 #7：偵測目前是否處於純探索畫面（若打開工坊/戰報/背包/戰鬥則暫停環境傷害與滑動）
+  function isExplorePanelActive() {
+    const modal = document.getElementById("panel-modal");
+    if (modal && modal.offsetParent !== null) return false;
+
+    const battle = document.getElementById("panel-battle");
+    if (battle && battle.offsetParent !== null) return false;
+
+    const explore = document.getElementById("panel-explore");
+    if (explore && explore.offsetParent === null) return false;
+
+    if (window.Aetheria.Battle && window.Aetheria.Battle.active) return false;
+    return true;
+  }
+
   // ================= 2. 注入環境互動狀態條與噴氣口樣式 =================
   function injectBiomeStyles() {
-    if (document.getElementById("srpg-biomes-v144-styles")) return;
+    if (document.getElementById("srpg-biomes-v145-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-biomes-v144-styles";
+    style.id = "srpg-biomes-v145-styles";
     style.textContent = `
       #srpg-env-badge {
-        position: absolute;
-        top: 56px;
-        left: 8px;
-        z-index: 19;
-        background: rgba(20, 16, 19, 0.88);
-        color: #ffd166;
-        border: 1.5px solid #38b6ff;
-        border-radius: 12px;
-        padding: 2px 8px;
-        font-size: 10px;
-        font-weight: 900;
-        pointer-events: none;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.8);
-        display: none;
+        position: absolute; top: 56px; left: 8px; z-index: 19;
+        background: rgba(20, 16, 19, 0.88); color: #ffd166;
+        border: 1.5px solid #38b6ff; border-radius: 12px; padding: 2px 8px;
+        font-size: 10px; font-weight: 900; pointer-events: none;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.8); display: none;
       }
       #srpg-env-badge.env-good { border-color: #5ac54f; color: #a3f7b5; background: rgba(18, 46, 30, 0.90); }
       #srpg-env-badge.env-warn { border-color: #ff595e; color: #ffb3ba; background: rgba(88, 20, 26, 0.92); }
@@ -293,36 +298,23 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         50%      { transform: translate(-50%, -50%) scale(1.18); }
       }
       .srpg-lava-vent {
-        position: absolute;
-        width: 68px;
-        height: 48px;
-        border-radius: 50%;
-        pointer-events: none;
-        z-index: 9;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: 900;
-        text-shadow: 1px 1px 0 #000;
+        position: absolute; width: 68px; height: 48px; border-radius: 50%;
+        pointer-events: none; z-index: 9; display: flex; align-items: center;
+        justify-content: center; font-size: 11px; font-weight: 900; text-shadow: 1px 1px 0 #000;
       }
       .srpg-lava-vent.calm {
         transform: translate(-50%, -50%);
         background: radial-gradient(circle, rgba(31,11,8,0.65) 0%, transparent 72%);
-        border: 1.5px dashed rgba(255, 209, 102, 0.3);
-        color: transparent;
+        border: 1.5px dashed rgba(255, 209, 102, 0.3); color: transparent;
       }
       .srpg-lava-vent.warn {
         background: radial-gradient(circle, rgba(255,209,102,0.45) 0%, rgba(224,60,75,0.22) 70%);
-        border: 2.5px solid #ffd166;
-        color: #ffd166;
+        border: 2.5px solid #ffd166; color: #ffd166;
         animation: srpgVentWarnPulse 0.45s ease-in-out infinite;
       }
       .srpg-lava-vent.erupt {
         background: radial-gradient(circle, #ffffff 0%, #ffd166 30%, #e03c4b 72%, transparent 100%);
-        border: 3px solid #ff595e;
-        color: #ffffff;
-        box-shadow: 0 0 14px #e03c4b;
+        border: 3px solid #ff595e; color: #ffffff; box-shadow: 0 0 14px #e03c4b;
         animation: srpgVentBurst 0.22s ease-in-out infinite;
       }
     `;
@@ -374,7 +366,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         ctx.beginPath(); ctx.ellipse(z.cx, z.cy, z.rx, z.ry, 0, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = "#86efac"; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.ellipse(z.cx, z.cy, z.rx - 6, z.ry - 6, 0, 0, Math.PI * 2); ctx.stroke();
-        // 散落小花瓣點綴
         ctx.fillStyle = "#fef08a";
         for (let i = -3; i <= 3; i++) {
           ctx.fillRect(z.cx + i * 26, z.cy + ((i % 2 === 0) ? -10 : 12), 5, 5);
@@ -410,7 +401,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const cols = Math.ceil(W / 16);
     const rows = Math.ceil(H / 16);
 
-    // 1. 草地/岩石基礎底色與細節
     ctx.fillStyle = pal.bg1;
     ctx.fillRect(0, 0, W, H);
 
@@ -437,7 +427,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     }
 
-    // 2. 泥路動線
     const blobs = mapObj.dirtBlobs || [];
     function isPath(px, py) {
       const wave = Math.sin(px * 0.025) * 14 + Math.cos(py * 0.025) * 14;
@@ -470,7 +459,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     }
 
-    // 3. 各區專屬地標（鏡湖、流沙盆地、新月海灣、火山口、暗河、天界星壇）
     const zId = mapObj.id;
     if (zId === "zone1_forest") {
       ctx.fillStyle = "#2d4c2b"; ctx.beginPath(); ctx.ellipse(420, 540, 95, 65, 0, 0, Math.PI * 2); ctx.fill();
@@ -507,7 +495,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       ctx.strokeStyle = "#f5b700"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(720, 550, 54, 0, Math.PI * 2); ctx.stroke();
     }
 
-    // 4. 繪製環境互動區（加速花瓣道、治癒菌泉、星界光道）與機關陣石框
     drawEnvZonesOnCanvas(ctx, mapObj, layout);
     if (layout && layout.puzzle) {
       ctx.strokeStyle = pal.bridgeRail;
@@ -515,7 +502,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       ctx.strokeRect(layout.puzzle.cx - 68, layout.puzzle.cy - 68, 136, 136);
     }
 
-    // 5. 河流與木橋
     if (mapObj.hasRiver) {
       const rx = mapObj.riverX || 1030;
       ctx.fillStyle = pal.bank; ctx.fillRect(rx - 6, 0, 52, H);
@@ -533,7 +519,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     }
 
-    // 6. 依本區專屬 layout.rects 繪製立體岩石懸崖與山洞口！
     if (layout && layout.rects) {
       let minX = W, maxX = 0, minY = H, maxY = 0;
       layout.rects.forEach(function(r) {
@@ -589,7 +574,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         }
       }
 
-      // 繪製本區專屬山洞入口洞穴
       if (layout.cave) {
         const cx = layout.cave.x - 24;
         const cy = layout.cave.y - 28;
@@ -609,7 +593,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
     const cryptUnlocked = Boolean(s.unlockedCrypts && s.unlockedCrypts[mapObj.id]);
 
-    // 1. 清除會擋到新懸崖、新機關區與新遺跡門的樹木
     if (mapObj.trees) {
       mapObj.trees = mapObj.trees.filter(function(t) {
         if (t.isExpandedPerimeterTree) return true;
@@ -620,7 +603,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       });
     }
 
-    // 2. 更新泥路動線連接本區機關陣、山洞口與遺跡門
     mapObj.dirtBlobs = (mapObj.dirtBlobs || []).filter(function(b) { return !b.isExpandedBlob; });
     mapObj.dirtBlobs.push(
       { cx: layout.puzzle.cx, cy: layout.puzzle.cy, rx: 105, ry: 90, isExpandedBlob: true },
@@ -630,7 +612,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       { cx: 1320, cy: 900, rx: 165, ry: 150, isExpandedBlob: true }
     );
 
-    // 3. 更新山洞入口座標
     (mapObj.portals || []).forEach(function(p) {
       if (p && p.isCliffCavePortal) {
         p.x = layout.cave.x;
@@ -638,7 +619,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     });
 
-    // 4. 更新攀岩繩梯（寫入專屬 upX/upY/downX/downY）與地底遺跡大門座標
     let ladderIdx = 0;
     (mapObj.decos || []).forEach(function(d) {
       if (!d) return;
@@ -656,7 +636,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     });
 
-    // 5. 更新高台礦脈與 4 個✖藏寶點座標
     let oreIdx = 0;
     let digIdx = 0;
     (mapObj.nodes || []).forEach(function(n) {
@@ -671,7 +650,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         n.reqHighland = Boolean(layout.digs[digIdx].reqHighland);
         digIdx++;
       } else if (n.isHighlandOre && !n.reqHighland && !n.isBuriedSpot && !n.isToolGateObstacle && !n.isExplorePuzzleChest) {
-        // 避免平地散落礦石剛好落在新懸崖裡面
         if (isPointBlockedByLayout(n.x, n.y, layout)) {
           n.x = 180 + (oreIdx * 45);
           n.y = 630;
@@ -679,7 +657,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     });
 
-    // 6. 將原本可能剛好站在新懸崖上的小怪移至安全平地
     (mapObj.monsters || []).forEach(function(m) {
       if (m && !m.isBoss && isPointBlockedByLayout(m.x, m.y, layout)) {
         m.x = 240; m.y = 580; m.homeX = 240; m.homeY = 580;
@@ -719,24 +696,21 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const now = Date.now();
     if (now - biomes.lastFootFxTime < 140) return;
     biomes.lastFootFxTime = now;
-    if (SRPG.terrain && SRPG.terrain.spawnHarvestParticles) {
-      const layer = document.getElementById("world-entity-layer");
-      if (!layer) return;
-      const p = document.createElement("div");
-      p.className = "srpg-particle";
-      p.style.left = (x + (Math.random() * 10 - 5)) + "px";
-      p.style.top = (y + 6) + "px";
-      p.style.background = color;
-      layer.appendChild(p);
-      requestAnimationFrame(function() {
-        p.style.transform = "translate(" + (Math.random() * 14 - 7).toFixed(1) + "px, " + (-8 - Math.random() * 6).toFixed(1) + "px)";
-        p.style.opacity = "0";
-      });
-      setTimeout(function() { if (p.parentNode) p.parentNode.removeChild(p); }, 360);
-    }
+    const layer = document.getElementById("world-entity-layer");
+    if (!layer) return;
+    const p = document.createElement("div");
+    p.className = "srpg-particle";
+    p.style.left = (x + (Math.random() * 10 - 5)) + "px";
+    p.style.top = (y + 6) + "px";
+    p.style.background = color;
+    layer.appendChild(p);
+    requestAnimationFrame(function() {
+      p.style.transform = "translate(" + (Math.random() * 14 - 7).toFixed(1) + "px, " + (-8 - Math.random() * 6).toFixed(1) + "px)";
+      p.style.opacity = "0";
+    });
+    setTimeout(function() { if (p.parentNode) p.parentNode.removeChild(p); }, 360);
   }
 
-  // 更新第 5 區火山噴氣口的動態 DOM 預警圈與噴發動畫
   function syncVolcanoVentsDOM(mapObj, layout, now) {
     const layer = document.getElementById("world-entity-layer");
     if (!layer) return;
@@ -762,7 +736,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       el.style.left = v.x + "px";
       el.style.top = v.y + "px";
 
-      const phase = (now + v.offset) % 7500; // 0~4000平靜, 4000~6000黃圈預警, 6000~7500噴發
+      const phase = (now + v.offset) % 7500;
       if (phase < 4000) {
         SRPG.utils.setClassIfChanged(el, "srpg-lava-vent calm");
         SRPG.utils.setTextIfChanged(el, "");
@@ -784,6 +758,12 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       return;
     }
 
+    // ★ v14.5 修正 #7：打開選單、工坊、戰報或戰鬥時暫停一切環境傷害與位移
+    if (!isExplorePanelActive()) {
+      biomes.iceVx = 0; biomes.iceVy = 0;
+      return;
+    }
+
     const env = layout.env;
     const dx = s.heroX - prevX;
     const dy = s.heroY - prevY;
@@ -796,7 +776,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const nx = Math.max(36, Math.min(maxW, s.heroX + mx));
       const ny = Math.max(36, Math.min(maxH, s.heroY + my));
       if (!isPointBlockedByLayout(nx, ny, layout)) {
-        // 避免推入未修好的河道
         if (mapObj.hasRiver && !SRPG.data.isMapBridgeBuilt(mapObj, s)) {
           const rx = mapObj.riverX || 1030;
           if (nx >= rx - 14 && nx <= rx + 50) return;
@@ -973,7 +952,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const Exp = window.Aetheria.Explore;
     const Ren = window.Aetheria.Renderer;
 
-    // 1. 覆寫高台碰撞範圍函式，依目前地圖套用獨立形狀
+    // 1. 覆寫高台碰撞範圍函式
     const origInside = terrain.isInsideHighlandPlateau;
     terrain.isInsideHighlandPlateau = function(x, y) {
       const s = window.Aetheria.State && window.Aetheria.State.data;
@@ -990,7 +969,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       return origBlocked(x, y);
     };
 
-    // 2. 覆寫地貌渲染函式（主畫面、羅盤與放大全圖自動同步新骨架！）
+    // 2. 覆寫地貌渲染函式
     const origPaint = terrain.paintTerrainOntoContext;
     terrain.paintTerrainOntoContext = function(ctx, mapObj, W, H, built) {
       if (mapObj && BIOME_LAYOUTS[mapObj.id]) {
@@ -1034,15 +1013,23 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       return m;
     };
 
-    // 4. 覆寫探索步進：執行環境互動物理 ＋ 舊存檔防卡岩石安全保護
+    // 4. 覆寫探索步進：雙重防傳送卡點 ＋ 環境互動物理
     if (Exp && Exp.updateStep) {
       const origStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const s = window.Aetheria.State.data;
+
+        // ★ 雙重防跨區傳送殘留高台旗標
+        if (biomes.lastZoneId && biomes.lastZoneId !== s.currentZone) {
+          s.onHighland = false;
+          biomes.iceVx = 0;
+          biomes.iceVy = 0;
+        }
+        biomes.lastZoneId = s.currentZone;
+
         const prevX = s.heroX, prevY = s.heroY;
         const mapObj = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
 
-        // 舊存檔防卡保護：若一開始剛好站在新懸崖岩石上，柔和推到安全位
         const lay = mapObj && BIOME_LAYOUTS[mapObj.id];
         if (lay) {
           if (!s.onHighland && isPointBlockedByLayout(s.heroX, s.heroY, lay)) {
@@ -1055,48 +1042,59 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
         origStep();
 
-        if (mapObj) {
+        if (mapObj && s.currentZone === mapObj.id) {
           runBiomeEnvironmentStep(mapObj, s, prevX, prevY);
         }
       };
     }
 
-    // 5. 覆寫攀爬繩梯互動：使用各區專屬 upX/upY/downX/downY 精準上下高台
+    // 5. ★ v14.5 修正 #6：攀爬繩梯互動改為搜尋距離主角「最近」的繩梯
     if (Exp && Exp.interactNearby) {
       const origInteract = Exp.interactNearby.bind(Exp);
       Exp.interactNearby = function() {
         const s = window.Aetheria.State.data;
         const mapObj = window.Aetheria.Data.Maps.getMap(s.currentZone);
         if (mapObj && BIOME_LAYOUTS[mapObj.id] && mapObj.decos) {
+          let nearestLadder = null;
+          let minDist = 68;
+
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
-            if (d && d.isCliffLadderSpot && d.upX !== undefined && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
-              const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
-              if (!rigged && ((s.inventory && s.inventory.ropeLadder) || 0) <= 0) {
-                // 沒繩梯時交給 origInteract（會自動觸發 srpg-study.js 的智慧雙軌解鎖！）
-                return origInteract();
+            if (d && d.isCliffLadderSpot && d.upX !== undefined) {
+              const dist = Math.hypot(s.heroX - d.x, s.heroY - d.y);
+              if (dist < minDist) {
+                minDist = dist;
+                nearestLadder = d;
               }
-              if (!s.riggedCliffs) s.riggedCliffs = {};
-              if (!rigged) {
-                s.inventory.ropeLadder--;
-                s.riggedCliffs[mapObj.id] = true;
-                (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
-              }
-              if (window.Aetheria.Audio && window.Aetheria.Audio.sfxGather) window.Aetheria.Audio.sfxGather();
-              if (s.onHighland) {
-                s.onHighland = false;
-                s.heroX = d.downX; s.heroY = d.downY;
-                window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬下了平地！");
-              } else {
-                s.onHighland = true;
-                s.heroX = d.upX; s.heroY = d.upY;
-                window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【岩石高台礦區】！");
-              }
-              s.petX = s.heroX - 20; s.petY = s.heroY;
-              window.Aetheria.State.save();
-              window.Aetheria.UI.updateAllHud();
-              return;
             }
+          }
+
+          if (nearestLadder) {
+            const d = nearestLadder;
+            const rigged = Boolean(s.riggedCliffs && s.riggedCliffs[mapObj.id]);
+            if (!rigged && ((s.inventory && s.inventory.ropeLadder) || 0) <= 0) {
+              return origInteract();
+            }
+            if (!s.riggedCliffs) s.riggedCliffs = {};
+            if (!rigged) {
+              s.inventory.ropeLadder--;
+              s.riggedCliffs[mapObj.id] = true;
+              (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
+            }
+            if (window.Aetheria.Audio && window.Aetheria.Audio.sfxGather) window.Aetheria.Audio.sfxGather();
+            if (s.onHighland) {
+              s.onHighland = false;
+              s.heroX = d.downX; s.heroY = d.downY;
+              window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬下了平地！");
+            } else {
+              s.onHighland = true;
+              s.heroX = d.upX; s.heroY = d.upY;
+              window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【岩石高台礦區】！");
+            }
+            s.petX = s.heroX - 20; s.petY = s.heroY;
+            window.Aetheria.State.save();
+            window.Aetheria.UI.updateAllHud();
+            return;
           }
         }
         return origInteract();
@@ -1120,7 +1118,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       };
     }
 
-    // 7. 同步金色導航箭頭 (srpg-nav.js) 精準指向各區新的繩梯與遺跡座標
+    // 7. 同步金色導航箭頭 (srpg-nav.js) 指向距離主角最近的繩梯與本區遺跡門
     if (SRPG.nav && SRPG.nav.resolveActiveTarget) {
       const origResolve = SRPG.nav.resolveActiveTarget.bind(SRPG.nav);
       SRPG.nav.resolveActiveTarget = function(mapObj, s) {
@@ -1128,9 +1126,14 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         const lay = mapObj && BIOME_LAYOUTS[mapObj.id];
         if (!res || !lay) return res;
 
-        const lad = lay.ladders[0];
         if (res.key && (res.key.indexOf("cliff_") === 0 || res.key.indexOf("go_up_ladder_") === 0 || res.key.indexOf("go_down_ladder_") === 0)) {
-          return { key: res.key, x: lad.x, y: lad.y, label: res.label, reqHighland: res.reqHighland };
+          let bestLad = lay.ladders[0];
+          let bestD = Infinity;
+          lay.ladders.forEach(function(l) {
+            const d = Math.hypot((s.heroX || 0) - l.x, (s.heroY || 0) - l.y);
+            if (d < bestD) { bestD = d; bestLad = l; }
+          });
+          return { key: res.key, x: bestLad.x, y: bestLad.y, label: res.label, reqHighland: res.reqHighland };
         }
         if (res.key && res.key.indexOf("crypt_door_") === 0) {
           return { key: res.key, x: lay.crypt.x, y: lay.crypt.y, label: res.label, reqHighland: false };
@@ -1179,7 +1182,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     }
   }
 
-  // 等待前面模組全數就緒後自動掛載
   function bootBiomesWhenReady() {
     let tries = 0;
     const timer = setInterval(function() {
