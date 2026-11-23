@@ -1,11 +1,9 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 寵物進化、自動撿物與尋寶雷達模組 (srpg-pet.js - v14.3)
- * 【File 7 / 7】獨立外掛模組，無須改動前 6 個檔案
- * 核心功能：
- *   1. 【4 階段智慧進化】：答對題目或餵食料理累積「智慧經驗」，即時進化像素外觀並獲永久屬性加成
- *   2. 【🐾 自動撿物磁場】：依進化階級自動拾取主角／寵物身邊的地面素材（不干擾寶箱與機關解謎）
- *   3. 【❗ 尋寶雷達氣泡】：二階起靠近隱藏「✖」藏寶點、秘寶箱或工具破障點時，寵物頭頂自動冒泡提醒
- *   4. 【🐉 究極體開戰破盾】：四階【破曉聖光龍靈】於戰鬥開場自動擊破敵人 1 層護盾
+ * Project J：艾瑟瑞亞的破曉 — 寵物進化、自動撿物與尋寶雷達模組 (srpg-pet.js - v14.5)
+ * 【File 7 / 8】獨立外掛模組
+ * v14.5 修正 (#3)：
+ *   1. syncEvolvedPetSprite 改用 querySelectorAll 並明確排除自家 #srpg-pet-* 光環/氣泡元素
+ *   2. 強化 petImg.src 校驗，確保切圖與進化後地圖上的小夥伴 100% 顯示對應階級像素外型
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.SRPG = window.Aetheria.SRPG || {};
@@ -16,59 +14,31 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
   // ================= 1. 4 階段進化設定與 16x16 專屬像素外型 =================
   const PET_STAGES = [
     {
-      stage: 1,
-      minXp: 0,
-      name: "水滴波波",
-      title: "幼生期",
-      spriteKey: "pet_evo_1",
-      auraColor: "rgba(56, 182, 255, 0.35)",
-      lootRadius: 75,
-      bonusChance: 0,
-      radarRadius: 0,
-      hpBonus: 0,
+      stage: 1, minXp: 0, name: "水滴波波", title: "幼生期",
+      spriteKey: "pet_evo_1", auraColor: "rgba(56, 182, 255, 0.35)",
+      lootRadius: 75, bonusChance: 0, radarRadius: 0, hpBonus: 0,
       lootPool: ["branch", "flint", "clay", "herb"],
       skillSummary: "🐾 自動撿物 (75px)：自動拾取枯枝、燧石、黏土與微光菇。"
     },
     {
-      stage: 2,
-      minXp: 15,
-      name: "星輝小靈獸",
-      title: "成長期",
-      spriteKey: "pet_evo_2",
-      auraColor: "rgba(255, 209, 102, 0.48)",
-      lootRadius: 110,
-      bonusChance: 0.15,
-      radarRadius: 240,
-      hpBonus: 15,
+      stage: 2, minXp: 15, name: "星輝小靈獸", title: "成長期",
+      spriteKey: "pet_evo_2", auraColor: "rgba(255, 209, 102, 0.48)",
+      lootRadius: 110, bonusChance: 0.15, radarRadius: 240, hpBonus: 15,
       lootPool: ["branch", "flint", "clay", "herb", "wood", "vine", "resin", "copperOre", "tinOre", "coal", "rockSalt", "quartz"],
       skillSummary: "❗ 解鎖【尋寶雷達】(240px內偵測✖藏寶點與寶箱) ＋ 撿物擴大至 110px ＋ 永久HP+15。"
     },
     {
-      stage: 3,
-      minXp: 45,
-      name: "蒼穹星翼獸",
-      title: "完全體",
-      spriteKey: "pet_evo_3",
-      auraColor: "rgba(140, 224, 255, 0.58)",
-      lootRadius: 145,
-      bonusChance: 0.35,
-      radarRadius: 280,
-      hpBonus: 40,
-      lootPool: "tier2", // 所有符合工具階級之 1~2 階素材
+      stage: 3, minXp: 45, name: "蒼穹星翼獸", title: "完全體",
+      spriteKey: "pet_evo_3", auraColor: "rgba(140, 224, 255, 0.58)",
+      lootRadius: 145, bonusChance: 0.35, radarRadius: 280, hpBonus: 40,
+      lootPool: "tier2",
       skillSummary: "🍀 撿物擴大至 145px (35%雙倍) ＋ 探索緩慢回血/飽食 ＋ 永久HP+40。"
     },
     {
-      stage: 4,
-      minXp: 90,
-      name: "破曉聖光龍靈",
-      title: "究極體",
-      spriteKey: "pet_evo_4",
-      auraColor: "rgba(245, 183, 0, 0.72)",
-      lootRadius: 185,
-      bonusChance: 0.60,
-      radarRadius: 340,
-      hpBonus: 100,
-      lootPool: "all", // 全地圖所有符合工具階級之採集點
+      stage: 4, minXp: 90, name: "破曉聖光龍靈", title: "究極體",
+      spriteKey: "pet_evo_4", auraColor: "rgba(245, 183, 0, 0.72)",
+      lootRadius: 185, bonusChance: 0.60, radarRadius: 340, hpBonus: 100,
+      lootPool: "all",
       skillSummary: "🐉 開戰自動擊破敵人 1 層護盾 ＋ 185px磁場撿物(60%雙倍) ＋ 永久HP+100！"
     }
   ];
@@ -101,7 +71,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const cache = SRPG.sprites && SRPG.sprites.cache;
     if (!cache || cache.pet_evo_1) return;
 
-    // 一階：水滴波波（圓滾可愛藍精靈）
     cache.pet_evo_1 = buildPixelDataUrl([
       "................","................","......KKKK......","....KKBBBBKK....",
       "...KBBWWWWBBK...","..KBBWBBBBBBBK..","..KBBBBBBBBBBK..",".KBBBKBBBBKBBBK.",
@@ -109,7 +78,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       "...KKKKKKKKKK...","................","................","................"
     ], { K: "#141013", B: "#38b6ff", D: "#1d5eb8", W: "#ffffff", P: "#ff8fab" });
 
-    // 二階：星輝小靈獸（青金角靈獸 + 頭頂星芒）
     cache.pet_evo_2 = buildPixelDataUrl([
       ".......YY.......","......YYYY......","...KK..YY..KK...","..KYYKKKKKKYYK..",
       "..KCCBBBBBBCCK..",".KCCWWWWWWWWCCK.",".KCBKBBBBBBKBCK.",".KCBKBBBBBBKBCK.",
@@ -117,7 +85,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       "...KKKK..KKKK...","................","................","................"
     ], { K: "#141013", Y: "#ffd166", C: "#8ce0ff", B: "#2978d4", D: "#1d3557", W: "#ffffff", P: "#ff8fab" });
 
-    // 三階：蒼穹星翼獸（展開金色羽翼與星冠）
     cache.pet_evo_3 = buildPixelDataUrl([
       "......YYYY......",".....KYWWYK.....",".KK..KCCCCK..KK.","KYYKKCWWWWCKKYYK",
       "KWWYKCBBBBKCWWYK",".KYYKCKBBKCKYYK.",".KCCKCKBBKCKCCK.","..KKKCCPPCCKKK..",
@@ -125,7 +92,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       "................","................","................","................"
     ], { K: "#141013", Y: "#f5b700", W: "#ffffff", C: "#38b6ff", B: "#1d5eb8", D: "#102542", P: "#ff758f" });
 
-    // 四階：破曉聖光龍靈（黃金白羽聖龍）
     cache.pet_evo_4 = buildPixelDataUrl([
       ".....YY..YY.....","....KYYKKYYK....","KK..KWWWWWWK..KK","KYYKKWWCCWWKKYYK",
       "KWWYKWKWWKWKYWWK","KYYYKWWWWWWKYYYK",".KKYKYYPPYYKYKK.","..KKYYYYYYYYKK..",
@@ -136,9 +102,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
   // ================= 2. 注入寵物光環、氣泡與進化面板樣式 =================
   function injectPetStyles() {
-    if (document.getElementById("srpg-pet-v143-styles")) return;
+    if (document.getElementById("srpg-pet-v145-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-pet-v143-styles";
+    style.id = "srpg-pet-v145-styles";
     style.textContent = `
       @keyframes srpgPetFloat {
         0%, 100% { transform: translate(-50%, 0px); }
@@ -149,101 +115,41 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         50%      { transform: translate(-50%, -50%) scale(1.12); opacity: 0.9; }
       }
       #srpg-pet-aura {
-        position: absolute;
-        left: 0; top: 0; width: 0; height: 0;
-        pointer-events: none !important;
-        z-index: 14;
-        display: none;
+        position: absolute; left: 0; top: 0; width: 0; height: 0;
+        pointer-events: none !important; z-index: 14; display: none;
       }
       #srpg-pet-aura-ring {
-        position: absolute;
-        left: 0; top: 4px;
-        width: 30px; height: 18px;
-        border-radius: 50%;
-        animation: srpgPetAuraPulse 1.6s ease-in-out infinite;
+        position: absolute; left: 0; top: 4px; width: 30px; height: 18px;
+        border-radius: 50%; animation: srpgPetAuraPulse 1.6s ease-in-out infinite;
       }
       #srpg-pet-bubble {
-        position: absolute;
-        left: 0; top: 0;
-        pointer-events: none !important;
-        z-index: 44;
-        display: none;
+        position: absolute; left: 0; top: 0; pointer-events: none !important; z-index: 44; display: none;
       }
       #srpg-pet-bubble-inner {
-        position: absolute;
-        left: 0; top: -32px;
-        white-space: nowrap;
-        background: rgba(20, 16, 19, 0.92);
-        color: #ffd166;
-        border: 1.5px solid #f5b700;
-        border-radius: 10px;
-        padding: 1px 6px;
-        font-size: 9.5px;
-        font-weight: 900;
-        text-shadow: 1px 1px 0 #000;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.8);
+        position: absolute; left: 0; top: -32px; white-space: nowrap;
+        background: rgba(20, 16, 19, 0.92); color: #ffd166; border: 1.5px solid #f5b700;
+        border-radius: 10px; padding: 1px 6px; font-size: 9.5px; font-weight: 900;
+        text-shadow: 1px 1px 0 #000; box-shadow: 0 2px 5px rgba(0,0,0,0.8);
         animation: srpgPetFloat 1.1s ease-in-out infinite;
       }
-      #srpg-pet-bubble-inner.radar-alert {
-        background: rgba(92, 29, 36, 0.94);
-        border-color: #ff758f;
-        color: #fff3b0;
-      }
-      #srpg-pet-bubble-inner.loot-pop {
-        background: rgba(20, 56, 36, 0.94);
-        border-color: #5ac54f;
-        color: #a3f7b5;
-      }
+      #srpg-pet-bubble-inner.radar-alert { background: rgba(92, 29, 36, 0.94); border-color: #ff758f; color: #fff3b0; }
+      #srpg-pet-bubble-inner.loot-pop    { background: rgba(20, 56, 36, 0.94); border-color: #5ac54f; color: #a3f7b5; }
 
-      /* 寵物進化面板卡片樣式 */
       .pet-hero-banner {
-        display: flex;
-        align-items: center;
-        gap: 10px;
+        display: flex; align-items: center; gap: 10px;
         background: linear-gradient(180deg, #1b2838 0%, #11161f 100%);
-        border: 2px solid #38b6ff;
-        border-radius: 9px;
-        padding: 9px 10px;
-        margin-bottom: 8px;
+        border: 2px solid #38b6ff; border-radius: 9px; padding: 9px 10px; margin-bottom: 8px;
       }
       .pet-avatar-frame {
-        width: 58px; height: 58px;
-        border-radius: 10px;
+        width: 58px; height: 58px; border-radius: 10px;
         background: radial-gradient(circle, #2a3f5f 0%, #101824 100%);
-        border: 2px solid #ffd166;
-        display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0;
+        border: 2px solid #ffd166; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
       }
-      .pet-avatar-frame img {
-        width: 48px; height: 48px;
-        image-rendering: pixelated;
-      }
-      .pet-xp-track {
-        width: 100%; height: 9px;
-        background: #141013; border: 1px solid #4a3e44;
-        border-radius: 5px; overflow: hidden; margin-top: 4px;
-      }
-      .pet-xp-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #38b6ff 0%, #ffd166 100%);
-        transition: width 0.3s ease;
-      }
-      .pet-feed-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-        margin-bottom: 8px;
-      }
-      .pet-feed-card {
-        background: #181316;
-        border: 1.5px solid #4a3e44;
-        border-radius: 7px;
-        padding: 6px 8px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 4px;
-      }
+      .pet-avatar-frame img { width: 48px; height: 48px; image-rendering: pixelated; }
+      .pet-xp-track { width: 100%; height: 9px; background: #141013; border: 1px solid #4a3e44; border-radius: 5px; overflow: hidden; margin-top: 4px; }
+      .pet-xp-fill  { height: 100%; background: linear-gradient(90deg, #38b6ff 0%, #ffd166 100%); transition: width 0.3s ease; }
+      .pet-feed-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 8px; }
+      .pet-feed-card { background: #181316; border: 1.5px solid #4a3e44; border-radius: 7px; padding: 6px 8px; display: flex; justify-content: space-between; align-items: center; gap: 4px; }
       .pet-feed-card.can-feed { border-color: #5ac54f; }
     `;
     document.head.appendChild(style);
@@ -266,18 +172,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
   const pet = {
     STAGES: PET_STAGES,
-    lastTickTime: 0,
-    lastRegenTime: 0,
-    lastSaveTime: 0,
-    lastSfxTime: 0,
-    tempBubbleText: "",
-    tempBubbleCls: "",
-    tempBubbleUntil: 0,
-    auraEl: null,
-    auraRingEl: null,
-    bubbleEl: null,
-    bubbleInnerEl: null,
-    cachedPetDomImg: null,
+    lastTickTime: 0, lastRegenTime: 0, lastSaveTime: 0, lastSfxTime: 0,
+    tempBubbleText: "", tempBubbleCls: "", tempBubbleUntil: 0,
+    auraEl: null, auraRingEl: null, bubbleEl: null, bubbleInnerEl: null, cachedPetDomImg: null,
 
     getStageObj: function(xpOverride) {
       const s = ensurePetState();
@@ -353,7 +250,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       this.openPetEvolutionModal();
     },
 
-    // ================= 4. 寵物視覺同步、自動撿物與尋寶雷達主迴圈 =================
+    // ================= 4. 寵物視覺同步、自動撿物與尋寶雷達 =================
     ensurePetOverlayElements: function() {
       const entityLayer = document.getElementById("world-entity-layer");
       if (!entityLayer) return false;
@@ -378,7 +275,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       return true;
     },
 
-    // 嘗試定位原版渲染器中的寵物 <img> 並套用進化後的像素外觀
+    // ★ v14.5 修正 #3：精準過濾自家 #srpg-pet-* 元件，確保 100% 抓到原版寵物 <img> 並套用進化外型
     syncEvolvedPetSprite: function(stageObj) {
       const S = window.Aetheria.Data && window.Aetheria.Data.Sprites;
       const Ren = window.Aetheria.Renderer;
@@ -390,22 +287,33 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         if (Ren.domPool) {
           const pEntry = Ren.domPool.pet || Ren.domPool.petEl;
           if (pEntry) {
-            petImg = (pEntry.tagName === "IMG") ? pEntry : (pEntry.img || (pEntry.querySelector && pEntry.querySelector("img")));
+            if (pEntry.tagName === "IMG") petImg = pEntry;
+            else if (pEntry.img && pEntry.img.tagName === "IMG") petImg = pEntry.img;
+            else if (pEntry.el && pEntry.el.querySelector) petImg = pEntry.el.querySelector("img");
+            else if (pEntry.querySelector) petImg = pEntry.querySelector("img");
           }
         }
         if (!petImg) {
           const layer = document.getElementById("world-entity-layer");
           if (layer) {
-            const pNode = layer.querySelector("#dom-pet, #world-pet, .dom-pet, [id*='pet']");
-            if (pNode) petImg = (pNode.tagName === "IMG") ? pNode : pNode.querySelector("img");
+            const candidates = layer.querySelectorAll("#dom-pet, #world-pet, .dom-pet, [id*='pet'], [class*='pet']");
+            for (let i = 0; i < candidates.length; i++) {
+              const el = candidates[i];
+              if (!el || (el.id && el.id.indexOf("srpg-pet-") === 0)) continue;
+              const foundImg = (el.tagName === "IMG") ? el : el.querySelector("img");
+              if (foundImg) {
+                petImg = foundImg;
+                break;
+              }
+            }
           }
         }
         this.cachedPetDomImg = petImg;
       }
 
-      if (petImg && petImg._lastEvoStage !== stageObj.stage) {
+      if (petImg) {
         const url = S.getDataURL(stageObj.spriteKey);
-        if (url) {
+        if (url && (petImg._lastEvoStage !== stageObj.stage || petImg.src !== url)) {
           petImg._lastEvoStage = stageObj.stage;
           petImg.src = url;
         }
@@ -414,16 +322,13 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
     canPetAutoLootNode: function(node, stageObj, s) {
       if (!node || node.opened || !node.giveKey) return false;
-      // 絕不自動開寶箱、挖✖點或破解工具障礙，保留玩家親手解謎的樂趣
       if (node.type === "chest" || node.isBuriedSpot || node.isToolGateObstacle ||
           node.isExplorePuzzleChest || node.isCryptVaultChest) {
         return false;
       }
-      // 遵守高低差規則
       if (node.reqHighland && !s.onHighland) return false;
       if (!node.reqHighland && s.onHighland) return false;
 
-      // 檢查工具階級是否達標
       const reqLv = node.reqToolLv || 0;
       if (reqLv > 0) {
         const toolType = node.reqTool || (node.type === "wood" ? "axe" : "pickaxe");
@@ -443,14 +348,12 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const hx = s.heroX || 0;
       const hy = s.heroY || 0;
 
-      // 1. 探索緩慢回血與飽食（三階以上）
       if (stageObj.stage >= 3 && now - this.lastRegenTime >= 12000) {
         this.lastRegenTime = now;
         if (s.hp < s.maxHp) s.hp = Math.min(s.maxHp, s.hp + 3);
         if (typeof s.hunger === "number" && s.hunger < 100) s.hunger = Math.min(100, s.hunger + 1);
       }
 
-      // 2. 自動撿物掃描（非營地與帳篷，且啟用自動撿物）
       const zId = mapObj.id || "";
       const isSafeField = (zId !== "camp_hub" && zId !== "ocean_sea" && zId.indexOf("tent_") !== 0);
 
@@ -460,9 +363,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         for (let i = 0; i < mapObj.nodes.length; i++) {
           const n = mapObj.nodes[i];
           if (!this.canPetAutoLootNode(n, stageObj, s)) continue;
-          const dPet  = Math.hypot(n.x - px, n.y - py);
-          const dHero = Math.hypot(n.x - hx, n.y - hy);
-          const dist  = Math.min(dPet, dHero);
+          const dist = Math.min(Math.hypot(n.x - px, n.y - py), Math.hypot(n.x - hx, n.y - hy));
           if (dist <= stageObj.lootRadius && dist < bestDist) {
             bestDist = dist;
             pickedNode = n;
@@ -479,7 +380,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
           s.inventory[gKey] = (s.inventory[gKey] || 0) + qty;
           s.petAutoLootCount = (s.petAutoLootCount || 0) + 1;
 
-          // 立即隱藏已撿取節點並噴出閃亮粒子
           if (window.Aetheria.Renderer && window.Aetheria.Renderer.domPool && window.Aetheria.Renderer.domPool.nodes) {
             const domNode = window.Aetheria.Renderer.domPool.nodes[pickedNode.id];
             if (domNode && domNode.el) SRPG.utils.setDisplayIfChanged(domNode.el, "none");
@@ -506,7 +406,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         }
       }
 
-      // 3. 尋寶雷達偵測（二階以上）
       let radarMsg = "";
       if (s.petRadarOn && stageObj.radarRadius > 0 && isSafeField && mapObj.nodes) {
         let nearestTreasure = null;
@@ -544,7 +443,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const stageObj = this.getStageObj(s.petWisdomXp);
       const now = Date.now();
 
-      // 節流每 420ms 執行一次自動撿物與雷達偵測，確保 0 Lag
       if (now - this.lastTickTime >= 420) {
         this.lastTickTime = now;
         this.runAutoLootAndRadarTick(mapObj, s, stageObj);
@@ -556,14 +454,12 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const px = Math.round((typeof s.petX === "number") ? s.petX : (s.heroX || 0) - 20);
       const py = Math.round((typeof s.petY === "number") ? s.petY : (s.heroY || 0));
 
-      // 在大海航行時隱藏光環與氣泡
       if (mapObj.id === "ocean_sea") {
         SRPG.utils.setDisplayIfChanged(this.auraEl, "none");
         SRPG.utils.setDisplayIfChanged(this.bubbleEl, "none");
         return;
       }
 
-      // 更新進化光環位置與顏色
       if (stageObj.stage >= 2) {
         SRPG.utils.setDisplayIfChanged(this.auraEl, "block");
         this.auraEl.style.transform = "translate3d(" + px + "px, " + py + "px, 0)";
@@ -575,7 +471,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         SRPG.utils.setDisplayIfChanged(this.auraEl, "none");
       }
 
-      // 更新寵物頭頂氣泡（撿物/進化氣泡優先，其次尋寶雷達氣泡）
       let showText = "";
       let showCls = "";
       if (now < this.tempBubbleUntil && this.tempBubbleText) {
@@ -611,7 +506,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       window.Aetheria.UI.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML = "🐾 智慧夥伴進化 ＆ 探索技能";
 
-      // 1. 頂部夥伴狀態卡
       const heroBannerHtml =
         '<div class="pet-hero-banner">' +
           '<div class="pet-avatar-frame"><img src="' + S.getDataURL(cur.spriteKey) + '" alt=""></div>' +
@@ -629,7 +523,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
           '</div>' +
         '</div>';
 
-      // 2. 技能開關 + 答題賺經驗快捷鈕
       const toggleRowHtml =
         '<div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin-bottom:8px;">' +
           '<button class="na-btn ' + (s.petAutoLoot ? 'highlight' : '') + '" style="padding:6px 2px; font-size:11px;" onclick="Aetheria.SRPG.pet.toggleSkill(\'petAutoLoot\')">' +
@@ -643,7 +536,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             : '<button class="na-btn" style="padding:6px 2px; font-size:11px;" onclick="Aetheria.UI.openForgeModal(\'workshop\')">🔨前往工坊</button>') +
         '</div>';
 
-      // 3. 餵食互動區
       let feedHtml = '<div style="font-size:11.5px; font-weight:900; color:#ffd166; margin-bottom:4px;">🍖 餵食小點心（增加智慧經驗加速進化）</div><div class="pet-feed-grid">';
       PET_FEED_ITEMS.forEach(function(fi) {
         const cnt = (s.inventory && s.inventory[fi.key]) || 0;
@@ -658,7 +550,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       });
       feedHtml += '</div>';
 
-      // 4. 進化路線圖
       let treeHtml = '<div style="font-size:11.5px; font-weight:900; color:#8ce0ff; margin-bottom:4px;">🌟 四階段進化路線與技能解鎖</div>';
       PET_STAGES.forEach(function(st) {
         const reached = cur.stage >= st.stage;
@@ -680,7 +571,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
   };
   SRPG.pet = pet;
 
-  // ================= 6. 掛鉤引擎（HP加成、答題經驗、究極體開戰破盾、渲染與職/寵面板入口） =================
+  // ================= 6. 掛鉤引擎 =================
   function installPetHooks() {
     if (pet._hooked) return;
     pet._hooked = true;
@@ -694,7 +585,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const Ren = window.Aetheria.Renderer;
     const UI  = window.Aetheria.UI;
 
-    // 1. 永久生命值上限加成
     if (St && St.recalcMaxHp) {
       const origMaxHp = St.recalcMaxHp.bind(St);
       St.recalcMaxHp = function() {
@@ -710,25 +600,21 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       St.recalcMaxHp();
     }
 
-    // 2. 答對題目自動賺取寵物智慧經驗（優先掛鉤 srpg-study.js 避免重複計算）
     if (SRPG.study && SRPG.study.recordAnswer) {
       const origRecord = SRPG.study.recordAnswer.bind(SRPG.study);
       SRPG.study.recordAnswer = function(subject, isCorrect, questionObj) {
         const res = origRecord(subject, isCorrect, questionObj);
-        if (isCorrect) {
-          pet.addWisdomXp(3, "✨答題成長");
-        }
+        if (isCorrect) pet.addWisdomXp(3, "✨答題成長");
         return res;
       };
     } else if (Bat && Bat.executeEnemyCounterPhase) {
       const origCounter = Bat.executeEnemyCounterPhase.bind(Bat);
       Bat.executeEnemyCounterPhase = function(answeredRight) {
-        if (answeredRight) pet.addWisdomXp(3, "✨答題成長");
+        if (answeredRight === true) pet.addWisdomXp(3, "✨答題成長");
         return origCounter(answeredRight);
       };
     }
 
-    // 3. 四階【破曉聖光龍靈】戰鬥開場自動破 1 層敵人護盾！
     if (Bat && Bat.startBattle) {
       const origStart = Bat.startBattle.bind(Bat);
       Bat.startBattle = function(mapMonsterNode, customMode, customQuestionId) {
@@ -748,7 +634,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       };
     }
 
-    // 4. 掛鉤渲染器：每幀更新寵物外型、光環、自動撿物與尋寶雷達氣泡
     if (Ren && Ren.renderWorld) {
       const origRender = Ren.renderWorld.bind(Ren);
       Ren.renderWorld = function() {
@@ -757,7 +642,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       };
     }
 
-    // 5. 無縫掛載「🐾 智慧夥伴進化面板」入口按鈕（進入【職/寵】、【日誌】或【背包】皆可一鍵開啟）
     if (UI && UI.setActivePanel) {
       const origPanel = UI.setActivePanel.bind(UI);
       UI.setActivePanel = function(panelId) {
@@ -810,14 +694,12 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     pet.updatePetVisuals();
   }
 
-  // 等待主模組 (v14.0) 就緒後自動掛載
   function bootPetWhenReady() {
     let tries = 0;
     const timer = setInterval(function() {
       tries++;
       if (SRPG._ready && SRPG.data && SRPG.sprites && window.Aetheria.Renderer && window.Aetheria.UI) {
         clearInterval(timer);
-        // 稍微延後 80ms 確保 srpg-study.js（若有安裝）已完成掛鉤
         setTimeout(installPetHooks, 80);
       } else if (tries >= 160) {
         clearInterval(timer);
