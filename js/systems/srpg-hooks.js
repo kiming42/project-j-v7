@@ -1,6 +1,7 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 系統掛鉤、互動解謎、戰鬥平衡與啟動模組 (srpg-hooks.js - v14.0)
- * 【File 4 / 4】負責：State/Maps/Explore/Battle/Renderer/UI 掛鉤與穩定就緒啟動器
+ * Project J：艾瑟瑞亞的破曉 — 系統掛鉤、互動解謎、戰鬥平衡與啟動模組 (srpg-hooks.js - v14.5)
+ * 【File 4 / 8】負責：State/Maps/Explore/Battle/Renderer/UI 掛鉤與穩定就緒啟動器
+ * v14.5 修正 (#2)：於 updateStep 與 buildSceneDOM 雙重追蹤跨區切換，企喺高台直接傳送亦即時重置 onHighland
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.SRPG = window.Aetheria.SRPG || {};
@@ -25,6 +26,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const terrain  = SRPG.terrain;
     const ui       = SRPG.ui;
     const workshop = SRPG.workshop;
+
+    let lastStepZoneId  = "";
+    let lastBuiltZoneId = "";
 
     utils.lockHintElementSetter();
     ui.lockLowerScreenControlsPosition();
@@ -76,6 +80,16 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const origUpdateStep = Exp.updateStep.bind(Exp);
       Exp.updateStep = function() {
         const s = window.Aetheria.State.data;
+
+        // ★ v14.5 修正 #2：偵測選單傳送導致的跨區切換，在移動與碰撞前即時清除高台狀態
+        if (lastStepZoneId && lastStepZoneId !== s.currentZone) {
+          s.onHighland = false;
+        }
+        if (!db.HIGHLAND_ZONES[s.currentZone]) {
+          s.onHighland = false;
+        }
+        lastStepZoneId = s.currentZone;
+
         const prevX = s.heroX, prevY = s.heroY, prevZone = s.currentZone;
         const curMap = window.Aetheria.Data && window.Aetheria.Data.Maps && window.Aetheria.Data.Maps.getMap(s.currentZone);
 
@@ -98,6 +112,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
         if (s.currentZone !== prevZone || !db.HIGHLAND_ZONES[s.currentZone]) {
           s.onHighland = false;
+          lastStepZoneId = s.currentZone;
           return;
         }
         if (s.onHighland) {
@@ -172,6 +187,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
         }
 
         if (mapObj && mapObj.decos) {
+          let nearestLadder = null;
+          let nearestLadderDist = 68;
+
           for (let i = 0; i < mapObj.decos.length; i++) {
             const d = mapObj.decos[i];
             if (!d) continue;
@@ -298,34 +316,45 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
               return;
             }
 
-            if (d.isCliffLadderSpot && Math.hypot(s.heroX - d.x, s.heroY - d.y) < 68) {
-              if (!s.riggedCliffs) s.riggedCliffs = {};
-              if (!s.riggedCliffs[mapObj.id]) {
-                if ((s.inventory.ropeLadder || 0) <= 0) {
-                  window.Aetheria.Audio.sfxWrong();
-                  window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🔨加工】用「原木x1+藤蔓x1」合成【攀岩繩梯 x1】架設！");
-                  return;
-                }
-                s.inventory.ropeLadder--;
-                s.riggedCliffs[mapObj.id] = true;
-                (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
+            if (d.isCliffLadderSpot) {
+              const lDist = Math.hypot(s.heroX - d.x, s.heroY - d.y);
+              if (lDist < nearestLadderDist) {
+                nearestLadderDist = lDist;
+                nearestLadder = d;
               }
-
-              window.Aetheria.Audio.sfxGather();
-              if (s.onHighland) {
-                s.onHighland = false;
-                s.heroX = d.x; s.heroY = (d.ladderSide === "north") ? 772 : 982;
-                window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬下了平地！");
-              } else {
-                s.onHighland = true;
-                s.heroX = d.x; s.heroY = (d.ladderSide === "north") ? 835 : 895;
-                window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【岩石高台礦區】！");
-              }
-              s.petX = s.heroX - 20; s.petY = s.heroY;
-              window.Aetheria.State.save();
-              window.Aetheria.UI.updateAllHud();
-              return;
             }
+          }
+
+          if (nearestLadder) {
+            const d = nearestLadder;
+            if (!s.riggedCliffs) s.riggedCliffs = {};
+            if (!s.riggedCliffs[mapObj.id]) {
+              if ((s.inventory.ropeLadder || 0) <= 0) {
+                window.Aetheria.Audio.sfxWrong();
+                window.Aetheria.UI.showToast("🧗 陡峭的懸崖岩壁！請先在【工坊 ➔ 🔨加工】用「原木x1+藤蔓x1」合成【攀岩繩梯 x1】架設！");
+                return;
+              }
+              s.inventory.ropeLadder--;
+              s.riggedCliffs[mapObj.id] = true;
+              (mapObj.decos || []).forEach(function(dc) { if (dc.isCliffLadderSpot) dc.sprite = "rope_ladder"; });
+            }
+
+            window.Aetheria.Audio.sfxGather();
+            if (s.onHighland) {
+              s.onHighland = false;
+              s.heroX = (d.downX !== undefined) ? d.downX : d.x;
+              s.heroY = (d.downY !== undefined) ? d.downY : ((d.ladderSide === "north") ? 772 : 982);
+              window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬下了平地！");
+            } else {
+              s.onHighland = true;
+              s.heroX = (d.upX !== undefined) ? d.upX : d.x;
+              s.heroY = (d.upY !== undefined) ? d.upY : ((d.ladderSide === "north") ? 835 : 895);
+              window.Aetheria.UI.showToast("🧗 順着攀岩繩梯爬上了【岩石高台礦區】！");
+            }
+            s.petX = s.heroX - 20; s.petY = s.heroY;
+            window.Aetheria.State.save();
+            window.Aetheria.UI.updateAllHud();
+            return;
           }
         }
 
@@ -747,7 +776,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
     }
 
-    // ================= 5. 渲染器掛鉤（地貌、標籤與羅盤更新） =================
+    // ================= 5. 渲染器掛鉤（地貌、跨區高台重置、標籤與羅盤更新） =================
     if (Ren) {
       if (Ren.updateMinimap) {
         Ren.updateMinimap = function(mapObj, s) {
@@ -757,6 +786,19 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
       const origBuild = Ren.buildSceneDOM.bind(Ren);
       Ren.buildSceneDOM = function(mapObj) {
+        // ★ v14.5 修正 #2：切換地圖重建場景時，強制清除舊地圖的高台旗標，徹底杜絕傳送卡點
+        const stData = window.Aetheria.State && window.Aetheria.State.data;
+        if (stData && mapObj) {
+          if (lastBuiltZoneId && lastBuiltZoneId !== mapObj.id) {
+            stData.onHighland = false;
+          }
+          if (!db.HIGHLAND_ZONES[mapObj.id]) {
+            stData.onHighland = false;
+          }
+          lastBuiltZoneId = mapObj.id;
+          lastStepZoneId  = mapObj.id;
+        }
+
         if (mapObj) {
           if (mapObj.id === "camp_hub") terrain.adjustCampTentsUpward(mapObj);
           else if (db.HIGHLAND_ZONES[mapObj.id]) terrain.injectHighlandCliffIntoMap(mapObj);
@@ -1019,7 +1061,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     }
   }
 
-  // ================= 7. 穩定就緒啟動器（自動偵測底層引擎與 4 個模組全數就緒才初始化） =================
+  // ================= 7. 穩定就緒啟動器 =================
   function initAllSrpgModules() {
     try {
       SRPG.injectStyles();
@@ -1052,13 +1094,13 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
       SRPG._ready = true;
     } catch (err) {
-      console.error("SRPG Modular v14.0 init error:", err);
+      console.error("SRPG Modular v14.5 init error:", err);
     }
   }
 
   function bootWhenEngineReady() {
     let attempts = 0;
-    const maxAttempts = 120; // 最長等待 6 秒，絕不卡死
+    const maxAttempts = 120;
     const timer = setInterval(function() {
       attempts++;
       const coreReady = Boolean(
