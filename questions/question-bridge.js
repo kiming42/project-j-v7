@@ -1,7 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 四科17課(456題)與詳盡錯題解析總橋接器 (question-bridge.js - v6.6)
- * 升級：1.為中文、英文、人文、科學全部 456 道題目自動生成詳盡 explanation (知識解釋與完整句子對照)
- *       2.新增 getExplanationHtml(q, correctText) 供答錯時的「錯題溫習卡」顯示完整教學解釋
+ * Project J：艾瑟瑞亞的破曉 — 四科題庫與詳盡錯題解析總橋接器 (question-bridge.js - v7.0)
+ * 升級：1.中文科除四選一（字詞解釋、例句填充）外，新增「中文・字塊拼詞 (chi_tile)」
+ *         透過原生 fill_blank 引擎將目標詞語拆成單字字塊＋形近/同音干擾字拼詞
+ *       2.支援 chi_fill 與 chi_tile 雙例句 (s1/s2) 每次出題隨機切換
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -37,6 +38,7 @@ window.Aetheria = window.Aetheria || {};
   const QUIZ_TYPE_CATALOG = [
     { key: "chi_meaning", label: "中文・字詞/成語解釋" },
     { key: "chi_fill",    label: "中文・例句填充題" },
+    { key: "chi_tile",    label: "中文・字塊拼詞" },
     { key: "eng_spell",   label: "英文・字塊串字" },
     { key: "eng_fill",    label: "英文・句子填充題" },
     { key: "hum_fill",    label: "人文・填充題" },
@@ -72,7 +74,28 @@ window.Aetheria = window.Aetheria || {};
     return allOpts.slice(shift).concat(allOpts.slice(0, shift));
   }
 
-  // 將填充題中的底線替換為高亮正確答案，生成完整句子解釋
+  // 若中文詞語未手動指定 tileDistractors，自動從同課其他詞語抽取單字作干擾字塊
+  function buildAutoTileDistractors(targetItem, pool, idxSeed) {
+    const wordChars = Array.from(String(targetItem.word || ""));
+    const need = wordChars.length <= 2 ? 4 : 3;
+    const sameUnit = pool.filter(function(it) { return it.unitKey === targetItem.unitKey && it.word !== targetItem.word; });
+    const source = sameUnit.length >= 2 ? sameUnit : pool;
+    const charPool = [];
+    source.forEach(function(it) {
+      Array.from(String(it.word || "")).forEach(function(ch) {
+        if (wordChars.indexOf(ch) === -1 && charPool.indexOf(ch) === -1) {
+          charPool.push(ch);
+        }
+      });
+    });
+    const out = [];
+    for (let i = 0; i < charPool.length && out.length < need; i++) {
+      const ch = charPool[(idxSeed * 3 + i * 2) % charPool.length];
+      if (out.indexOf(ch) === -1) out.push(ch);
+    }
+    return out;
+  }
+
   function buildFilledSentenceExplanation(promptText, blanksArr) {
     let idx = 0;
     const raw = String(promptText || "").replace(/^【[^】]+】/, "");
@@ -85,7 +108,7 @@ window.Aetheria = window.Aetheria || {};
 
   const ALL_QUESTIONS = [];
 
-  // (A) 中文科：30 成語 + 32 字詞 -> 124 題 (附詞義與完整例句解釋)
+  // (A) 中文科：字詞解釋 (MCQ) + 例句填充 (MCQ) + 字塊拼詞 (fill_blank)
   const allChiItems = (ChiBank.IDIOMS || []).concat(ChiBank.WORDS || []);
   allChiItems.forEach(function(item, idx) {
     const uName = item.unitName || unitNameLookup[item.unitKey] || "中文";
@@ -131,10 +154,39 @@ window.Aetheria = window.Aetheria || {};
         answer: item.word,
         explanation: "【詞義解釋】" + (item.meaning || "") + "<br>【完整句子】" + String(firstSent).replace(/_{2,}/g, "「" + item.word + "」")
       });
+
+      // 新增：單字字塊拼成字詞（依句子空格數點選正確字塊）
+      const chars = Array.from(String(item.word || ""));
+      if (chars.length >= 2) {
+        const slotStr = chars.map(function() { return "________"; }).join(" ");
+        const tileDistractors = (Array.isArray(item.tileDistractors) && item.tileDistractors.length > 0)
+          ? item.tileDistractors.slice()
+          : buildAutoTileDistractors(item, allChiItems, idx + 5);
+
+        ALL_QUESTIONS.push({
+          id: item.id + "_t",
+          baseId: item.id,
+          subject: "chinese",
+          subjectLabel: "中文・" + uName,
+          unitKey: item.unitKey,
+          unitName: uName,
+          qCategory: "chi_tile",
+          type: "fill_blank",
+          typeLabel: "字塊拼詞",
+          prompt: "【字塊拼詞】" + String(firstSent).replace(/_{2,}/g, slotStr),
+          s1: item.s1 || firstSent,
+          s2: item.s2 || firstSent,
+          meaning: item.meaning || "",
+          blanks: chars,
+          distractors: tileDistractors,
+          answer: item.word,
+          explanation: "【正確詞語】" + item.word + "<br>【詞義解釋】" + (item.meaning || "") + "<br>【完整句子】" + String(firstSent).replace(/_{2,}/g, "「" + item.word + "」")
+        });
+      }
     }
   });
 
-  // (B) 英文科：46 Vocab -> 92 題 (附中文詞義與完整英文例句解釋)
+  // (B) 英文科：Vocab -> 字塊串字 + 句子填充
   const allEngItems = EngBank.VOCAB || [];
   allEngItems.forEach(function(item, idx) {
     const uName = item.unitName || unitNameLookup[item.unitKey] || "English";
@@ -203,7 +255,7 @@ window.Aetheria = window.Aetheria || {};
     return "【課本知識點】題目問及「" + String(q.prompt || "").replace(/^【[^】]+】/, "") + "」，正確答案為：<b>" + (q.answer || "") + "</b>。";
   }
 
-  // (C) 人文科：4 課 -> 120 題
+  // (C) 人文科
   (HumBank.QUESTIONS || []).forEach(function(q) {
     const uName = q.unitName || unitNameLookup[q.unitKey] || "人文科";
     const copy = Object.assign({}, q, {
@@ -219,7 +271,7 @@ window.Aetheria = window.Aetheria || {};
     ALL_QUESTIONS.push(copy);
   });
 
-  // (D) 科學科：4 課 -> 120 題
+  // (D) 科學科
   (SciBank.QUESTIONS || []).forEach(function(q) {
     const uName = q.unitName || unitNameLookup[q.unitKey] || "科學科";
     const copy = Object.assign({}, q, {
@@ -334,6 +386,11 @@ window.Aetheria = window.Aetheria || {};
         const chosenSent = (Math.random() < 0.5) ? copy.s1 : copy.s2;
         copy.prompt = "【填充題】" + chosenSent;
         copy.explanation = "【詞義解釋】" + (copy.meaning || "") + "<br>【完整句子】" + String(chosenSent).replace(/_{2,}/g, "「" + copy.answer + "」");
+      } else if (copy.qCategory === "chi_tile" && copy.s1 && copy.s2) {
+        const chosenSent = (Math.random() < 0.5) ? copy.s1 : copy.s2;
+        const slotStr = (copy.blanks || Array.from(String(copy.answer || ""))).map(function() { return "________"; }).join(" ");
+        copy.prompt = "【字塊拼詞】" + String(chosenSent).replace(/_{2,}/g, slotStr);
+        copy.explanation = "【正確詞語】" + copy.answer + "<br>【詞義解釋】" + (copy.meaning || "") + "<br>【完整句子】" + String(chosenSent).replace(/_{2,}/g, "「" + copy.answer + "」");
       }
       if (copy.svgKey && ALL_DIAGRAMS[copy.svgKey]) {
         copy.svgDiagram = ALL_DIAGRAMS[copy.svgKey];
