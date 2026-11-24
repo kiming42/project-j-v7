@@ -514,12 +514,14 @@ window.Aetheria = window.Aetheria || {};
     },
 
     // ================= 0-B. 營地料理鍋 & 睡眠至天亮 =================
+// ================= 0-B. 營地料理鍋 & 睡眠至天亮（大餐打包保留至打怪時食） =================
     openCookingModal: function() {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
       const inv = s.inventory;
       const Helper = window.Aetheria.Data.CraftingHelper;
       const phase = window.Aetheria.State.getTimePhase();
+      if (!s.cookedMeals || typeof s.cookedMeals !== "object") s.cookedMeals = {};
 
       this.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML = S.iconHtml("icon_potion") + "營地料理與休息 (飽食 " + (s.hunger || 0) + "%｜" + phase.label + ")";
@@ -564,7 +566,7 @@ window.Aetheria = window.Aetheria || {};
 
       const mealHeader = document.createElement("div");
       mealHeader.style.cssText = "color:var(--na-gold); font-weight:900; margin:6px 0 4px; font-size:13px;";
-      mealHeader.innerText = "【行前大餐料理】（回滿飽食度與HP，並獲 3 場戰鬥強化）";
+      mealHeader.innerText = "【行前大餐料理】（烹調後打包保留，打怪時按「大餐」隨時享用）";
       body.appendChild(mealHeader);
 
       if (s.activeMeal && s.activeMeal.battlesLeft > 0 && window.Aetheria.Data.CAMP_MEALS[s.activeMeal.id]) {
@@ -578,12 +580,16 @@ window.Aetheria = window.Aetheria || {};
 
       Object.values(window.Aetheria.Data.CAMP_MEALS).forEach(function(meal) {
         const canCook = Helper.canAfford(inv, meal.cost);
+        const packed = s.cookedMeals[meal.id] || 0;
         const mCard = document.createElement("div");
         mCard.className = "sys-card";
         mCard.innerHTML =
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b style="color:var(--na-gold);">' + S.iconHtml("mat_potionHeal") + meal.name + '</b>' +
-            '<button class="na-btn ' + (canCook ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.cookCampMeal(\'' + meal.id + '\')">烹調</button>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; gap:5px;">' +
+            '<b style="color:var(--na-gold);">' + S.iconHtml("mat_potionHeal") + meal.name + ' <span class="stat-pill" style="color:' + (packed > 0 ? '#5ac54f' : '#cbd5e1') + ';">已打包 ' + packed + '</span></b>' +
+            '<div style="display:flex; gap:4px;">' +
+              '<button class="na-btn ' + (canCook ? 'highlight' : '') + '" style="padding:4px 9px;" onclick="Aetheria.UI.cookCampMeal(\'' + meal.id + '\')">烹調保留</button>' +
+              (packed > 0 ? '<button class="na-btn" style="padding:4px 7px; border-color:#5ac54f; color:#a3f7b5;" onclick="Aetheria.UI.eatPackedMealAtCamp(\'' + meal.id + '\')">現食</button>' : '') +
+            '</div>' +
           '</div>' +
           '<div style="font-size:12px; color:#cbd5e1; margin:2px 0;">' + meal.desc + '</div>' +
           '<div style="font-size:12px;">' + formatIconCost(inv, meal.cost) + '</div>';
@@ -630,15 +636,31 @@ window.Aetheria = window.Aetheria || {};
         this.showToast("食材不足！");
         return;
       }
-      s.activeMeal = { id: meal.id, battlesLeft: meal.battles };
+      if (!s.cookedMeals || typeof s.cookedMeals !== "object") s.cookedMeals = {};
+      s.cookedMeals[meal.id] = (s.cookedMeals[meal.id] || 0) + 1;
       s.questProgress.cookedOnce = true;
       if (!s.bountyStats) s.bountyStats = { kills: 0, breaks: 0, fishes: 0, meals: 0 };
       s.bountyStats.meals = (s.bountyStats.meals || 0) + 1;
-      window.Aetheria.State.restoreHunger(100, s.maxHp);
       window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
       this.openCookingModal();
       this.updateAllHud();
-      this.showToast("享用【" + meal.name + "】！飽食度 100% 恢復並獲得 3 場戰鬥強化！");
+      this.showToast("烹調完成！【" + meal.name + "】已打包保留（持有 " + s.cookedMeals[meal.id] + " 份），打怪時可按「大餐」享用！");
+    },
+
+    eatPackedMealAtCamp: function(mealId) {
+      const s = window.Aetheria.State.data;
+      const meal = window.Aetheria.Data.CAMP_MEALS[mealId];
+      if (!meal || !s.cookedMeals || (s.cookedMeals[meal.id] || 0) <= 0) return;
+      s.cookedMeals[meal.id]--;
+      s.activeMeal = { id: meal.id, battlesLeft: meal.battles };
+      window.Aetheria.State.recalcMaxHp();
+      window.Aetheria.State.restoreHunger(100, s.maxHp);
+      window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
+      this.openCookingModal();
+      this.updateAllHud();
+      this.showToast("已享用【" + meal.name + "】！生命與飽食度 100% 恢復並獲得 " + meal.battles + " 場戰鬥強化！");
     },
 
     // ================= 1. NPC 對話：v6.7 動態四階段台詞與任務卡片 =================
