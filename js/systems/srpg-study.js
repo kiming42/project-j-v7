@@ -1,9 +1,10 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 智慧答題雙軌解鎖與學習戰報模組 (srpg-study.js - v15.0)
+ * Project J：艾瑟瑞亞的破曉 — 智慧答題雙軌解鎖與學習戰報模組 (srpg-study.js - v15.1)
  * 升級修正：
- *   1. 修正 openSettingsModal 掛鉤漏傳參數導致「題庫預覽」「掌握報告」無反應之 Bug
- *   2. 全面對齊 QuizBridge 四科新題庫（中文／英文／人文／科學）與 s.wrongBook、s.questionMastery
- *   3. 直接掛鉤 QuizBridge.recordAnswer，戰鬥、採集、雙軌破障與溫習特訓 100% 精準同步計分
+ *   1. 補回「日誌」頁（openGuildModal / openQuestLogModal）的「📊 學習戰報」快捷入口
+ *   2. 完成溫習／錯題特訓後提示備份存檔，並於戰報頁新增「💾 備份存檔」快捷鍵
+ *   3. 特訓彈窗支援免費 Web Speech 語音朗讀按鈕，切題自動停聲
+ *   4. 保留 v15.0 修正：轉發 openSettingsModal 參數、100% 對齊四科題庫與 s.wrongBook
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 window.Aetheria.SRPG = window.Aetheria.SRPG || {};
@@ -23,10 +24,16 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     { id: "fb_en_1", subject: "英文", q: "We like to ________ along the river. (去踏單車)", options: ["go cycling", "play tennis", "read magazines", "do yoga"], ans: 0, exp: "go cycling ＝ 去踏單車。" }
   ];
 
+  function stopTtsSafe() {
+    if (window.Aetheria.TTS && typeof window.Aetheria.TTS.stop === "function") {
+      window.Aetheria.TTS.stop();
+    }
+  }
+
   function injectStudyStyles() {
-    if (document.getElementById("srpg-study-v150-styles")) return;
+    if (document.getElementById("srpg-study-v151-styles")) return;
     const style = document.createElement("style");
-    style.id = "srpg-study-v150-styles";
+    style.id = "srpg-study-v151-styles";
     style.textContent = `
       #srpg-study-camp-pill {
         position: absolute; top: 56px; right: 6px; z-index: 18;
@@ -101,7 +108,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     return a;
   }
 
-  // 將 QuizBridge 的任意題目轉為可供快速彈窗作答的四選一格式
   function convertBridgeQuestionToModalItem(rawQ, allBridgeQs) {
     if (!rawQ) return null;
     const subjZh = SUBJ_KEY_TO_ZH[rawQ.subject] || rawQ.subject || "綜合溫習";
@@ -116,6 +122,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       return {
         id: rawQ.id,
         bridgeId: rawQ.id,
+        rawRef: rawQ,
         subject: subjZh,
         unitName: rawQ.unitName || "",
         q: rawQ.prompt,
@@ -125,7 +132,6 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       };
     }
 
-    // 非單選題（如填充／英文串字／分類）自動由同單元抽取 3 個干擾項轉為四選一，方便在錯題特訓作答
     const correctAns = String(rawQ.answer || (rawQ.blanks && rawQ.blanks.join("、")) || "");
     if (!correctAns) return null;
 
@@ -150,6 +156,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     return {
       id: rawQ.id,
       bridgeId: rawQ.id,
+      rawRef: rawQ,
       subject: subjZh,
       unitName: rawQ.unitName || "",
       q: rawQ.prompt,
@@ -163,6 +170,9 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     const s = ensureStudyState();
     const Bridge = window.Aetheria.QuizBridge;
     if (!s || !Bridge) return [];
+    if (typeof Bridge.getValidWrongBook === "function") {
+      return Bridge.getValidWrongBook(s);
+    }
     const allQs = Bridge.getAllQuestions();
     const byId = {};
     allQs.forEach(function(q) { byId[q.id] = q; });
@@ -318,6 +328,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     },
 
     loadNextSessionQuestion: function() {
+      stopTtsSafe();
       const sess = this.activeSession;
       if (!sess) return;
       const picked = this.pickNextQuestion(sess.askedIds, sess.mode === "mistake");
@@ -333,10 +344,24 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       this.renderQuizModal();
     },
 
+    speakCurrentSessionQuestion: function(btnEl) {
+      const sess = this.activeSession;
+      const TTS = window.Aetheria.TTS;
+      if (!sess || !sess.curQ || !TTS || !TTS.isSupported()) return;
+      const q = sess.curQ;
+      if (q.rawRef) {
+        TTS.speakQuestion(q.rawRef, btnEl);
+      } else {
+        const isEng = (q.subject === "英文");
+        TTS.speak(TTS.cleanPromptForSpeech(q.q, isEng), isEng ? "en-GB" : TTS.getPrefs().chiLang, btnEl);
+      }
+    },
+
     renderQuizModal: function(feedback) {
       const sess = this.activeSession;
       if (!sess || !sess.curQ) return;
       const q = sess.curQ;
+      const hasTts = Boolean(window.Aetheria.TTS && window.Aetheria.TTS.isSupported());
 
       window.Aetheria.UI.setActivePanel("panel-modal");
       const modeTitle = (sess.mode === "unlock")
@@ -381,11 +406,14 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       }
 
       document.getElementById("modal-body").innerHTML =
-        '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">' +
+        '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; flex-wrap:wrap; margin-bottom:6px;">' +
           '<span class="codex-tag">' + q.subject + (q.unitName ? ('・' + q.unitName) : '') + '</span>' +
-          (sess.fromMistake
-            ? '<span class="codex-tag" style="background:#4a151b; color:#ffb3ba; border-color:#ff595e;">📕 錯題本舊題（答對即消滅）</span>'
-            : '<span class="codex-tag" style="color:#5ac54f;">進度：' + sess.curCorrect + ' / ' + sess.needCorrect + '</span>') +
+          '<div style="display:flex; align-items:center; gap:5px;">' +
+            (hasTts ? '<button type="button" class="quiz-speak-btn" onclick="Aetheria.SRPG.study.speakCurrentSessionQuestion(this)">🔊 朗讀</button>' : '') +
+            (sess.fromMistake
+              ? '<span class="codex-tag" style="background:#4a151b; color:#ffb3ba; border-color:#ff595e;">📕 錯題本舊題</span>'
+              : '<span class="codex-tag" style="color:#5ac54f;">進度：' + sess.curCorrect + '/' + sess.needCorrect + '</span>') +
+          '</div>' +
         '</div>' +
         '<div class="wk-inspector-box" style="margin-bottom:8px;">' +
           '<div style="font-size:14px; font-weight:900; color:#ffffff; line-height:1.45;">' + q.q + '</div>' +
@@ -395,6 +423,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     },
 
     submitQuizOption: function(chosenIdx) {
+      stopTtsSafe();
       const sess = this.activeSession;
       if (!sess || !sess.curQ || sess.locked) return;
       sess.locked = true;
@@ -419,6 +448,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
     },
 
     finishQuizSession: function() {
+      stopTtsSafe();
       const sess = this.activeSession;
       const s = ensureStudyState();
       if (!sess || !s) return;
@@ -436,7 +466,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       if (window.Aetheria.State && window.Aetheria.State.save) window.Aetheria.State.save();
       if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) window.Aetheria.UI.updateAllHud();
       if (window.Aetheria.Audio && window.Aetheria.Audio.sfxLevelUp) window.Aetheria.Audio.sfxLevelUp();
-      window.Aetheria.UI.showToast("🏆 溫習特訓完成！獲得智慧獎學金 💰 " + bonusGold + " G！");
+      window.Aetheria.UI.showToast("🏆 溫習特訓完成！獲得獎學金 💰 " + bonusGold + " G！記得定時到【設定 ➔ 存檔/語音】或雲端槽位備份進度。");
       this.openStudyReportModal("overview");
     },
 
@@ -547,6 +577,7 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
 
     // ================= 📊 學習成果戰報（與四科題庫 & wrongBook 100% 同步） =================
     openStudyReportModal: function(activeTab) {
+      stopTtsSafe();
       const s = ensureStudyState();
       if (!s) return;
       if (activeTab) this.curReportTab = activeTab;
@@ -637,11 +668,12 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
             '<div style="font-size:12px; font-weight:900; color:#8ce0ff; margin-bottom:6px;">📚 四科實戰正確率 ＆ 題庫掌握度</div>' +
             subjBars +
           '</div>' +
-          '<div style="display:flex; gap:6px; margin-top:8px;">' +
-            '<button class="na-btn highlight" style="flex:1; padding:7px; font-size:11.5px;" onclick="Aetheria.SRPG.study.copyParentSummary()">📋 複製家長戰報摘要</button>' +
+          '<div style="display:flex; gap:5px; margin-top:8px; flex-wrap:wrap;">' +
+            '<button class="na-btn highlight" style="flex:1; padding:7px 4px; font-size:11.5px;" onclick="Aetheria.SRPG.study.copyParentSummary()">📋 複製家長戰報</button>' +
             (wrongQs.length > 0
-              ? '<button class="na-btn" style="flex:1; padding:7px; font-size:11.5px; border-color:#ff758f; color:#ffb3ba;" onclick="Aetheria.SRPG.study.startMistakeReviewSession()">⚔️ 消滅錯題(' + wrongQs.length + ')</button>'
+              ? '<button class="na-btn" style="flex:1; padding:7px 4px; font-size:11.5px; border-color:#ff758f; color:#ffb3ba;" onclick="Aetheria.SRPG.study.startMistakeReviewSession()">⚔️ 消滅錯題(' + wrongQs.length + ')</button>'
               : '') +
+            '<button class="na-btn" style="padding:7px 8px; font-size:11.5px; border-color:#38b6ff; color:#8ce0ff;" onclick="Aetheria.UI.openSettingsModal(\'system\')">💾 備份存檔</button>' +
           '</div>';
       } else {
         if (wrongQs.length === 0) {
@@ -729,6 +761,36 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       const mCnt = getBridgeWrongQuestions().length;
       SRPG.utils.setTextIfChanged(pill, mCnt > 0 ? ("📊學習戰報 (錯題:" + mCnt + ")") : "📊學習戰報 ＆ 溫習");
     }
+  }
+
+  function injectJournalStudyButton() {
+    const body = document.getElementById("modal-body");
+    if (!body) return;
+    if (document.getElementById("open-study-report-btn") || document.getElementById("open-study-from-guild-btn")) return;
+
+    const codexWrap = document.getElementById("open-codex-from-quest-btn");
+    const mCnt = getBridgeWrongQuestions().length;
+    const label = mCnt > 0 ? ("📊 學習戰報 (錯題:" + mCnt + ")") : "📊 學習戰報 ＆ 錯題魔典";
+
+    if (codexWrap) {
+      const btn = document.createElement("button");
+      btn.id = "open-study-report-btn";
+      btn.className = "na-btn highlight";
+      btn.style.cssText = "flex:1; padding:7px; font-size:12px; border-color:#c77dff;";
+      btn.textContent = label;
+      btn.onclick = function() { study.openStudyReportModal("overview"); };
+      codexWrap.appendChild(btn);
+      return;
+    }
+
+    const bar = document.createElement("div");
+    bar.id = "open-study-from-guild-btn";
+    bar.style.marginBottom = "6px";
+    bar.innerHTML =
+      '<button class="na-btn highlight" style="width:100%; padding:7px; font-size:12px; border-color:#c77dff;" onclick="Aetheria.SRPG.study.openStudyReportModal(\'overview\')">' +
+        label +
+      '</button>';
+    body.insertBefore(bar, body.firstChild);
   }
 
   function installStudyHooks() {
@@ -864,7 +926,18 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
       };
     }
 
-    // 5. ★ 關鍵修正：轉發 arguments，徹底修復「題庫預覽」「掌握報告」點了沒反應！
+    // 5. ★ v15.1 補回：於【日誌】(openGuildModal / openQuestLogModal) 顯示「📊 學習戰報」按鈕
+    ["openGuildModal", "openQuestLogModal"].forEach(function(fnName) {
+      if (UI && UI[fnName]) {
+        const origFn = UI[fnName].bind(UI);
+        UI[fnName] = function() {
+          origFn.apply(this, arguments);
+          injectJournalStudyButton();
+        };
+      }
+    });
+
+    // 6. 轉發 arguments，確保「題庫預覽」「掌握報告」等設定分頁切換正常
     ["openSettingsModal", "openSystemModal", "openConfigModal"].forEach(function(fnName) {
       if (UI && UI[fnName]) {
         const origFn = UI[fnName].bind(UI);
