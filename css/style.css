@@ -1439,3 +1439,105 @@ body, html {
   border-radius: 8px; width: 94%; max-width: 400px;
   text-align: center; font-weight: bold; font-size: 15px;
 }
+
+/* ================= v7.2 修正：操作區上移、答題成功卡與戰鬥大餐選單 ================= */
+#panel-explore {
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.controls-pads {
+  position: static !important;
+  height: auto !important;
+  margin: 10px 0 auto 0 !important;
+  padding: 2px 10px 8px !important;
+}
+
+.battle-cmd-header {
+  gap: 4px;
+}
+.battle-cmd-header .na-btn {
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+/* 答題成功慶祝畫面卡片 */
+.correct-card-box {
+  background: linear-gradient(180deg, #132e20 0%, #0e1f16 100%);
+  border: 3px solid #5ac54f;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-shadow: 0 0 18px rgba(90, 197, 79, 0.45);
+  animation: popCorrectCard 0.22s ease-out;
+}
+@keyframes popCorrectCard {
+  0% { opacity: 0; transform: scale(0.94); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.correct-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #2d6a4f;
+  padding-bottom: 4px;
+  color: #a3f7b5;
+  font-size: 15px;
+  font-weight: 900;
+}
+.correct-ans-block {
+  background: var(--na-scroll);
+  color: var(--na-outline);
+  border: 2px solid var(--na-outline);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+.correct-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.correct-pill {
+  background: #1d3557;
+  color: #ffd166;
+  border: 1.5px solid #38b6ff;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 11.5px;
+  font-weight: 900;
+}
+.correct-pill.break-pill {
+  background: #7f2b1d;
+  color: #fff3b0;
+  border-color: #f5b700;
+}
+.correct-pill.heal-pill {
+  background: #1b4332;
+  color: #a3f7b5;
+  border-color: #5ac54f;
+}
+
+/* 戰鬥中享用行前大餐抽屜 */
+.battle-meal-drawer {
+  background: #181316;
+  border: 2.5px solid var(--na-gold);
+  border-radius: 7px;
+  padding: 8px;
+  margin-bottom: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.75);
+}
+.battle-meal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  background: #241c20;
+  border: 1.5px solid #594950;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-top: 5px;
+}
