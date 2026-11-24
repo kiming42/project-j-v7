@@ -1,8 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 六大題型互動組件與星象調頻引擎 (quiz-widgets.js - v7.3)
- * 更新：1.英文串字 (eng_tile_spell)：維持原版逐字母串字、⌫ 退回鍵與 6 個額外干擾字母塊
- *       2.中文「字塊拼詞 (chi_tile)」：改用緊湊正方形單字格、句內簡潔單字底線與 ⌫ 退回鍵
- *       3.星象調頻：動態計算四科實際總題數並新增各題型獨立開關篩選
+ * Project J：艾瑟瑞亞的破曉 — 六大題型互動組件、免費語音朗讀與星象調頻引擎 (quiz-widgets.js - v7.4)
+ * 更新：1.內建免費 Web Speech 語音引擎 (window.Aetheria.TTS)，支援英式英語 (en-GB) 與廣東話/普通話 (zh-HK/zh-CN)
+ *       2.每道題目頂部自動加入「🔊 聽發音 / 讀句子 / 讀題目」按鈕，英文串字支援自動朗讀
+ *       3.保留原版英文逐字母串字排版、中文緊湊字塊拼詞方格與星象動態題數
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -22,11 +22,214 @@ window.Aetheria = window.Aetheria || {};
     return String(s || "").replace(/[，。！？、；：「」『』（）()\s]/g, "").trim();
   }
 
+  // ================= 0. 免費瀏覽器語音朗讀引擎 (Web Speech API) =================
+  function injectTtsStyles() {
+    if (document.getElementById("quiz-tts-v74-styles")) return;
+    const style = document.createElement("style");
+    style.id = "quiz-tts-v74-styles";
+    style.textContent =
+      ".quiz-meta { align-items: center; gap: 4px; flex-wrap: wrap; }" +
+      ".quiz-speak-btn {" +
+        "display: inline-flex; align-items: center; gap: 3px;" +
+        "background: #1d3557; color: #fff3b0; border: 1.5px solid #1c1619;" +
+        "border-radius: 5px; padding: 2px 7px; font-size: 11.5px; font-weight: 900;" +
+        "cursor: pointer; line-height: 1.25; white-space: nowrap;" +
+        "box-shadow: 0 1px 0 #1c1619;" +
+      "}" +
+      ".quiz-speak-btn:active { transform: translateY(1px); background: #2b5082; }" +
+      ".quiz-speak-btn.speaking { background: #2d6a4f; color: #ffffff; border-color: #5ac54f; }" +
+      ".quiz-ans-speak-btn {" +
+        "display: inline-flex; align-items: center; gap: 3px; margin-left: 6px;" +
+        "background: #1d3557; color: #ffd166; border: 1.5px solid #38b6ff;" +
+        "border-radius: 5px; padding: 2px 7px; font-size: 11.5px; font-weight: 900;" +
+        "cursor: pointer; vertical-align: middle; white-space: nowrap;" +
+      "}" +
+      ".quiz-ans-speak-btn.speaking { background: #2d6a4f; color: #ffffff; border-color: #5ac54f; }";
+    document.head.appendChild(style);
+  }
+
+  let _cachedVoices = [];
+  let _activeUtterance = null; // 防止 Chrome 長句朗讀中途被 GC 回收
+
+  function refreshVoices() {
+    if (!("speechSynthesis" in window)) return [];
+    try {
+      const list = window.speechSynthesis.getVoices() || [];
+      if (list.length > 0) _cachedVoices = list;
+    } catch (e) {}
+    return _cachedVoices;
+  }
+
+  if ("speechSynthesis" in window) {
+    refreshVoices();
+    try {
+      window.speechSynthesis.onvoiceschanged = refreshVoices;
+    } catch (e) {}
+  }
+
+  const TTS = {
+    isSupported: function() {
+      return typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
+    },
+
+    getPrefs: function() {
+      const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
+      return {
+        autoEngSpell: s.ttsAutoEngSpell !== false,
+        engSlow: Boolean(s.ttsEngSlow),
+        chiLang: s.ttsChiLang || "zh-HK"
+      };
+    },
+
+    pickVoice: function(langCode) {
+      const voices = refreshVoices();
+      if (!voices || voices.length === 0) return null;
+      const target = String(langCode || "en-GB").toLowerCase();
+
+      let match = voices.find(function(v) { return String(v.lang || "").toLowerCase() === target; });
+      if (match) return match;
+
+      if (target.indexOf("en") === 0) {
+        match = voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("en-gb") === 0; })
+             || voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("en-us") === 0; })
+             || voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("en") === 0; });
+        return match || null;
+      }
+
+      if (target === "zh-hk") {
+        match = voices.find(function(v) {
+          const l = String(v.lang || "").toLowerCase();
+          return l === "zh-hk" || l === "yue-hk" || l === "yue-hant-hk" || l.indexOf("hk") !== -1;
+        }) || voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("zh-tw") === 0; })
+           || voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("zh") === 0; });
+        return match || null;
+      }
+
+      match = voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("zh-cn") === 0; })
+           || voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("zh-tw") === 0; })
+           || voices.find(function(v) { return String(v.lang || "").toLowerCase().indexOf("zh") === 0; });
+      return match || null;
+    },
+
+    stop: function() {
+      try {
+        if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      } catch (e) {}
+      _activeUtterance = null;
+      document.querySelectorAll(".quiz-speak-btn.speaking, .quiz-ans-speak-btn.speaking").forEach(function(el) {
+        el.classList.remove("speaking");
+      });
+    },
+
+    speak: function(text, langCode, btnEl) {
+      const clean = String(text || "").trim();
+      if (!clean) return;
+      if (!this.isSupported()) {
+        if (window.Aetheria.UI && window.Aetheria.UI.showToast) {
+          window.Aetheria.UI.showToast("此瀏覽器暫不支援語音朗讀功能。");
+        }
+        return;
+      }
+
+      const prefs = this.getPrefs();
+      const isEng = String(langCode || "").toLowerCase().indexOf("en") === 0;
+      const finalLang = isEng ? "en-GB" : (langCode || prefs.chiLang || "zh-HK");
+
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(clean);
+        u.lang = finalLang;
+        u.rate = isEng ? (prefs.engSlow ? 0.72 : 0.90) : 0.96;
+        u.pitch = 1.0;
+
+        const chosenVoice = this.pickVoice(finalLang);
+        if (chosenVoice) {
+          u.voice = chosenVoice;
+          u.lang = chosenVoice.lang;
+        }
+
+        if (btnEl) {
+          btnEl.classList.add("speaking");
+          u.onend = function() { btnEl.classList.remove("speaking"); _activeUtterance = null; };
+          u.onerror = function() { btnEl.classList.remove("speaking"); _activeUtterance = null; };
+        } else {
+          u.onend = function() { _activeUtterance = null; };
+          u.onerror = function() { _activeUtterance = null; };
+        }
+
+        _activeUtterance = u;
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+    },
+
+    cleanPromptForSpeech: function(rawPrompt, isEng) {
+      let txt = String(rawPrompt || "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/^【[^】]+】\s*/g, "")
+        .replace(/（[^）]*）/g, "")
+        .trim();
+
+      if (isEng) {
+        txt = txt.replace(/(?:\s*_{2,}\s*)+/g, " blank ");
+      } else {
+        txt = txt.replace(/(?:\s*_{2,}\s*)+/g, "甚麼");
+      }
+      return txt.replace(/\s+/g, " ").trim();
+    },
+
+    getQuestionSpeakInfo: function(q) {
+      if (!q) return { text: "", lang: "zh-HK", label: "🔊 朗讀" };
+      const prefs = this.getPrefs();
+
+      if (q.type === "eng_tile_spell") {
+        return {
+          text: String(q.answer || "").trim(),
+          lang: "en-GB",
+          label: "🔊 聽發音"
+        };
+      }
+      if (q.subject === "english" || q.qCategory === "eng_fill") {
+        return {
+          text: this.cleanPromptForSpeech(q.prompt, true),
+          lang: "en-GB",
+          label: "🔊 讀句子"
+        };
+      }
+      return {
+        text: this.cleanPromptForSpeech(q.prompt, false),
+        lang: prefs.chiLang,
+        label: "🔊 讀題目"
+      };
+    },
+
+    speakQuestion: function(q, btnEl) {
+      const info = this.getQuestionSpeakInfo(q);
+      this.speak(info.text, info.lang, btnEl);
+    },
+
+    speakAnswer: function(q, fallbackText, btnEl) {
+      const prefs = this.getPrefs();
+      const isEng = Boolean(q && (q.subject === "english" || q.type === "eng_tile_spell" || q.qCategory === "eng_fill"));
+      const rawAns = String((q && q.answer) || fallbackText || "")
+        .replace(/<[^>]+>/g, " ")
+        .trim();
+      if (!rawAns) return;
+      this.speak(rawAns, isEng ? "en-GB" : prefs.chiLang, btnEl);
+    }
+  };
+
+  window.Aetheria.TTS = TTS;
+
   const QuizUI = {
     currentQuestion: null,
     currentCallback: null,
+    _autoSpeakTimer: null,
 
     renderQuestion: function(q, onResultCallback) {
+      injectTtsStyles();
+      clearTimeout(this._autoSpeakTimer);
+      TTS.stop();
+
       this.currentQuestion = q;
       this.currentCallback = onResultCallback;
 
@@ -39,6 +242,35 @@ window.Aetheria = window.Aetheria || {};
 
       if (subjTag) subjTag.innerText = "[" + (q.subjectLabel || "知識共鳴") + "]";
       if (typeTag) typeTag.innerText = q.typeLabel || "詠唱檢定";
+
+      // 在題目標題列動態掛載免費「🔊 朗讀」按鈕
+      const metaBar = subjTag && subjTag.parentElement;
+      if (metaBar && TTS.isSupported()) {
+        let speakBtn = document.getElementById("btn-quiz-speak");
+        if (!speakBtn) {
+          speakBtn = document.createElement("button");
+          speakBtn.id = "btn-quiz-speak";
+          speakBtn.type = "button";
+          speakBtn.className = "quiz-speak-btn";
+          metaBar.appendChild(speakBtn);
+        }
+        const info = TTS.getQuestionSpeakInfo(q);
+        speakBtn.innerText = info.label;
+        speakBtn.classList.remove("speaking");
+        speakBtn.onclick = function(ev) {
+          ev.stopPropagation();
+          TTS.speakQuestion(q, speakBtn);
+        };
+
+        // 英文串字自動讀出發音（若設定開啟）
+        if (q.type === "eng_tile_spell" && TTS.getPrefs().autoEngSpell) {
+          this._autoSpeakTimer = setTimeout(function() {
+            if (QuizUI.currentQuestion === q) {
+              TTS.speakQuestion(q, speakBtn);
+            }
+          }, 220);
+        }
+      }
 
       const svgContent = q.svgDiagram || (q.svgKey && window.Aetheria.QuizBridge && window.Aetheria.QuizBridge.getDiagram(q.svgKey)) || "";
       if (diagBox && diagSvg) {
@@ -833,7 +1065,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.QuizUI = QuizUI;
 
-  // ================= 7. 星象調頻（單/多選課次、題型開關、動態題數）與全屏切換 =================
+  // ================= 7. 星象調頻（單/多選課次、題型開關、語音設定）與全屏切換 =================
   function attachAstrolabeUpgrade() {
     if (!window.Aetheria.UI) return;
     const UI = window.Aetheria.UI;
@@ -912,6 +1144,26 @@ window.Aetheria = window.Aetheria || {};
       this.openSettingsModal("astrolabe");
     };
 
+    UI.toggleTtsPref = function(prefKey) {
+      const s = window.Aetheria.State.data;
+      if (prefKey === "autoEngSpell") {
+        s.ttsAutoEngSpell = (s.ttsAutoEngSpell === false);
+        this.showToast("英文串字自動朗讀：" + (s.ttsAutoEngSpell ? "已開啟" : "已關閉"));
+      } else if (prefKey === "engSlow") {
+        s.ttsEngSlow = !Boolean(s.ttsEngSlow);
+        this.showToast("英文語速：" + (s.ttsEngSlow ? "慢速清晰 (0.72x)" : "正常語速 (0.9x)"));
+        TTS.speak("Good job! Keep going!", "en-GB");
+      } else if (prefKey === "chiLang") {
+        s.ttsChiLang = (s.ttsChiLang === "zh-CN") ? "zh-HK" : "zh-CN";
+        const isHk = s.ttsChiLang !== "zh-CN";
+        this.showToast("中文語音已切換為：" + (isHk ? "廣東話 (香港)" : "普通話"));
+        TTS.speak(isHk ? "你好，而家用緊廣東話朗讀。" : "你好，現在使用普通話朗讀。", s.ttsChiLang);
+      }
+      window.Aetheria.Audio.sfxTalkBlip();
+      window.Aetheria.State.save();
+      this.openSettingsModal("system");
+    };
+
     UI.openSettingsModal = function(tab, previewUnitKey) {
       tab = tab || "astrolabe";
       const s = window.Aetheria.State.data;
@@ -933,7 +1185,7 @@ window.Aetheria = window.Aetheria || {};
         { id: "astrolabe", label: "星象選課" },
         { id: "preview",   label: "題庫預覽" },
         { id: "report",    label: "掌握報告" },
-        { id: "system",    label: "存檔/重置" }
+        { id: "system",    label: "存檔/語音" }
       ].forEach(function(t) {
         const b = document.createElement("button");
         b.className = "na-btn" + (tab === t.id ? " highlight" : "");
@@ -1078,6 +1330,18 @@ window.Aetheria = window.Aetheria || {};
       }
 
       else if (tab === "system") {
+        const prefs = TTS.getPrefs();
+        const ttsCard = document.createElement("div");
+        ttsCard.className = "sys-card";
+        ttsCard.innerHTML =
+          '<div style="color:var(--na-gold); font-weight:900; font-size:13px; margin-bottom:6px;">🔊 免費離線語音朗讀設定（Web Speech）</div>' +
+          '<div style="display:flex; flex-direction:column; gap:5px;">' +
+            '<button class="na-btn ' + (prefs.autoEngSpell ? 'highlight' : '') + '" style="padding:7px;" onclick="Aetheria.UI.toggleTtsPref(\'autoEngSpell\')">🔊 英文串字自動朗讀：' + (prefs.autoEngSpell ? '已開啟 ✓' : '已關閉') + '</button>' +
+            '<button class="na-btn" style="padding:7px;" onclick="Aetheria.UI.toggleTtsPref(\'engSlow\')">🐢 英文朗讀語速：' + (prefs.engSlow ? '慢速清晰 (0.72x)' : '正常語速 (0.9x)') + '</button>' +
+            '<button class="na-btn" style="padding:7px;" onclick="Aetheria.UI.toggleTtsPref(\'chiLang\')">🗣️ 中文朗讀語言：' + (prefs.chiLang === 'zh-CN' ? '普通話 (zh-CN)' : '廣東話 (香港 zh-HK)') + '</button>' +
+          '</div>';
+        body.appendChild(ttsCard);
+
         const sysCard = document.createElement("div");
         sysCard.className = "sys-card";
         sysCard.innerHTML =
@@ -1088,7 +1352,7 @@ window.Aetheria = window.Aetheria || {};
             '<button class="na-btn" style="padding:8px;" onclick="Aetheria.UI.exportSavePrompt()">複製存檔 JSON 代碼 (備份)</button>' +
             '<button class="na-btn" style="padding:8px;" onclick="Aetheria.UI.importSavePrompt()">貼上存檔 JSON 代碼 (還原)</button>' +
             '<button class="na-btn" style="padding:8px;" onclick="document.getElementById(\'title-screen\').style.display=\'flex\'; Aetheria.UI.initTitleScreen();">返回遊戲首頁</button>' +
-            '<button class="na-btn" style="padding:8px; background:#a32c24; border-color:#ff595e;" onclick="if(confirm(\'確定要清除所有進度並重新開始嗎？\')) Aetheria.State.resetSave()">重置遊戲 (清除進度)</button>' +
+            '<button class="na-btn" style="padding:8px; background:#a32c24; border-color:#ff595e;" onclick="if(confirm(\'確定要清除所有進度並重新開始嗎？\') && confirm(\'再次確認：所有存檔、裝備與溫習紀錄將會永久刪除，確定繼續？\')) Aetheria.State.resetSave()">重置遊戲 (清除進度)</button>' +
           '</div>';
         body.appendChild(sysCard);
       }
