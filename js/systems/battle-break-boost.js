@@ -1,8 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 知識充飢檢定、答題成功卡、戰鬥大餐與語音朗讀引擎 (battle-break-boost.js - v7.3)
- * 更新：1.答題成功回饋卡與錯題溫習卡均加入「🔊 朗讀答案」按鈕（點擊朗讀時自動暫停倒數，不中途切聲）
- *       2.交卷與離開戰鬥時自動呼叫 Aetheria.TTS.stop() 停止語音，避免殘音
- *       3.保留 v7.2 戰鬥打包大餐、答題成功回饋卡、知識共鳴充飢與夜戰破防核心加成
+ * Project J：艾瑟瑞亞的破曉 — 戰鬥破防、答題成功卡、大餐、語音朗讀與 Boss 備份提醒 (battle-break-boost.js - v7.4)
+ * 更新：1.縮短戰鬥階段標題（破盾戰 / 🌙夜戰 / 📕錯題 / 收服中），配合 v7.4 CSS 確保指令列單行不折行
+ *       2.擊敗區域守關 Boss 後自動彈出存檔備份提醒
+ *       3.完整保留答題成功卡、錯題溫習卡「🔊 朗讀答案」、戰鬥打包大餐、知識充飢與夜戰核心加成
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -18,6 +18,18 @@ window.Aetheria = window.Aetheria || {};
     if (window.Aetheria.TTS && typeof window.Aetheria.TTS.stop === "function") {
       window.Aetheria.TTS.stop();
     }
+  }
+
+  function getCompactCombatTitle(customMode, stateData) {
+    const s = stateData || {};
+    if (customMode === "bounty") return "錯題戰";
+    const Bridge = window.Aetheria.QuizBridge;
+    const wrongCnt = (Bridge && Bridge.getValidWrongBook)
+      ? Bridge.getValidWrongBook(s).length
+      : ((s.wrongBook && s.wrongBook.length) || 0);
+    if (s.wrongOnlyMode && wrongCnt > 0) return "📕錯題";
+    const isNight = Boolean(window.Aetheria.State && window.Aetheria.State.getTimePhase && window.Aetheria.State.getTimePhase().isNight);
+    return isNight ? "🌙夜戰" : "破盾戰";
   }
 
   function getHunterSubPet(state) {
@@ -138,6 +150,7 @@ window.Aetheria = window.Aetheria || {};
     revivedThisBattle: false,
     timerInterval: null,
     _correctTimer: null,
+    _backupHintTimer: null,
     timeLeft: 0,
 
     startBattle: function(mapMonsterNode, customMode, customQuestionId) {
@@ -145,6 +158,7 @@ window.Aetheria = window.Aetheria || {};
       customMode = customMode || "combat";
       customQuestionId = customQuestionId || null;
 
+      clearTimeout(this._backupHintTimer);
       this.active = true;
       this.mode = customMode;
       this.mapMonsterRef = mapMonsterNode;
@@ -195,8 +209,7 @@ window.Aetheria = window.Aetheria || {};
 
       const phaseTitle = document.getElementById("battle-phase-title");
       if (phaseTitle) {
-        const isNight = window.Aetheria.State.getTimePhase().isNight;
-        phaseTitle.innerText = (customMode === "bounty") ? "討伐暗影錯題幻象" : (isNight ? "🌙 夜戰破盾詠唱" : "破盾詠唱");
+        phaseTitle.innerText = getCompactCombatTitle(customMode, s);
       }
 
       this.renderBattleDomStage();
@@ -206,6 +219,7 @@ window.Aetheria = window.Aetheria || {};
 
     // 零口糧時的「野外求生・知識共鳴充飢」保底挑戰
     startForageChallenge: function() {
+      clearTimeout(this._backupHintTimer);
       this.active = true;
       this.mode = "forage";
       this.boostActive = false;
@@ -231,7 +245,7 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.setActivePanel("panel-battle");
 
       const phaseTitle = document.getElementById("battle-phase-title");
-      if (phaseTitle) phaseTitle.innerText = "知識共鳴充飢";
+      if (phaseTitle) phaseTitle.innerText = "充飢戰";
 
       this.renderBattleDomStage();
       this.updateBattleHUD();
@@ -239,6 +253,7 @@ window.Aetheria = window.Aetheria || {};
     },
 
     startHarvestChallenge: function(node) {
+      clearTimeout(this._backupHintTimer);
       this.active = true;
       this.mode = "harvest";
       this.harvestNodeRef = node;
@@ -268,7 +283,7 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.setActivePanel("panel-battle");
 
       const phaseTitle = document.getElementById("battle-phase-title");
-      if (phaseTitle) phaseTitle.innerText = "完美採集 (10秒)";
+      if (phaseTitle) phaseTitle.innerText = "採集戰";
 
       this.renderBattleDomStage();
       this.updateBattleHUD();
@@ -276,6 +291,7 @@ window.Aetheria = window.Aetheria || {};
     },
 
     startPathActionChallenge: function(actionObj, npcObj) {
+      clearTimeout(this._backupHintTimer);
       this.active = true;
       this.mode = "path_inquire";
       this.pathActionRef = { action: actionObj, npc: npcObj };
@@ -302,7 +318,10 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.setActivePanel("panel-battle");
 
       const phaseTitle = document.getElementById("battle-phase-title");
-      if (phaseTitle) phaseTitle.innerText = stripEmoji(actionObj.label);
+      if (phaseTitle) {
+        const cleanLbl = stripEmoji(actionObj.label);
+        phaseTitle.innerText = cleanLbl.length > 4 ? cleanLbl.slice(0, 4) : cleanLbl;
+      }
 
       this.renderBattleDomStage();
       this.updateBattleHUD();
@@ -509,7 +528,7 @@ window.Aetheria = window.Aetheria || {};
       s.inventory.tameFruit--;
       this.mode = "tame_trial";
       const phaseTitle = document.getElementById("battle-phase-title");
-      if (phaseTitle) phaseTitle.innerText = "已投出誘餌果！答對本題收服";
+      if (phaseTitle) phaseTitle.innerText = "收服中";
       window.Aetheria.UI.showToast("已投出靈獸誘餌果！請答對下方題目完成契約共鳴！");
     },
 
@@ -612,6 +631,11 @@ window.Aetheria = window.Aetheria || {};
       const e = this.enemy;
       const self = this;
 
+      if (this.mode === "combat" || this.mode === "bounty") {
+        const phaseTitle = document.getElementById("battle-phase-title");
+        if (phaseTitle) phaseTitle.innerText = getCompactCombatTitle(this.mode, s);
+      }
+
       const isHighPressure = e && ((e.lv - s.lv) >= 6);
       const limitSec = customSeconds || (isHighPressure ? 14 : 0);
 
@@ -699,7 +723,6 @@ window.Aetheria = window.Aetheria || {};
       if (speakBtn && hasTts) {
         speakBtn.onclick = function(ev) {
           ev.stopPropagation();
-          // 點擊朗讀時取消自動跳題，讓小朋友聽清楚後手動按繼續
           clearTimeout(self._correctTimer);
           if (btn) btn.innerText = "⚡ 聽完後按此繼續 ▸";
           window.Aetheria.TTS.speakAnswer(qObj, ansText, speakBtn);
@@ -885,7 +908,7 @@ window.Aetheria = window.Aetheria || {};
         } else {
           this.mode = "combat";
           const phaseTitle = document.getElementById("battle-phase-title");
-          if (phaseTitle) phaseTitle.innerText = "破盾詠唱";
+          if (phaseTitle) phaseTitle.innerText = getCompactCombatTitle("combat", s);
         }
       }
 
@@ -1126,6 +1149,7 @@ window.Aetheria = window.Aetheria || {};
       const s = window.Aetheria.State.data;
       const e = this.enemy;
       const isNight = window.Aetheria.State.getTimePhase().isNight;
+      const defeatedBoss = Boolean(e && (e.bossId || e.isBoss));
 
       window.Aetheria.Audio.sfxLevelUp();
 
@@ -1192,6 +1216,17 @@ window.Aetheria = window.Aetheria || {};
       }
 
       this.endBattle();
+
+      // v7.4：擊敗區域領主／Boss 後溫馨提示備份存檔
+      if (defeatedBoss) {
+        const self = this;
+        clearTimeout(this._backupHintTimer);
+        this._backupHintTimer = setTimeout(function() {
+          if (!self.active && window.Aetheria.UI && window.Aetheria.UI.showToast) {
+            window.Aetheria.UI.showToast("已擊敗強敵領主！建議前往【設定 ➔ 存檔/語音】或雲端存檔槽位備份進度。");
+          }
+        }, 3300);
+      }
     },
 
     fleeBattle: function() {
