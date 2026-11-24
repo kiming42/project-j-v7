@@ -12,43 +12,30 @@ window.Aetheria.SRPG = window.Aetheria.SRPG || {};
   let questBoxElementRef = null;
 
   const ui = {
-    lockLowerScreenControlsPosition: function() {
-      const lower = document.getElementById("lower-screen") || document.getElementById("panel-explore");
-      if (!lower) return;
+lockLowerScreenControlsPosition: function() {
+      const explorePanel = document.getElementById("panel-explore");
+      const exploreLog = document.getElementById("explore-log");
+      const ctrlRow = explorePanel && explorePanel.querySelector(".controls-pads");
 
-      const aHint = document.getElementById("a-btn-hint");
-      if (aHint) {
-        let ctrlRow = aHint.parentElement;
-        while (ctrlRow && ctrlRow.parentElement && ctrlRow.parentElement !== lower && ctrlRow.parentElement.id !== "panel-explore") {
-          ctrlRow = ctrlRow.parentElement;
-        }
-        if (ctrlRow && ctrlRow.parentElement) {
-          const parentBox = ctrlRow.parentElement;
-          parentBox.style.setProperty("position", "relative", "important");
-          parentBox.style.setProperty("overflow", "hidden", "important");
+      if (exploreLog) {
+        questBoxElementRef = exploreLog;
+        exploreLog.style.setProperty("height", "76px", "important");
+        exploreLog.style.setProperty("max-height", "76px", "important");
+        exploreLog.style.setProperty("min-height", "76px", "important");
+        exploreLog.style.setProperty("flex-shrink", "0", "important");
+        exploreLog.style.setProperty("overflow-y", "auto", "important");
+        exploreLog.style.setProperty("margin-bottom", "0", "important");
+        exploreLog.style.setProperty("padding", "4px 8px", "important");
+        exploreLog.style.setProperty("box-sizing", "border-box", "important");
+      }
 
-          // 永久鎖死方向鍵 + A鍵 + 四個快捷鍵在下半框底部同一位置
-          ctrlRow.style.setProperty("position", "absolute", "important");
-          ctrlRow.style.setProperty("left", "8px", "important");
-          ctrlRow.style.setProperty("right", "8px", "important");
-          ctrlRow.style.setProperty("bottom", "6px", "important");
-          ctrlRow.style.setProperty("height", "118px", "important");
-          ctrlRow.style.setProperty("margin", "0", "important");
-          ctrlRow.style.setProperty("z-index", "25", "important");
-
-          // 固定中間米黃色任務框高度為 76px（內容可上下滑動，絕不擠壓方向鍵）
-          const prevSibling = ctrlRow.previousElementSibling;
-          if (prevSibling) {
-            questBoxElementRef = prevSibling;
-            prevSibling.style.setProperty("height", "76px", "important");
-            prevSibling.style.setProperty("max-height", "76px", "important");
-            prevSibling.style.setProperty("min-height", "76px", "important");
-            prevSibling.style.setProperty("overflow-y", "auto", "important");
-            prevSibling.style.setProperty("margin-bottom", "0", "important");
-            prevSibling.style.setProperty("padding", "4px 8px", "important");
-            prevSibling.style.setProperty("box-sizing", "border-box", "important");
-          }
-        }
+      if (ctrlRow) {
+        // 讓方向鍵與 A 鍵緊貼在任務框下方，避免沉底被手機導航列遮擋
+        ctrlRow.style.setProperty("position", "static", "important");
+        ctrlRow.style.setProperty("height", "auto", "important");
+        ctrlRow.style.setProperty("margin", "10px 0 auto 0", "important");
+        ctrlRow.style.setProperty("padding", "2px 10px 8px", "important");
+        ctrlRow.style.setProperty("z-index", "25", "important");
       }
     },
 
