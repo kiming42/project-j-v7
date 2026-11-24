@@ -1,8 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 四科題庫與詳盡錯題解析總橋接器 (question-bridge.js - v7.0)
- * 升級：1.中文科除四選一（字詞解釋、例句填充）外，新增「中文・字塊拼詞 (chi_tile)」
- *         透過原生 fill_blank 引擎將目標詞語拆成單字字塊＋形近/同音干擾字拼詞
- *       2.支援 chi_fill 與 chi_tile 雙例句 (s1/s2) 每次出題隨機切換
+ * Project J：艾瑟瑞亞的破曉 — 四科題庫、字塊拼詞與智慧權重抽題總橋接器 (question-bridge.js - v7.1)
+ * 升級：1.中文科除四選一（字詞解釋、例句填充）外，支援「中文・字塊拼詞 (chi_tile)」與 s1/s2 隨機切換
+ *       2.升級智慧權重抽題（getQuestionWeight / pickQuestion）：錯題本(8) > 未做0星(5) > 1星(3) > 2星(1.5) > 3星熟練(0.5)
+ *       3.完整相容英文 VOCAB 雙題型與人文／科學科專屬 SVG 圖解及詳盡錯題解析
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -155,7 +155,6 @@ window.Aetheria = window.Aetheria || {};
         explanation: "【詞義解釋】" + (item.meaning || "") + "<br>【完整句子】" + String(firstSent).replace(/_{2,}/g, "「" + item.word + "」")
       });
 
-      // 新增：單字字塊拼成字詞（依句子空格數點選正確字塊）
       const chars = Array.from(String(item.word || ""));
       if (chars.length >= 2) {
         const slotStr = chars.map(function() { return "________"; }).join(" ");
@@ -344,6 +343,19 @@ window.Aetheria = window.Aetheria || {};
       return buildHumSciExplanation(q);
     },
 
+    getQuestionWeight: function(q, stateData) {
+      const s = stateData || {};
+      if (Array.isArray(s.wrongBook) && s.wrongBook.indexOf(q.id) !== -1) {
+        return 8;
+      }
+      const m = s.questionMastery && s.questionMastery[q.id];
+      const stars = (m && m.stars) ? m.stars : 0;
+      if (stars === 0) return 5;
+      if (stars === 1) return 3;
+      if (stars === 2) return 1.5;
+      return 0.5;
+    },
+
     pickQuestion: function(opts) {
       opts = opts || {};
       const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
@@ -371,7 +383,25 @@ window.Aetheria = window.Aetheria || {};
       const freshPool = pool.filter(function(q) { return recentIds.indexOf(q.id) === -1; });
       const finalPool = freshPool.length > 0 ? freshPool : pool;
 
-      const picked = finalPool[Math.floor(Math.random() * finalPool.length)];
+      // 智慧權重抽題：錯題(8) > 未做0星(5) > 1星(3) > 2星(1.5) > 3星熟練(0.5)
+      let totalWeight = 0;
+      const weights = new Array(finalPool.length);
+      for (let i = 0; i < finalPool.length; i++) {
+        const w = this.getQuestionWeight(finalPool[i], s);
+        weights[i] = w;
+        totalWeight += w;
+      }
+
+      let r = Math.random() * totalWeight;
+      let picked = finalPool[finalPool.length - 1];
+      for (let i = 0; i < finalPool.length; i++) {
+        r -= weights[i];
+        if (r <= 0) {
+          picked = finalPool[i];
+          break;
+        }
+      }
+
       recentIds.push(picked.id);
       if (recentIds.length > Math.min(20, Math.floor(pool.length / 2))) {
         recentIds.shift();
