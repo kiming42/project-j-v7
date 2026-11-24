@@ -1,7 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 知識充飢檢定、夜戰加成與錯題溫習卡引擎 (battle-break-boost.js - v7.0)
- * 新增：1.startForageChallenge()：零口糧時的「知識共鳴充飢」問答檢定，確保玩家絕不因飢餓卡關
- *       2.飽食度 >= 80% 戰鬥傷害 +10% 且每回額外回血 +12；黑夜時段魔物額外機率掉落破防核心
+ * Project J：艾瑟瑞亞的破曉 — 知識充飢檢定、答題成功回饋卡與戰鬥大餐引擎 (battle-break-boost.js - v7.2)
+ * 更新：1.新增 showCorrectAnswerFeedbackCard()：答對後顯示「✅ 答對了！詠唱成功！」回饋卡（1.3秒自動前進或點擊跳過）
+ *       2.新增 openBattleMealPicker() / eatBattleMeal()：戰鬥中隨時享用營地打包保留的行前大餐（不耗回合）
+ *       3.保留 v7.0 知識共鳴充飢檢定、夜戰破防核心掉落加成與錯題溫習卡
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -130,6 +131,7 @@ window.Aetheria = window.Aetheria || {};
     guardActive: false,
     revivedThisBattle: false,
     timerInterval: null,
+    _correctTimer: null,
     timeLeft: 0,
 
     startBattle: function(mapMonsterNode, customMode, customQuestionId) {
@@ -196,7 +198,7 @@ window.Aetheria = window.Aetheria || {};
       this.nextTurnQuestion(customQuestionId);
     },
 
-    // v7.0 新增：零口糧時的「野外求生・知識共鳴充飢」保底挑戰
+    // 零口糧時的「野外求生・知識共鳴充飢」保底挑戰
     startForageChallenge: function() {
       this.active = true;
       this.mode = "forage";
@@ -460,6 +462,16 @@ window.Aetheria = window.Aetheria || {};
         const canTame = (this.mode === "combat") && (e.broken || (e.hp / e.maxHp) <= 0.45);
         tameBtn.style.display = canTame ? "inline-block" : "none";
       }
+
+      // v7.2：同步顯示已打包的行前大餐份數
+      const mealBtn = document.getElementById("btn-battle-meal");
+      if (mealBtn) {
+        const packedMap = (s.cookedMeals && typeof s.cookedMeals === "object") ? s.cookedMeals : {};
+        const totalMeals = Object.values(packedMap).reduce(function(sum, v) { return sum + (v || 0); }, 0);
+        const hasActiveMeal = Boolean(s.activeMeal && s.activeMeal.battlesLeft > 0);
+        mealBtn.innerText = totalMeals > 0 ? ("大餐(" + totalMeals + ")") : "大餐(0)";
+        mealBtn.className = "na-btn" + (totalMeals > 0 && !hasActiveMeal ? " highlight" : "");
+      }
     },
 
     toggleBoost: function() {
@@ -496,6 +508,75 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.showToast("已投出靈獸誘餌果！請答對下方題目完成契約共鳴！");
     },
 
+    // ================= v7.2：戰鬥中享用打包行前大餐（不耗回合） =================
+    openBattleMealPicker: function() {
+      const s = window.Aetheria.State.data;
+      const mealsDB = (window.Aetheria.Data && window.Aetheria.Data.CAMP_MEALS) || {};
+      const packedMap = (s.cookedMeals && typeof s.cookedMeals === "object") ? s.cookedMeals : {};
+      const panel = document.getElementById("panel-battle");
+      if (!panel) return;
+
+      const existing = document.getElementById("battle-meal-drawer");
+      if (existing) { existing.remove(); return; }
+
+      const availMeals = Object.values(mealsDB).filter(function(m) { return (packedMap[m.id] || 0) > 0; });
+      if (availMeals.length === 0) {
+        window.Aetheria.UI.showToast("尚未打包行前大餐！請先到營地【料理鍋】烹調保留再帶上戰場。");
+        return;
+      }
+
+      const drawer = document.createElement("div");
+      drawer.id = "battle-meal-drawer";
+      drawer.className = "battle-meal-drawer";
+
+      let rowsHtml = availMeals.map(function(m) {
+        return '<div class="battle-meal-row">' +
+          '<div style="flex:1;">' +
+            '<b style="color:#ffd166; font-size:12.5px;">🍲 ' + m.name + ' (剩 ' + packedMap[m.id] + ' 份)</b>' +
+            '<div style="font-size:11px; color:#cbd5e1;">' + m.desc + '</div>' +
+          '</div>' +
+          '<button class="na-btn highlight" style="padding:5px 10px; font-size:12px;" onclick="Aetheria.Battle.eatBattleMeal(\'' + m.id + '\')">🍽️ 享用</button>' +
+        '</div>';
+      }).join("");
+
+      drawer.innerHTML =
+        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+          '<b style="color:#a3f7b5; font-size:12.5px;">🍲 隨身行前大餐（食用不耗回合・即回滿 HP 與飽食度）</b>' +
+          '<button class="na-btn" style="padding:2px 8px; font-size:11px;" onclick="Aetheria.Battle.closeBattleMealPicker()">關閉</button>' +
+        '</div>' +
+        rowsHtml;
+
+      const quizArea = document.getElementById("quiz-interactive-area");
+      panel.insertBefore(drawer, quizArea);
+      window.Aetheria.Audio.sfxTalkBlip();
+    },
+
+    closeBattleMealPicker: function() {
+      const existing = document.getElementById("battle-meal-drawer");
+      if (existing) existing.remove();
+    },
+
+    eatBattleMeal: function(mealId) {
+      const s = window.Aetheria.State.data;
+      const meal = window.Aetheria.Data.CAMP_MEALS && window.Aetheria.Data.CAMP_MEALS[mealId];
+      if (!meal || !s.cookedMeals || (s.cookedMeals[mealId] || 0) <= 0) return;
+
+      s.cookedMeals[mealId]--;
+      s.activeMeal = { id: meal.id, battlesLeft: meal.battles };
+      window.Aetheria.State.recalcMaxHp();
+      window.Aetheria.State.restoreHunger(100, s.maxHp);
+      if (meal.id === "meal_steak") {
+        s.bp = Math.min(s.maxBp, s.bp + 1);
+      }
+      window.Aetheria.Audio.sfxLevelUp();
+      window.Aetheria.State.save();
+      this.closeBattleMealPicker();
+      this.updateBattleHUD();
+      if (window.Aetheria.UI && window.Aetheria.UI.updateAllHud) window.Aetheria.UI.updateAllHud();
+      window.Aetheria.UI.spawnFloatingText("🍲享用" + meal.name + "! HP全滿", "#5ac54f", false);
+      window.Aetheria.UI.showToast("戰鬥中享用【" + meal.name + "】！HP與飽食度全滿，獲得 " + meal.battles + " 場強化！");
+    },
+
     useHealPotion: function() {
       const s = window.Aetheria.State.data;
       if ((s.inventory.potionHeal || 0) <= 0) {
@@ -519,6 +600,8 @@ window.Aetheria = window.Aetheria || {};
 
     nextTurnQuestion: function(forceId, customSeconds) {
       clearInterval(this.timerInterval);
+      clearTimeout(this._correctTimer);
+      this.closeBattleMealPicker();
       const s = window.Aetheria.State.data;
       const e = this.enemy;
       const self = this;
@@ -552,6 +635,54 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.QuizUI.renderQuestion(q, function(isCorrect, correctText, qObj) {
         self.resolveTurn(isCorrect, correctText, qObj);
       });
+    },
+
+    // ================= v7.2：答題成功回饋畫面卡片 =================
+    showCorrectAnswerFeedbackCard: function(qObj, meta, onContinue) {
+      const area = document.getElementById("quiz-interactive-area");
+      if (!area) {
+        if (onContinue) onContinue();
+        return;
+      }
+      meta = meta || {};
+      const self = this;
+      const s = window.Aetheria.State.data;
+      const ansText = meta.answerText || (qObj && qObj.answer) || "";
+      const meaningLine = (qObj && qObj.meaning)
+        ? ('<div style="font-size:12px; color:#5c3824; margin-top:2px;">' + qObj.meaning + '</div>')
+        : '';
+
+      let pillsHtml = "";
+      if (meta.dmg) pillsHtml += '<span class="correct-pill">⚔️ 造成 ' + meta.dmg + ' 傷害</span>';
+      if (meta.justBroken) pillsHtml += '<span class="correct-pill break-pill">💥 BREAK 破防暈眩！</span>';
+      else if (meta.shieldDmg) pillsHtml += '<span class="correct-pill">🛡️ 削盾 -' + meta.shieldDmg + '</span>';
+      if (meta.healAmt) pillsHtml += '<span class="correct-pill heal-pill">💚 回復 +' + meta.healAmt + ' HP</span>';
+      if (meta.customBadge) pillsHtml += '<span class="correct-pill heal-pill">' + meta.customBadge + '</span>';
+
+      area.innerHTML =
+        '<div class="correct-card-box">' +
+          '<div class="correct-card-header">' +
+            '<span>✅ 答對了！詠唱成功！</span>' +
+            '<span style="font-size:12px; color:#ffd166;">🔥 連勝 x' + (s.streak || 1) + '</span>' +
+          '</div>' +
+          '<div class="correct-ans-block">' +
+            '<div>✓ 正解：' + ansText + '</div>' +
+            meaningLine +
+          '</div>' +
+          (pillsHtml ? '<div class="correct-pills-row">' + pillsHtml + '</div>' : '') +
+          '<button class="na-btn highlight" id="btn-correct-continue" style="padding:7px; font-size:13px;">⚡ 繼續 ▸（點擊立即前進）</button>' +
+        '</div>';
+
+      let fired = false;
+      function proceed() {
+        if (fired || !self.active) return;
+        fired = true;
+        clearTimeout(self._correctTimer);
+        if (onContinue) onContinue();
+      }
+      const btn = document.getElementById("btn-correct-continue");
+      if (btn) btn.onclick = proceed;
+      this._correctTimer = setTimeout(proceed, 1300);
     },
 
     showWrongAnswerReviewCard: function(correctText, qObj, onAcknowledge) {
@@ -593,6 +724,8 @@ window.Aetheria = window.Aetheria || {};
 
     resolveTurn: function(isCorrect, correctText, qObj) {
       clearInterval(this.timerInterval);
+      clearTimeout(this._correctTimer);
+      this.closeBattleMealPicker();
       const s = window.Aetheria.State.data;
       const e = this.enemy;
       const self = this;
@@ -604,7 +737,7 @@ window.Aetheria = window.Aetheria || {};
         }
       }
 
-      // 模式 0：v7.0 知識共鳴充飢檢定
+      // 模式 0：知識共鳴充飢檢定
       if (this.mode === "forage") {
         if (isCorrect) {
           this.playAttackAnimation();
@@ -612,8 +745,14 @@ window.Aetheria = window.Aetheria || {};
           window.Aetheria.State.restoreHunger(40, 25);
           s.inventory.rationHerb = (s.inventory.rationHerb || 0) + 1;
           window.Aetheria.State.save();
-          window.Aetheria.UI.showToast("知識覓食成功！飽食度 +40%、HP +25，並額外覓得【烘烤微光菇乾 +1】！");
-          this.endBattle();
+          this.showCorrectAnswerFeedbackCard(
+            qObj,
+            { answerText: correctText, customBadge: "🍄 飽食 +40%・微光菇乾 +1" },
+            function() {
+              window.Aetheria.UI.showToast("知識覓食成功！飽食度 +40%、HP +25，並額外覓得【烘烤微光菇乾 +1】！");
+              self.endBattle();
+            }
+          );
         } else {
           window.Aetheria.Audio.sfxWrong();
           window.Aetheria.UI.spawnFloatingText("請先溫習下方解析", "#ff595e", false);
@@ -638,8 +777,14 @@ window.Aetheria = window.Aetheria || {};
           s.inventory[matKey] = (s.inventory[matKey] || 0) + 1;
           const goldReward = (s.monolithPts && s.monolithPts.science >= 75) ? 100 : 50;
           window.Aetheria.State.gainRewards(45, goldReward, 12);
-          window.Aetheria.UI.showToast("完美共鳴採集成功！獲得【" + matObj.name + " +1】與賞金 " + goldReward + " G！");
-          this.endBattle();
+          this.showCorrectAnswerFeedbackCard(
+            qObj,
+            { answerText: correctText, customBadge: "⛏️ " + matObj.name + " +1・" + goldReward + "G" },
+            function() {
+              window.Aetheria.UI.showToast("完美共鳴採集成功！獲得【" + matObj.name + " +1】與賞金 " + goldReward + " G！");
+              self.endBattle();
+            }
+          );
         } else {
           if (this.harvestNodeRef) this.harvestNodeRef.opened = false;
           window.Aetheria.Audio.sfxWrong();
@@ -659,8 +804,14 @@ window.Aetheria = window.Aetheria || {};
           window.Aetheria.Audio.sfxLevelUp();
           ref.action.onSuccess(s);
           window.Aetheria.State.save();
-          window.Aetheria.UI.showToast("旅人指令成功！" + stripEmoji(ref.action.rewardSummary));
-          this.endBattle();
+          this.showCorrectAnswerFeedbackCard(
+            qObj,
+            { answerText: correctText, customBadge: "✨ 旅人指令成功" },
+            function() {
+              window.Aetheria.UI.showToast("旅人指令成功！" + stripEmoji(ref.action.rewardSummary));
+              self.endBattle();
+            }
+          );
         } else {
           window.Aetheria.Audio.sfxWrong();
           window.Aetheria.UI.spawnFloatingText("檢定未通過！請先溫習", "#ff595e", false);
@@ -684,8 +835,14 @@ window.Aetheria = window.Aetheria || {};
           const petInfo = window.Aetheria.Data.PETS[petId];
           const shinyPrefix = e.isShiny ? "【異色閃光】" : "";
           window.Aetheria.State.gainRewards(e.expReward, e.goldReward, 20);
-          window.Aetheria.UI.showToast("收服成功！" + shinyPrefix + (petInfo ? stripEmoji(petInfo.name) : "新戰寵") + " 已加入隊伍！");
-          this.endBattle();
+          this.showCorrectAnswerFeedbackCard(
+            qObj,
+            { answerText: correctText, customBadge: "🐾 收服成功！" },
+            function() {
+              window.Aetheria.UI.showToast("收服成功！" + shinyPrefix + (petInfo ? stripEmoji(petInfo.name) : "新戰寵") + " 已加入隊伍！");
+              self.endBattle();
+            }
+          );
           return;
         } else {
           this.mode = "combat";
@@ -704,7 +861,7 @@ window.Aetheria = window.Aetheria || {};
         let shieldDmg = 1 + window.Aetheria.State.getBonusShieldBreak();
         let dmgMult = 1.0;
 
-        // v7.0 飽食度 >= 80% 時獲得「飽食強攻」加成
+        // 飽食度 >= 80% 時獲得「飽食強攻」加成
         if ((s.hunger !== undefined ? s.hunger : 100) >= 80) {
           dmgMult *= 1.10;
         }
@@ -746,7 +903,9 @@ window.Aetheria = window.Aetheria || {};
         }
 
         let justBroken = false;
+        let appliedShieldDmg = 0;
         if (!e.broken) {
+          appliedShieldDmg = shieldDmg;
           e.shield = Math.max(0, e.shield - shieldDmg);
           if (e.shield === 0) {
             e.broken = true;
@@ -801,11 +960,17 @@ window.Aetheria = window.Aetheria || {};
         window.Aetheria.UI.spawnFloatingText("-" + totalDmg, e.broken ? "#fbd000" : "#ffffff", true);
         this.updateBattleHUD();
 
-        if (e.hp <= 0) {
-          setTimeout(function() { self.winBattle(); }, 450);
-        } else {
-          setTimeout(function() { self.executeEnemyCounterPhase(true); }, 580);
-        }
+        this.showCorrectAnswerFeedbackCard(
+          qObj,
+          { answerText: correctText, dmg: totalDmg, shieldDmg: appliedShieldDmg, justBroken: justBroken, healAmt: healAmt },
+          function() {
+            if (e.hp <= 0) {
+              self.winBattle();
+            } else {
+              self.executeEnemyCounterPhase(true);
+            }
+          }
+        );
       } else {
         window.Aetheria.Audio.sfxWrong();
         this.updateBattleHUD();
@@ -953,7 +1118,7 @@ window.Aetheria = window.Aetheria || {};
         dropSummary += "、" + window.Aetheria.Data.MATERIALS[e.subDrop].name + " +1";
       }
 
-      // v7.0：黑夜戰鬥除了破防必掉核心外，未破防亦有 45% 機率額外獲得破防核心
+      // 黑夜戰鬥除了破防必掉核心外，未破防亦有 45% 機率額外獲得破防核心
       const dropBreakCore = ((e.broken || e.wasBroken) || (isNight && Math.random() < 0.45)) && e.breakDrop;
       if (dropBreakCore) {
         s.inventory[e.breakDrop] = (s.inventory[e.breakDrop] || 0) + 1;
@@ -1002,6 +1167,8 @@ window.Aetheria = window.Aetheria || {};
 
     endBattle: function() {
       clearInterval(this.timerInterval);
+      clearTimeout(this._correctTimer);
+      this.closeBattleMealPicker();
       this.active = false;
       this.mapMonsterRef = null;
       this.harvestNodeRef = null;
