@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Project J：艾瑟瑞亞的破曉 (Dawn of Aetheria v14.4)</title>
-  <link rel="stylesheet" href="css/style.css?v=7.3">
+  <title>Project J：艾瑟瑞亞的破曉 (Dawn of Aetheria v15.1)</title>
+  <link rel="stylesheet" href="css/style.css?v=7.4">
 </head>
 <body>
 
@@ -16,7 +16,7 @@
       <div class="title-emblem-box">
         <div class="title-sub">PROJECT J : SURVIVAL &amp; TACTICAL RPG</div>
         <h1 class="title-main">艾瑟瑞亞的破曉</h1>
-        <div class="title-ver">SURVIVAL EDITION v14.4</div>
+        <div class="title-ver">SURVIVAL EDITION v15.1</div>
       </div>
       <div class="title-hero-showcase" id="title-hero-preview"></div>
     </div>
@@ -66,7 +66,7 @@
     <!-- 純 DOM 小地圖雷達 -->
     <div id="dom-minimap"></div>
 
-    <!-- v7.0 新增：動態日夜光影與火把照明遮罩 -->
+    <!-- 動態日夜光影與火把照明遮罩 -->
     <div id="daynight-overlay"></div>
 
     <!-- 洞穴火把視野遮罩 -->
@@ -193,7 +193,7 @@
             <span class="action-main-txt">A 鍵</span>
             <span class="action-sub-txt" id="a-btn-hint">對話 / 拾取</span>
           </button>
-          <!-- v7.0 新增：2x2 求生快捷鍵（口糧、火把、炸彈、回營地） -->
+          <!-- 2x2 求生快捷鍵（口糧、火把、炸彈、回營地） -->
           <div class="survival-mini-grid">
             <button class="na-btn" id="btn-use-ration" onclick="Aetheria.Explore.useFieldRation()">口糧</button>
             <button class="na-btn" id="btn-use-torch" onclick="Aetheria.Explore.useFieldTorch()">火把</button>
@@ -223,11 +223,11 @@
     <!-- 【面板 3】戰鬥指令與詠唱面板 -->
     <div id="panel-battle" class="sub-panel">
       <div class="battle-cmd-header">
-        <div style="display:flex; align-items:center; gap:5px;">
-          <span style="color:var(--na-gold); font-weight:900; font-size:13px;" id="battle-phase-title">破盾詠唱</span>
+        <div class="battle-cmd-title-wrap">
+          <span id="battle-phase-title">詠唱</span>
           <span id="timer-badge" style="display:none;">12s</span>
         </div>
-        <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+        <div class="battle-cmd-btns">
           <button class="na-btn" id="btn-boost" onclick="Aetheria.Battle.toggleBoost()">Boost</button>
           <button class="na-btn" id="btn-guard" onclick="Aetheria.Battle.toggleGuard()">舉盾</button>
           <button class="na-btn" id="btn-tame" style="display:none; border-color:#5ac54f;" onclick="Aetheria.Battle.attemptTame()">收服</button>
@@ -285,7 +285,7 @@
   })();
 </script>
 
-<!-- 模組與四科獨立題庫載入順序 -->
+<!-- 模組與四科獨立題庫載入順序 (v15.1) -->
 <script src="js/engine/save-state.js?v=7.0"></script>
 <script src="js/engine/audio-synth.js?v=7.0"></script>
 <script src="js/data/pixel-sprites.js?v=7.0"></script>
@@ -298,13 +298,13 @@
 <script src="questions/questions-english.js?v=7.1"></script>
 <script src="questions/questions-humanities.js?v=7.0"></script>
 <script src="questions/questions-science.js?v=7.0"></script>
-<script src="questions/question-bridge.js?v=7.1"></script>
+<script src="questions/question-bridge.js?v=7.2"></script>
 
 <script src="js/engine/camera-renderer.js?v=7.0"></script>
 <script src="js/systems/exploration-gather.js?v=7.0"></script>
-<script src="js/systems/quiz-widgets.js?v=7.3"></script>
-<script src="js/systems/battle-break-boost.js?v=7.2"></script>
-<script src="js/systems/progression-town.js?v=7.2"></script>
+<script src="js/systems/quiz-widgets.js?v=7.5"></script>
+<script src="js/systems/battle-break-boost.js?v=7.4"></script>
+<script src="js/systems/progression-town.js?v=7.3"></script>
 <script src="js/systems/survival-daynight.js?v=7.2"></script>
 <!-- 大航海未知荒島與隨機秘境地牢模組 -->
 <script src="js/systems/ocean-voyage.js?v=7.5"></script>
@@ -320,7 +320,7 @@
 <script src="js/systems/srpg-workshop.js?v=14.6"></script>
 <script src="js/systems/srpg-hooks.js?v=14.5"></script>
 <script src="js/systems/srpg-nav.js?v=14.1"></script>
-<script src="js/systems/srpg-study.js?v=15.0"></script>
+<script src="js/systems/srpg-study.js?v=15.1"></script>
 <script src="js/systems/srpg-pet.js?v=14.5"></script>
 <script src="js/systems/srpg-biomes.js?v=14.5"></script>
 
