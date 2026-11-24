@@ -1,8 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 知識充飢檢定、答題成功回饋卡與戰鬥大餐引擎 (battle-break-boost.js - v7.2)
- * 更新：1.新增 showCorrectAnswerFeedbackCard()：答對後顯示「✅ 答對了！詠唱成功！」回饋卡（1.3秒自動前進或點擊跳過）
- *       2.新增 openBattleMealPicker() / eatBattleMeal()：戰鬥中隨時享用營地打包保留的行前大餐（不耗回合）
- *       3.保留 v7.0 知識共鳴充飢檢定、夜戰破防核心掉落加成與錯題溫習卡
+ * Project J：艾瑟瑞亞的破曉 — 知識充飢檢定、答題成功卡、戰鬥大餐與語音朗讀引擎 (battle-break-boost.js - v7.3)
+ * 更新：1.答題成功回饋卡與錯題溫習卡均加入「🔊 朗讀答案」按鈕（點擊朗讀時自動暫停倒數，不中途切聲）
+ *       2.交卷與離開戰鬥時自動呼叫 Aetheria.TTS.stop() 停止語音，避免殘音
+ *       3.保留 v7.2 戰鬥打包大餐、答題成功回饋卡、知識共鳴充飢與夜戰破防核心加成
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -12,6 +12,12 @@ window.Aetheria = window.Aetheria || {};
     return String(str)
       .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, "")
       .trim();
+  }
+
+  function stopTtsSafe() {
+    if (window.Aetheria.TTS && typeof window.Aetheria.TTS.stop === "function") {
+      window.Aetheria.TTS.stop();
+    }
   }
 
   function getHunterSubPet(state) {
@@ -463,7 +469,6 @@ window.Aetheria = window.Aetheria || {};
         tameBtn.style.display = canTame ? "inline-block" : "none";
       }
 
-      // v7.2：同步顯示已打包的行前大餐份數
       const mealBtn = document.getElementById("btn-battle-meal");
       if (mealBtn) {
         const packedMap = (s.cookedMeals && typeof s.cookedMeals === "object") ? s.cookedMeals : {};
@@ -508,7 +513,7 @@ window.Aetheria = window.Aetheria || {};
       window.Aetheria.UI.showToast("已投出靈獸誘餌果！請答對下方題目完成契約共鳴！");
     },
 
-    // ================= v7.2：戰鬥中享用打包行前大餐（不耗回合） =================
+    // ================= 戰鬥中享用打包行前大餐（不耗回合） =================
     openBattleMealPicker: function() {
       const s = window.Aetheria.State.data;
       const mealsDB = (window.Aetheria.Data && window.Aetheria.Data.CAMP_MEALS) || {};
@@ -601,6 +606,7 @@ window.Aetheria = window.Aetheria || {};
     nextTurnQuestion: function(forceId, customSeconds) {
       clearInterval(this.timerInterval);
       clearTimeout(this._correctTimer);
+      stopTtsSafe();
       this.closeBattleMealPicker();
       const s = window.Aetheria.State.data;
       const e = this.enemy;
@@ -637,7 +643,7 @@ window.Aetheria = window.Aetheria || {};
       });
     },
 
-    // ================= v7.2：答題成功回饋畫面卡片 =================
+    // ================= 答題成功回饋卡（附免費 🔊 朗讀答案） =================
     showCorrectAnswerFeedbackCard: function(qObj, meta, onContinue) {
       const area = document.getElementById("quiz-interactive-area");
       if (!area) {
@@ -651,6 +657,7 @@ window.Aetheria = window.Aetheria || {};
       const meaningLine = (qObj && qObj.meaning)
         ? ('<div style="font-size:12px; color:#5c3824; margin-top:2px;">' + qObj.meaning + '</div>')
         : '';
+      const hasTts = Boolean(window.Aetheria.TTS && window.Aetheria.TTS.isSupported());
 
       let pillsHtml = "";
       if (meta.dmg) pillsHtml += '<span class="correct-pill">⚔️ 造成 ' + meta.dmg + ' 傷害</span>';
@@ -666,7 +673,10 @@ window.Aetheria = window.Aetheria || {};
             '<span style="font-size:12px; color:#ffd166;">🔥 連勝 x' + (s.streak || 1) + '</span>' +
           '</div>' +
           '<div class="correct-ans-block">' +
-            '<div>✓ 正解：' + ansText + '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">' +
+              '<span>✓ 正解：' + ansText + '</span>' +
+              (hasTts ? '<button type="button" class="quiz-ans-speak-btn" id="btn-correct-speak">🔊 朗讀答案</button>' : '') +
+            '</div>' +
             meaningLine +
           '</div>' +
           (pillsHtml ? '<div class="correct-pills-row">' + pillsHtml + '</div>' : '') +
@@ -678,13 +688,28 @@ window.Aetheria = window.Aetheria || {};
         if (fired || !self.active) return;
         fired = true;
         clearTimeout(self._correctTimer);
+        stopTtsSafe();
         if (onContinue) onContinue();
       }
+
       const btn = document.getElementById("btn-correct-continue");
       if (btn) btn.onclick = proceed;
+
+      const speakBtn = document.getElementById("btn-correct-speak");
+      if (speakBtn && hasTts) {
+        speakBtn.onclick = function(ev) {
+          ev.stopPropagation();
+          // 點擊朗讀時取消自動跳題，讓小朋友聽清楚後手動按繼續
+          clearTimeout(self._correctTimer);
+          if (btn) btn.innerText = "⚡ 聽完後按此繼續 ▸";
+          window.Aetheria.TTS.speakAnswer(qObj, ansText, speakBtn);
+        };
+      }
+
       this._correctTimer = setTimeout(proceed, 1300);
     },
 
+    // ================= 錯題溫習卡（附免費 🔊 朗讀答案） =================
     showWrongAnswerReviewCard: function(correctText, qObj, onAcknowledge) {
       const area = document.getElementById("quiz-interactive-area");
       if (!area) {
@@ -695,6 +720,8 @@ window.Aetheria = window.Aetheria || {};
       const expHtml = (window.Aetheria.QuizBridge && window.Aetheria.QuizBridge.getExplanationHtml)
         ? window.Aetheria.QuizBridge.getExplanationHtml(qObj, correctText)
         : ("請記住正確答案：<b>" + correctText + "</b>");
+      const finalAns = correctText || (qObj && qObj.answer) || "";
+      const hasTts = Boolean(window.Aetheria.TTS && window.Aetheria.TTS.isSupported());
 
       area.innerHTML =
         '<div class="review-card-box">' +
@@ -702,8 +729,9 @@ window.Aetheria = window.Aetheria || {};
             '<span>✗ 詠唱失誤・錯題溫習卡</span>' +
             '<span style="font-size:11px; color:#ffd166;">已自動收入錯題本</span>' +
           '</div>' +
-          '<div class="review-ans-block">' +
-            '✓ 正確答案：' + (correctText || (qObj && qObj.answer) || "") +
+          '<div class="review-ans-block" style="display:flex; justify-content:space-between; align-items:center; gap:6px;">' +
+            '<span>✓ 正確答案：' + finalAns + '</span>' +
+            (hasTts ? '<button type="button" class="quiz-ans-speak-btn" id="btn-wrong-speak">🔊 朗讀答案</button>' : '') +
           '</div>' +
           '<div class="review-exp-block">' +
             expHtml +
@@ -713,9 +741,18 @@ window.Aetheria = window.Aetheria || {};
           '</button>' +
         '</div>';
 
+      const speakBtn = document.getElementById("btn-wrong-speak");
+      if (speakBtn && hasTts) {
+        speakBtn.onclick = function(ev) {
+          ev.stopPropagation();
+          window.Aetheria.TTS.speakAnswer(qObj, finalAns, speakBtn);
+        };
+      }
+
       const confirmBtn = document.getElementById("btn-confirm-learned");
       if (confirmBtn) {
         confirmBtn.onclick = function() {
+          stopTtsSafe();
           window.Aetheria.Audio.sfxTalkBlip();
           if (onAcknowledge) onAcknowledge();
         };
@@ -725,6 +762,7 @@ window.Aetheria = window.Aetheria || {};
     resolveTurn: function(isCorrect, correctText, qObj) {
       clearInterval(this.timerInterval);
       clearTimeout(this._correctTimer);
+      stopTtsSafe();
       this.closeBattleMealPicker();
       const s = window.Aetheria.State.data;
       const e = this.enemy;
@@ -861,7 +899,6 @@ window.Aetheria = window.Aetheria || {};
         let shieldDmg = 1 + window.Aetheria.State.getBonusShieldBreak();
         let dmgMult = 1.0;
 
-        // 飽食度 >= 80% 時獲得「飽食強攻」加成
         if ((s.hunger !== undefined ? s.hunger : 100) >= 80) {
           dmgMult *= 1.10;
         }
@@ -1118,7 +1155,6 @@ window.Aetheria = window.Aetheria || {};
         dropSummary += "、" + window.Aetheria.Data.MATERIALS[e.subDrop].name + " +1";
       }
 
-      // 黑夜戰鬥除了破防必掉核心外，未破防亦有 45% 機率額外獲得破防核心
       const dropBreakCore = ((e.broken || e.wasBroken) || (isNight && Math.random() < 0.45)) && e.breakDrop;
       if (dropBreakCore) {
         s.inventory[e.breakDrop] = (s.inventory[e.breakDrop] || 0) + 1;
@@ -1168,6 +1204,7 @@ window.Aetheria = window.Aetheria || {};
     endBattle: function() {
       clearInterval(this.timerInterval);
       clearTimeout(this._correctTimer);
+      stopTtsSafe();
       this.closeBattleMealPicker();
       this.active = false;
       this.mapMonsterRef = null;
