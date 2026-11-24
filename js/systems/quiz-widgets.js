@@ -1,7 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 六大題型互動組件與星象調頻引擎 (quiz-widgets.js - v6.5)
- * 修正：1.英文串字 (eng_tile_spell)：刪除題目空格與(6)(2)字數提示、新增【⌫ 退回】鍵、每題額外混入 6 個干擾字母塊
- *       2.強化簡答題/情境題/多格填充題的答案比對邏輯，支援對調容錯與精準核對
+ * Project J：艾瑟瑞亞的破曉 — 六大題型互動組件與星象調頻引擎 (quiz-widgets.js - v7.3)
+ * 更新：1.英文串字 (eng_tile_spell)：維持原版逐字母串字、⌫ 退回鍵與 6 個額外干擾字母塊
+ *       2.中文「字塊拼詞 (chi_tile)」：改用緊湊正方形單字格、句內簡潔單字底線與 ⌫ 退回鍵
+ *       3.星象調頻：動態計算四科實際總題數並新增各題型獨立開關篩選
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -54,7 +55,6 @@ window.Aetheria = window.Aetheria || {};
       area.innerHTML = "";
 
       if (q.type === "eng_tile_spell") {
-        // 問題 3 修正：題目框只顯示中文詞意，不顯示底線與字數提示！
         if (promptEl) {
           promptEl.innerHTML = '<div style="color:#7f2b1d; font-size:17px;">【英文串字】' + q.meaning + '</div>';
         }
@@ -79,7 +79,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
 
-    // ================= 1. 英文串字組件 (純答題空位 + 無字數數字 + 退回鍵 + 6個額外干擾字母塊) =================
+    // ================= 1. 英文串字組件 (維持原版：純答題空位 + 退回鍵 + 6個干擾字母塊) =================
     renderEngTileSpell: function(q, area) {
       const self = this;
       const rawPhrase = String(q.answer || "").trim();
@@ -100,9 +100,8 @@ window.Aetheria = window.Aetheria || {};
 
       const totalLetters = cleanLetters.length;
       const filled = new Array(totalLetters).fill(null);
-      const historyStack = []; // 記錄填入順序供「⌫ 退回」鍵使用
+      const historyStack = [];
 
-      // 問題 3 修正：不論單字長短，一律額外加入 6 個干擾字母塊！
       const bankChars = cleanLetters.map(function(c) { return c.toLowerCase(); });
       const extraAlphabet = shuffleArray(["a","b","c","d","e","f","g","h","i","l","m","n","o","p","r","s","t","u","v","w","y"]);
       const extraTargetCount = 6;
@@ -174,7 +173,6 @@ window.Aetheria = window.Aetheria || {};
             wordGroup.appendChild(cell);
           });
 
-          // 問題 3 修正：不顯示 (6)、(2) 等字數提示標籤！
           slotsRow.appendChild(wordGroup);
         });
 
@@ -201,7 +199,6 @@ window.Aetheria = window.Aetheria || {};
         });
       }
 
-      // 新增：【⌫ 退回】鍵（退回最後填入的一個字母）
       const backBtn = document.createElement("button");
       backBtn.className = "na-btn highlight";
       backBtn.innerText = "⌫ 退回";
@@ -216,7 +213,6 @@ window.Aetheria = window.Aetheria || {};
             return;
           }
         }
-        // 若 historyStack 為空則從右往左退回最後一個非空槽位
         for (let i = filled.length - 1; i >= 0; i--) {
           if (filled[i]) {
             filled[i].bankItem.used = false;
@@ -404,12 +400,15 @@ window.Aetheria = window.Aetheria || {};
       refreshClassifyUI();
     },
 
-    // ================= 3. 填充題與看圖填充題組件 (支援對調容錯判定) =================
+    // ================= 3. 填充題與看圖填充題組件 (支援中文緊湊字塊拼詞 + 對調容錯) =================
     renderFillBlanks: function(q, promptEl, area) {
       const self = this;
       const blanks = q.blanks || [q.answer];
       const numBlanks = blanks.length;
+      const isChiTile = (q.qCategory === "chi_tile");
       const filled = new Array(numBlanks).fill(null);
+      const historyStack = [];
+      let submitted = false;
 
       const rawBank = blanks.concat(q.distractors || []);
       const shuffledBank = shuffleArray(rawBank.map(function(w, idx) {
@@ -419,6 +418,23 @@ window.Aetheria = window.Aetheria || {};
       function updatePromptDisplay() {
         if (!promptEl) return;
         let idxCount = 0;
+
+        if (isChiTile) {
+          const formatted = String(q.prompt || "")
+            .replace(/_{2,}/g, function() {
+              const curIdx = idxCount < numBlanks ? idxCount : numBlanks - 1;
+              idxCount++;
+              const val = filled[curIdx];
+              if (val) {
+                return '<span class="chi-inline-char filled">' + val.word + '</span>';
+              }
+              return '<span class="chi-inline-char"> </span>';
+            })
+            .replace(/<\/span>\s+<span class="chi-inline-char/g, '</span><span class="chi-inline-char');
+          promptEl.innerHTML = formatted;
+          return;
+        }
+
         const formatted = String(q.prompt || "").replace(/_{2,}/g, function() {
           const curIdx = idxCount < numBlanks ? idxCount : numBlanks - 1;
           idxCount++;
@@ -435,20 +451,24 @@ window.Aetheria = window.Aetheria || {};
       wrapper.style.cssText = "display:flex; flex-direction:column; gap:8px;";
 
       const slotsBar = document.createElement("div");
-      slotsBar.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; justify-content:center;";
+      slotsBar.className = isChiTile ? "chi-tile-slots-row" : "";
+      if (!isChiTile) {
+        slotsBar.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; justify-content:center;";
+      }
 
       const bankBar = document.createElement("div");
       bankBar.style.cssText = "display:flex; flex-wrap:wrap; gap:6px; justify-content:center;";
 
       function checkFillAnswer() {
+        if (submitted) return;
+        submitted = true;
         const userWords = filled.map(function(f) { return f ? f.word : ""; });
         let isAllRight = blanks.every(function(ans, i) {
           return userWords[i] === ans;
         });
 
-        // 針對可互換順序的並列空格（例如「蔬菜類、水果類」或「瞿塘峽、巫峽、西陵峽」等並列項）提供容錯
         if (!isAllRight && q.allowSwapIndices) {
-          const group = q.allowSwapIndices; // 例如 [1, 2]
+          const group = q.allowSwapIndices;
           const expectedSet = group.map(function(idx) { return blanks[idx]; }).sort().join("|");
           const actualSet = group.map(function(idx) { return userWords[idx]; }).sort().join("|");
           const otherOk = blanks.every(function(ans, i) {
@@ -459,48 +479,92 @@ window.Aetheria = window.Aetheria || {};
           }
         }
 
+        const correctDisplay = isChiTile ? blanks.join("") : blanks.join("、");
         if (self.currentCallback) {
-          self.currentCallback(isAllRight, blanks.join("、"), q);
+          self.currentCallback(isAllRight, correctDisplay, q);
         }
       }
 
       function refreshFillUI() {
         updatePromptDisplay();
         slotsBar.innerHTML = "";
+        const nextEmptyIdx = filled.findIndex(function(x) { return x === null; });
+
         for (let i = 0; i < numBlanks; i++) {
           const slotBtn = document.createElement("div");
           const val = filled[i];
-          slotBtn.style.cssText =
-            "min-width:86px; padding:5px 10px; border-radius:5px; font-size:13px; font-weight:900; text-align:center; cursor:pointer; " +
-            (val ? "background:#2b2118; border:2px solid var(--na-gold); color:var(--na-gold);" : "background:#141013; border:2px dashed #8ce0ff; color:#8ce0ff;");
-          slotBtn.innerText = val ? ("(" + (i + 1) + ") " + val.word + " ×") : ("空格 (" + (i + 1) + ")");
+
+          if (isChiTile) {
+            const isNext = (i === nextEmptyIdx);
+            slotBtn.className = "chi-tile-slot" + (val ? " filled" : (isNext ? " next-active" : ""));
+            slotBtn.innerText = val ? val.word : "";
+          } else {
+            slotBtn.style.cssText =
+              "min-width:86px; padding:5px 10px; border-radius:5px; font-size:13px; font-weight:900; text-align:center; cursor:pointer; " +
+              (val ? "background:#2b2118; border:2px solid var(--na-gold); color:var(--na-gold);" : "background:#141013; border:2px dashed #8ce0ff; color:#8ce0ff;");
+            slotBtn.innerText = val ? ("(" + (i + 1) + ") " + val.word + " ×") : ("空格 (" + (i + 1) + ")");
+          }
+
           if (val) {
             slotBtn.onclick = function() {
               window.Aetheria.Audio.sfxTalkBlip();
               val.bankItem.used = false;
               filled[i] = null;
+              const hPos = historyStack.indexOf(i);
+              if (hPos !== -1) historyStack.splice(hPos, 1);
               refreshFillUI();
             };
           }
           slotsBar.appendChild(slotBtn);
         }
 
+        if (isChiTile) {
+          const backBtn = document.createElement("button");
+          backBtn.className = "na-btn";
+          backBtn.style.cssText = "height:42px; padding:0 10px; font-size:13px;";
+          backBtn.innerText = "⌫ 退回";
+          backBtn.onclick = function() {
+            window.Aetheria.Audio.sfxTalkBlip();
+            while (historyStack.length > 0) {
+              const lastIdx = historyStack.pop();
+              if (filled[lastIdx]) {
+                filled[lastIdx].bankItem.used = false;
+                filled[lastIdx] = null;
+                refreshFillUI();
+                return;
+              }
+            }
+            for (let i = filled.length - 1; i >= 0; i--) {
+              if (filled[i]) {
+                filled[i].bankItem.used = false;
+                filled[i] = null;
+                refreshFillUI();
+                return;
+              }
+            }
+          };
+          slotsBar.appendChild(backBtn);
+        }
+
         bankBar.innerHTML = "";
         shuffledBank.forEach(function(bItem) {
           const btn = document.createElement("button");
-          btn.className = "bank-char" + (bItem.used ? " used" : "");
-          btn.style.cssText = "padding:7px 12px; font-size:14px;";
+          btn.className = "bank-char" + (isChiTile ? " chi-tile-bank-btn" : "") + (bItem.used ? " used" : "");
+          if (!isChiTile) {
+            btn.style.cssText = "padding:7px 12px; font-size:14px;";
+          }
           btn.innerText = bItem.word;
           btn.onclick = function() {
-            if (bItem.used) return;
+            if (bItem.used || submitted) return;
             const nextEmpty = filled.findIndex(function(x) { return x === null; });
             if (nextEmpty === -1) return;
             window.Aetheria.Audio.sfxTalkBlip();
             bItem.used = true;
             filled[nextEmpty] = { word: bItem.word, bankItem: bItem };
+            historyStack.push(nextEmpty);
             refreshFillUI();
             if (filled.every(function(x) { return x !== null; })) {
-              setTimeout(checkFillAnswer, 200);
+              setTimeout(checkFillAnswer, 180);
             }
           };
           bankBar.appendChild(btn);
@@ -569,7 +633,7 @@ window.Aetheria = window.Aetheria || {};
       refreshMultiUI();
     },
 
-    // ================= 5. 單選選擇題 / 簡答題 / 情境問答題 (強化精準與容錯比對) =================
+    // ================= 5. 單選選擇題 / 簡答題 / 情境問答題 =================
     renderMCQ: function(q, area) {
       const self = this;
       const s = (window.Aetheria.State && window.Aetheria.State.data) || {};
@@ -932,7 +996,6 @@ window.Aetheria = window.Aetheria || {};
           body.appendChild(card);
         });
 
-        // 題型篩選開關（支援開關「中文・字塊拼詞」等所有題型）
         const typeCard = document.createElement("div");
         typeCard.className = "sys-card";
         const typeBtns = (Bridge.QUIZ_TYPE_CATALOG || []).map(function(tp) {
