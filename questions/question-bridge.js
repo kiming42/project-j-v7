@@ -1,8 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 四科題庫、字塊拼詞與智慧權重抽題總橋接器 (question-bridge.js - v7.1)
- * 升級：1.中文科除四選一（字詞解釋、例句填充）外，支援「中文・字塊拼詞 (chi_tile)」與 s1/s2 隨機切換
- *       2.升級智慧權重抽題（getQuestionWeight / pickQuestion）：錯題本(8) > 未做0星(5) > 1星(3) > 2星(1.5) > 3星熟練(0.5)
- *       3.完整相容英文 VOCAB 雙題型與人文／科學科專屬 SVG 圖解及詳盡錯題解析
+ * Project J：艾瑟瑞亞的破曉 — 四科題庫、字塊拼詞、智慧權重與只溫錯題總橋接器 (question-bridge.js - v7.2)
+ * 升級：1.新增 wrongOnlyMode（📕 戰鬥只出錯題本）與 getValidWrongBook()，清完錯題自動無縫回退常規池
+ *       2.保留中文三題型（解釋／例句填充／字塊拼詞）與雙例句隨機切換
+ *       3.保留智慧權重抽題（錯題8 > 未做0星5 > 1星3 > 2星1.5 > 3星0.5）
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -74,7 +74,6 @@ window.Aetheria = window.Aetheria || {};
     return allOpts.slice(shift).concat(allOpts.slice(0, shift));
   }
 
-  // 若中文詞語未手動指定 tileDistractors，自動從同課其他詞語抽取單字作干擾字塊
   function buildAutoTileDistractors(targetItem, pool, idxSeed) {
     const wordChars = Array.from(String(targetItem.word || ""));
     const need = wordChars.length <= 2 ? 4 : 3;
@@ -228,7 +227,6 @@ window.Aetheria = window.Aetheria || {};
     }
   });
 
-  // 輔助函式：為人文科與科學科題目建立詳盡解釋
   function buildHumSciExplanation(q) {
     if (q.explanation) return q.explanation;
     if (q.type === "fill_blank" || q.type === "image_fill") {
@@ -286,6 +284,9 @@ window.Aetheria = window.Aetheria || {};
     ALL_QUESTIONS.push(copy);
   });
 
+  const QUESTION_BY_ID = {};
+  ALL_QUESTIONS.forEach(function(q) { QUESTION_BY_ID[q.id] = q; });
+
   LESSON_CATALOG.forEach(function(les) {
     les.count = ALL_QUESTIONS.filter(function(q) { return q.unitKey === les.key; }).length;
   });
@@ -309,6 +310,10 @@ window.Aetheria = window.Aetheria || {};
 
     if (!s.lessonSelectMode) {
       s.lessonSelectMode = "multi";
+    }
+
+    if (s.wrongOnlyMode === undefined) {
+      s.wrongOnlyMode = false;
     }
 
     if (!s.activeQuizTypes) {
@@ -335,6 +340,20 @@ window.Aetheria = window.Aetheria || {};
 
     getAllQuestions: function() {
       return ALL_QUESTIONS;
+    },
+
+    getValidWrongBook: function(stateData) {
+      const s = stateData || (window.Aetheria.State && window.Aetheria.State.data) || {};
+      if (!Array.isArray(s.wrongBook) || s.wrongBook.length === 0) return [];
+      const seen = {};
+      const out = [];
+      s.wrongBook.forEach(function(id) {
+        if (!seen[id] && QUESTION_BY_ID[id]) {
+          seen[id] = true;
+          out.push(QUESTION_BY_ID[id]);
+        }
+      });
+      return out;
     },
 
     getExplanationHtml: function(q, correctText) {
@@ -364,6 +383,26 @@ window.Aetheria = window.Aetheria || {};
       if (opts.forceId) {
         const forced = ALL_QUESTIONS.find(function(q) { return q.id === opts.forceId || q.baseId === opts.forceId; });
         if (forced) return this.prepareQuestionInstance(forced);
+      }
+
+      // v7.2 新增：📕 戰鬥只出錯題本模式（錯題清零後自動無縫切回常規智慧題庫）
+      if (s.wrongOnlyMode) {
+        const wrongPool = this.getValidWrongBook(s);
+        if (wrongPool.length > 0) {
+          const freshWrong = wrongPool.filter(function(q) { return recentIds.indexOf(q.id) === -1; });
+          let finalWrong = freshWrong.length > 0 ? freshWrong : wrongPool;
+          if (finalWrong.length > 1 && recentIds.length > 0) {
+            const lastId = recentIds[recentIds.length - 1];
+            const noRepeat = finalWrong.filter(function(q) { return q.id !== lastId; });
+            if (noRepeat.length > 0) finalWrong = noRepeat;
+          }
+          const pickedWrong = finalWrong[Math.floor(Math.random() * finalWrong.length)];
+          recentIds.push(pickedWrong.id);
+          if (recentIds.length > Math.min(20, Math.max(1, Math.floor(wrongPool.length / 2)))) {
+            recentIds.shift();
+          }
+          return this.prepareQuestionInstance(pickedWrong);
+        }
       }
 
       let pool = ALL_QUESTIONS.filter(function(q) {
