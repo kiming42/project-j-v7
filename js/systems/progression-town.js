@@ -513,8 +513,7 @@ window.Aetheria = window.Aetheria || {};
       this.showToast("工程落成！【" + proj.name + "】已完工！請找對應 NPC 交付主線領獎！");
     },
 
-    // ================= 0-B. 營地料理鍋 & 睡眠至天亮 =================
-// ================= 0-B. 營地料理鍋 & 睡眠至天亮（大餐打包保留至打怪時食） =================
+    // ================= 0-B. 營地料理鍋 & 睡眠至天亮（大餐打包保留至打怪時食） =================
     openCookingModal: function() {
       const s = window.Aetheria.State.data;
       const S = window.Aetheria.Data.Sprites;
