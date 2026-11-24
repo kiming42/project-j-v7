@@ -220,14 +220,14 @@
       <div id="npc-action-buttons" class="npc-btn-grid"></div>
     </div>
 
-    <!-- 【面板 3】戰鬥指令與詠唱面板 -->
+    <!-- 【面板 3】戰鬥指令與詠唱面板（v15.1 單行緊湊指令列） -->
     <div id="panel-battle" class="sub-panel">
       <div class="battle-cmd-header">
         <div class="battle-cmd-title-wrap">
-          <span id="battle-phase-title">詠唱</span>
+          <span class="battle-phase-lbl" id="battle-phase-title">破盾詠唱</span>
           <span id="timer-badge" style="display:none;">12s</span>
         </div>
-        <div class="battle-cmd-btns">
+        <div class="battle-cmd-actions">
           <button class="na-btn" id="btn-boost" onclick="Aetheria.Battle.toggleBoost()">Boost</button>
           <button class="na-btn" id="btn-guard" onclick="Aetheria.Battle.toggleGuard()">舉盾</button>
           <button class="na-btn" id="btn-tame" style="display:none; border-color:#5ac54f;" onclick="Aetheria.Battle.attemptTame()">收服</button>
@@ -285,7 +285,7 @@
   })();
 </script>
 
-<!-- 模組與四科獨立題庫載入順序 (v15.1) -->
+<!-- v15.1 模組與四科獨立題庫載入順序 -->
 <script src="js/engine/save-state.js?v=7.0"></script>
 <script src="js/engine/audio-synth.js?v=7.0"></script>
 <script src="js/data/pixel-sprites.js?v=7.0"></script>
