@@ -769,7 +769,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.QuizUI = QuizUI;
 
-  // ================= 7. 星象調頻（單/多選課次）與全屏切換 =================
+  // ================= 7. 星象調頻（單/多選課次、題型開關、動態題數）與全屏切換 =================
   function attachAstrolabeUpgrade() {
     if (!window.Aetheria.UI) return;
     const UI = window.Aetheria.UI;
@@ -839,6 +839,15 @@ window.Aetheria = window.Aetheria || {};
       this.openSettingsModal("astrolabe");
     };
 
+    UI.toggleQuizType = function(typeKey) {
+      const s = window.Aetheria.State.data;
+      window.Aetheria.QuizBridge.ensureQuizSettings(s);
+      s.activeQuizTypes[typeKey] = !s.activeQuizTypes[typeKey];
+      window.Aetheria.Audio.sfxTalkBlip();
+      window.Aetheria.State.save();
+      this.openSettingsModal("astrolabe");
+    };
+
     UI.openSettingsModal = function(tab, previewUnitKey) {
       tab = tab || "astrolabe";
       const s = window.Aetheria.State.data;
@@ -846,9 +855,10 @@ window.Aetheria = window.Aetheria || {};
       const Bridge = window.Aetheria.QuizBridge;
       Bridge.ensureQuizSettings(s);
       const self = this;
+      const allQ = Bridge.getAllQuestions();
 
       this.setActivePanel("panel-modal");
-      document.getElementById("modal-title").innerHTML = S.iconHtml("icon_gear") + "系統設定與星象調頻 (共 " + Bridge.getAllQuestions().length + " 題)";
+      document.getElementById("modal-title").innerHTML = S.iconHtml("icon_gear") + "系統設定與星象調頻 (共 " + allQ.length + " 題)";
 
       const body = document.getElementById("modal-body");
       body.innerHTML = "";
@@ -877,17 +887,20 @@ window.Aetheria = window.Aetheria || {};
           '<div style="display:flex; justify-content:space-between; align-items:center;">' +
             '<b>選課模式：</b>' +
             '<div style="display:flex; gap:6px;">' +
-              '<button class="na-btn ' + (isSingle ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.setLessonSelectMode(\'single\')">🎯 單選課次 (專注單課)</button>' +
-              '<button class="na-btn ' + (!isSingle ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.setLessonSelectMode(\'multi\')">☑️ 多選課次 (自由組合)</button>' +
+              '<button class="na-btn ' + (isSingle ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.setLessonSelectMode(\'single\')">🎯 單選課次</button>' +
+              '<button class="na-btn ' + (!isSingle ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.setLessonSelectMode(\'multi\')">☑️ 多選課次</button>' +
             '</div>' +
           '</div>';
         body.appendChild(modeBox);
 
+        const cntBySubj = function(k) { return allQ.filter(function(q) { return q.subject === k; }).length; };
+        const engVocabCnt = (window.Aetheria.QuestionBank && window.Aetheria.QuestionBank.English && window.Aetheria.QuestionBank.English.VOCAB) ? window.Aetheria.QuestionBank.English.VOCAB.length : 0;
+
         const subjMeta = [
-          { key: "chinese",    name: "中文科（30成語 + 32字詞｜解釋・填充）" },
-          { key: "english",    name: "英文科（46 Vocab｜字塊串字・句子填充）" },
-          { key: "humanities", name: "人文科（U1/U2/U8/U9 共120題｜全六大題型）" },
-          { key: "science",    name: "科學科（第2/3/8/9課 共120題｜全六大題型）" }
+          { key: "chinese",    name: "中文科（共" + cntBySubj("chinese") + "題｜解釋・填充・字塊拼詞）" },
+          { key: "english",    name: "英文科（" + engVocabCnt + " Vocab / " + cntBySubj("english") + "題｜字塊串字・填充）" },
+          { key: "humanities", name: "人文科（共" + cntBySubj("humanities") + "題｜選擇・填充・分類・看圖）" },
+          { key: "science",    name: "科學科（共" + cntBySubj("science") + "題｜選擇・填充・分類・看圖）" }
         ];
 
         subjMeta.forEach(function(sm) {
@@ -908,7 +921,7 @@ window.Aetheria = window.Aetheria || {};
 
           card.innerHTML =
             '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #3d3136;">' +
-              '<b style="color:var(--na-gold); font-size:13px;">' + sm.name + '</b>' +
+              '<b style="color:var(--na-gold); font-size:12.5px;">' + sm.name + '</b>' +
               '<div style="display:flex; gap:4px;">' +
                 '<button class="na-btn" style="padding:2px 7px; font-size:11px;" onclick="Aetheria.UI.selectAllLessonsInSubject(\'' + sm.key + '\', true)">全選</button>' +
                 '<button class="na-btn" style="padding:2px 7px; font-size:11px;" onclick="Aetheria.UI.selectAllLessonsInSubject(\'' + sm.key + '\', false)">全關</button>' +
@@ -918,9 +931,28 @@ window.Aetheria = window.Aetheria || {};
 
           body.appendChild(card);
         });
+
+        // 題型篩選開關（支援開關「中文・字塊拼詞」等所有題型）
+        const typeCard = document.createElement("div");
+        typeCard.className = "sys-card";
+        const typeBtns = (Bridge.QUIZ_TYPE_CATALOG || []).map(function(tp) {
+          const on = s.activeQuizTypes[tp.key] !== false;
+          return '<button class="na-btn ' + (on ? 'highlight' : '') + '" style="padding:4px 6px; font-size:11px; text-align:left;" ' +
+            'onclick="Aetheria.UI.toggleQuizType(\'' + tp.key + '\')">' +
+            (on ? "☑ " : "☐ ") + tp.label +
+          '</button>';
+        }).join("");
+        typeCard.innerHTML =
+          '<div style="color:var(--na-gold); font-weight:900; font-size:12.5px; margin-bottom:5px;">🎯 題型開關篩選（可獨立開關字塊拼詞／串字）</div>' +
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">' + typeBtns + '</div>';
+        body.appendChild(typeCard);
       }
 
       else if (tab === "preview") {
+        if (!Bridge.LESSON_CATALOG || Bridge.LESSON_CATALOG.length === 0) {
+          body.innerHTML += '<div class="sys-card">目前尚未載入任何課程題庫。</div>';
+          return;
+        }
         const curUnit = previewUnitKey || Bridge.LESSON_CATALOG[0].key;
         const unitBar = document.createElement("div");
         unitBar.style.cssText = "display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;";
@@ -928,26 +960,31 @@ window.Aetheria = window.Aetheria || {};
           const btn = document.createElement("button");
           btn.className = "na-btn" + (l.key === curUnit ? " highlight" : "");
           btn.style.cssText = "font-size:11px; padding:4px 7px;";
-          btn.innerText = l.name.split(" ")[0];
+          btn.innerText = l.name.length > 14 ? l.name.slice(0, 13) + "…" : l.name;
           btn.onclick = function() { self.openSettingsModal("preview", l.key); };
           unitBar.appendChild(btn);
         });
         body.appendChild(unitBar);
 
-        const unitQuestions = Bridge.getAllQuestions().filter(function(q) { return q.unitKey === curUnit; });
+        const unitQuestions = allQ.filter(function(q) { return q.unitKey === curUnit; });
+        if (unitQuestions.length === 0) {
+          const emptyCard = document.createElement("div");
+          emptyCard.className = "sys-card";
+          emptyCard.innerText = "此單元暫無題目。";
+          body.appendChild(emptyCard);
+        }
         unitQuestions.forEach(function(q, idx) {
           const btn = document.createElement("button");
           btn.className = "na-btn";
           btn.style.cssText = "width:100%; text-align:left; padding:7px 10px; margin-bottom:4px; font-size:12px;";
           const shortPrompt = String(q.prompt || "").replace(/\n/g, " ").slice(0, 34);
-          btn.innerHTML = (idx + 1) + ". <b>[" + q.typeLabel + "]</b> " + shortPrompt + "...";
+          btn.innerHTML = (idx + 1) + ". <b>[" + q.typeLabel + "]</b> " + shortPrompt + (String(q.prompt || "").length > 34 ? "..." : "");
           btn.onclick = function() { window.Aetheria.Battle.startBattle(null, "combat", q.id); };
           body.appendChild(btn);
         });
       }
 
       else if (tab === "report") {
-        const allQ = Bridge.getAllQuestions();
         const topCard = document.createElement("div");
         topCard.className = "sys-card-scroll";
         topCard.innerHTML = '<b>全題庫掌握度報告（最高連勝紀錄：' + (s.maxStreak || 0) + ' 題｜錯題本：' + ((s.wrongBook && s.wrongBook.length) || 0) + ' 題）</b>';
@@ -969,9 +1006,10 @@ window.Aetheria = window.Aetheria || {};
           row.className = "sys-card";
           row.style.display = "flex";
           row.style.justifyContent = "space-between";
+          row.style.alignItems = "center";
           row.innerHTML =
             '<span><b>' + les.name + '</b></span>' +
-            '<span style="color:var(--na-gold); font-weight:bold;">' + mastered + '/' + qs.length + ' (' + pct + '%) ★' + stars + '</span>';
+            '<span style="color:var(--na-gold); font-weight:bold; white-space:nowrap;">' + mastered + '/' + qs.length + ' (' + pct + '%) ★' + stars + '</span>';
           body.appendChild(row);
         });
       }
