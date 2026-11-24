@@ -1,8 +1,8 @@
 /* ============================================================================
- * Project J：艾瑟瑞亞的破曉 — 六大題型互動組件、免費語音朗讀與星象調頻引擎 (quiz-widgets.js - v7.4)
- * 更新：1.內建免費 Web Speech 語音引擎 (window.Aetheria.TTS)，支援英式英語 (en-GB) 與廣東話/普通話 (zh-HK/zh-CN)
- *       2.每道題目頂部自動加入「🔊 聽發音 / 讀句子 / 讀題目」按鈕，英文串字支援自動朗讀
- *       3.保留原版英文逐字母串字排版、中文緊湊字塊拼詞方格與星象動態題數
+ * Project J：艾瑟瑞亞的破曉 — 六大題型互動組件、免費語音朗讀與星象調頻引擎 (quiz-widgets.js - v7.5)
+ * 更新：1.英文串字 (eng_tile_spell)：維持原版逐字母串字，加入安全換行與動態格寬防止長詞切邊
+ *       2.星象調頻：新增「📕 戰鬥只出錯題本」開關、四大科目折疊收合與題型開關篩選
+ *       3.內建免費 Web Speech 語音引擎 (window.Aetheria.TTS) 與中文緊湊字塊拼詞方格
  * ============================================================================ */
 window.Aetheria = window.Aetheria || {};
 
@@ -24,9 +24,9 @@ window.Aetheria = window.Aetheria || {};
 
   // ================= 0. 免費瀏覽器語音朗讀引擎 (Web Speech API) =================
   function injectTtsStyles() {
-    if (document.getElementById("quiz-tts-v74-styles")) return;
+    if (document.getElementById("quiz-tts-v75-styles")) return;
     const style = document.createElement("style");
-    style.id = "quiz-tts-v74-styles";
+    style.id = "quiz-tts-v75-styles";
     style.textContent =
       ".quiz-meta { align-items: center; gap: 4px; flex-wrap: wrap; }" +
       ".quiz-speak-btn {" +
@@ -49,7 +49,7 @@ window.Aetheria = window.Aetheria || {};
   }
 
   let _cachedVoices = [];
-  let _activeUtterance = null; // 防止 Chrome 長句朗讀中途被 GC 回收
+  let _activeUtterance = null;
 
   function refreshVoices() {
     if (!("speechSynthesis" in window)) return [];
@@ -243,7 +243,6 @@ window.Aetheria = window.Aetheria || {};
       if (subjTag) subjTag.innerText = "[" + (q.subjectLabel || "知識共鳴") + "]";
       if (typeTag) typeTag.innerText = q.typeLabel || "詠唱檢定";
 
-      // 在題目標題列動態掛載免費「🔊 朗讀」按鈕
       const metaBar = subjTag && subjTag.parentElement;
       if (metaBar && TTS.isSupported()) {
         let speakBtn = document.getElementById("btn-quiz-speak");
@@ -262,7 +261,6 @@ window.Aetheria = window.Aetheria || {};
           TTS.speakQuestion(q, speakBtn);
         };
 
-        // 英文串字自動讀出發音（若設定開啟）
         if (q.type === "eng_tile_spell" && TTS.getPrefs().autoEngSpell) {
           this._autoSpeakTimer = setTimeout(function() {
             if (QuizUI.currentQuestion === q) {
@@ -311,7 +309,7 @@ window.Aetheria = window.Aetheria || {};
       }
     },
 
-    // ================= 1. 英文串字組件 (維持原版：純答題空位 + 退回鍵 + 6個干擾字母塊) =================
+    // ================= 1. 英文串字組件 (保留原版逐字母玩法 + 安全換行防長詞切邊) =================
     renderEngTileSpell: function(q, area) {
       const self = this;
       const rawPhrase = String(q.answer || "").trim();
@@ -331,6 +329,7 @@ window.Aetheria = window.Aetheria || {};
       });
 
       const totalLetters = cleanLetters.length;
+      const maxWordLen = words.reduce(function(m, w) { return Math.max(m, w.length); }, 1);
       const filled = new Array(totalLetters).fill(null);
       const historyStack = [];
 
@@ -348,10 +347,10 @@ window.Aetheria = window.Aetheria || {};
       }));
 
       const wrapper = document.createElement("div");
-      wrapper.style.cssText = "display:flex; flex-direction:column; gap:6px;";
+      wrapper.style.cssText = "display:flex; flex-direction:column; gap:6px; width:100%;";
 
       const slotsRow = document.createElement("div");
-      slotsRow.style.cssText = "display:flex; flex-wrap:wrap; gap:12px; justify-content:center; align-items:center; background:#141013; border:2px solid var(--na-wood-mid); border-radius:6px; padding:8px; min-height:46px;";
+      slotsRow.className = "eng-spell-slots-row";
 
       const bankRow = document.createElement("div");
       bankRow.style.cssText = "display:flex; flex-wrap:wrap; gap:5px; justify-content:center; max-height:115px; overflow-y:auto; padding:2px;";
@@ -375,17 +374,17 @@ window.Aetheria = window.Aetheria || {};
       function refreshUI() {
         slotsRow.innerHTML = "";
         const nextEmptyIdx = filled.findIndex(function(x) { return x === null; });
+        const boxSize = maxWordLen >= 13 ? "20px" : (totalLetters > 14 ? "22px" : "27px");
+        const fontSize = maxWordLen >= 13 ? "13px" : (totalLetters > 14 ? "14px" : "16px");
 
         wordSlotMeta.forEach(function(wIdxs) {
           const wordGroup = document.createElement("div");
-          wordGroup.style.cssText = "display:inline-flex; gap:3px; align-items:center;";
+          wordGroup.className = "eng-word-group";
 
           wIdxs.forEach(function(flatIdx) {
             const cell = document.createElement("div");
             const val = filled[flatIdx];
             const isNext = (flatIdx === nextEmptyIdx);
-            const boxSize = totalLetters > 14 ? "23px" : "28px";
-            const fontSize = totalLetters > 14 ? "14px" : "16px";
             cell.style.cssText =
               "width:" + boxSize + "; height:" + boxSize + "; border-bottom:3px solid " + (val ? "var(--na-gold)" : (isNext ? "#5ac54f" : "#8ce0ff")) + ";" +
               "background:" + (val ? "#2b2118" : (isNext ? "#1e3a2f" : "#1e293b")) + "; color:#ffd166; font-weight:900; font-size:" + fontSize + ";" +
@@ -1065,7 +1064,7 @@ window.Aetheria = window.Aetheria || {};
 
   window.Aetheria.QuizUI = QuizUI;
 
-  // ================= 7. 星象調頻（單/多選課次、題型開關、語音設定）與全屏切換 =================
+  // ================= 7. 星象調頻（只溫錯題開關、科目折疊收合、題型開關、語音設定） =================
   function attachAstrolabeUpgrade() {
     if (!window.Aetheria.UI) return;
     const UI = window.Aetheria.UI;
@@ -1081,6 +1080,53 @@ window.Aetheria = window.Aetheria || {};
           else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         }
       } catch (e) {}
+    };
+
+    UI.toggleWrongOnlyMode = function() {
+      const s = window.Aetheria.State.data;
+      const Bridge = window.Aetheria.QuizBridge;
+      Bridge.ensureQuizSettings(s);
+
+      if (!s.wrongOnlyMode) {
+        const validWrongs = Bridge.getValidWrongBook ? Bridge.getValidWrongBook(s) : [];
+        if (validWrongs.length === 0) {
+          this.showToast("🌟 錯題本目前是空的！戰鬥將自動使用智慧權重出題。");
+          return;
+        }
+        s.wrongOnlyMode = true;
+        this.showToast("📕 已開啟「戰鬥只出錯題本」(" + validWrongs.length + " 題待清零)！");
+      } else {
+        s.wrongOnlyMode = false;
+        this.showToast("已切回常規智慧權重選課出題。");
+      }
+      window.Aetheria.Audio.sfxTalkBlip();
+      window.Aetheria.State.save();
+      this.openSettingsModal("astrolabe");
+    };
+
+    UI.toggleSubjectCollapse = function(subjKey) {
+      const s = window.Aetheria.State.data;
+      if (!s.collapsedSubjects || typeof s.collapsedSubjects !== "object") {
+        s.collapsedSubjects = { _types: true };
+      }
+      s.collapsedSubjects[subjKey] = !Boolean(s.collapsedSubjects[subjKey]);
+      window.Aetheria.Audio.sfxTalkBlip();
+      window.Aetheria.State.save();
+      this.openSettingsModal("astrolabe");
+    };
+
+    UI.setAllSubjectsCollapsed = function(collapsed) {
+      const s = window.Aetheria.State.data;
+      s.collapsedSubjects = {
+        chinese: collapsed,
+        english: collapsed,
+        humanities: collapsed,
+        science: collapsed,
+        _types: collapsed
+      };
+      window.Aetheria.Audio.sfxTalkBlip();
+      window.Aetheria.State.save();
+      this.openSettingsModal("astrolabe");
     };
 
     UI.setLessonSelectMode = function(mode) {
@@ -1170,8 +1216,12 @@ window.Aetheria = window.Aetheria || {};
       const S = window.Aetheria.Data.Sprites;
       const Bridge = window.Aetheria.QuizBridge;
       Bridge.ensureQuizSettings(s);
+      if (!s.collapsedSubjects || typeof s.collapsedSubjects !== "object") {
+        s.collapsedSubjects = { _types: true };
+      }
       const self = this;
       const allQ = Bridge.getAllQuestions();
+      const validWrongs = Bridge.getValidWrongBook ? Bridge.getValidWrongBook(s) : [];
 
       this.setActivePanel("panel-modal");
       document.getElementById("modal-title").innerHTML = S.iconHtml("icon_gear") + "系統設定與星象調頻 (共 " + allQ.length + " 題)";
@@ -1196,70 +1246,121 @@ window.Aetheria = window.Aetheria || {};
       body.appendChild(tabBar);
 
       if (tab === "astrolabe") {
+        // 1. 📕 戰鬥只出錯題本衝刺開關
+        const wrongOn = Boolean(s.wrongOnlyMode);
+        const wrongBanner = document.createElement("div");
+        wrongBanner.className = "astro-wrong-banner" + (wrongOn ? " active" : "");
+        wrongBanner.innerHTML =
+          '<div style="flex:1; min-width:0;">' +
+            '<b style="color:' + (wrongOn ? '#ffb3ba' : '#ffd166') + '; font-size:12.5px;">📕 戰鬥只出錯題本 (待複習 ' + validWrongs.length + ' 題)</b>' +
+            '<div style="font-size:11px; color:#cbd5e1; margin-top:2px;">' +
+              (wrongOn ? '進行中：打怪只抽錯題本，答對即移出並清零！' : '開啟後集中重溫錯題，清完自動恢復常規選課') +
+            '</div>' +
+          '</div>' +
+          '<button class="na-btn ' + (wrongOn ? 'highlight' : '') + '" style="padding:5px 10px; font-size:12px; white-space:nowrap;" onclick="Aetheria.UI.toggleWrongOnlyMode()">' +
+            (wrongOn ? '已開啟 ✓' : '開啟衝刺') +
+          '</button>';
+        body.appendChild(wrongBanner);
+
+        // 2. 單選 / 多選課次 ＆ 全部展開 / 收合
         const isSingle = (s.lessonSelectMode === "single");
         const modeBox = document.createElement("div");
         modeBox.className = "sys-card-scroll";
         modeBox.innerHTML =
-          '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-            '<b>選課模式：</b>' +
-            '<div style="display:flex; gap:6px;">' +
-              '<button class="na-btn ' + (isSingle ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.setLessonSelectMode(\'single\')">🎯 單選課次</button>' +
-              '<button class="na-btn ' + (!isSingle ? 'highlight' : '') + '" style="padding:4px 10px;" onclick="Aetheria.UI.setLessonSelectMode(\'multi\')">☑️ 多選課次</button>' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">' +
+            '<div style="display:flex; gap:4px;">' +
+              '<button class="na-btn ' + (isSingle ? 'highlight' : '') + '" style="padding:4px 8px; font-size:11.5px;" onclick="Aetheria.UI.setLessonSelectMode(\'single\')">🎯 單選課次</button>' +
+              '<button class="na-btn ' + (!isSingle ? 'highlight' : '') + '" style="padding:4px 8px; font-size:11.5px;" onclick="Aetheria.UI.setLessonSelectMode(\'multi\')">☑️ 多選課次</button>' +
+            '</div>' +
+            '<div style="display:flex; gap:4px;">' +
+              '<button class="na-btn" style="padding:4px 7px; font-size:11px;" onclick="Aetheria.UI.setAllSubjectsCollapsed(false)">全部展開</button>' +
+              '<button class="na-btn" style="padding:4px 7px; font-size:11px;" onclick="Aetheria.UI.setAllSubjectsCollapsed(true)">全部收合</button>' +
             '</div>' +
           '</div>';
         body.appendChild(modeBox);
 
+        // 3. 四大科目可折疊卡片
         const cntBySubj = function(k) { return allQ.filter(function(q) { return q.subject === k; }).length; };
         const engVocabCnt = (window.Aetheria.QuestionBank && window.Aetheria.QuestionBank.English && window.Aetheria.QuestionBank.English.VOCAB) ? window.Aetheria.QuestionBank.English.VOCAB.length : 0;
 
         const subjMeta = [
-          { key: "chinese",    name: "中文科（共" + cntBySubj("chinese") + "題｜解釋・填充・字塊拼詞）" },
-          { key: "english",    name: "英文科（" + engVocabCnt + " Vocab / " + cntBySubj("english") + "題｜字塊串字・填充）" },
-          { key: "humanities", name: "人文科（共" + cntBySubj("humanities") + "題｜選擇・填充・分類・看圖）" },
-          { key: "science",    name: "科學科（共" + cntBySubj("science") + "題｜選擇・填充・分類・看圖）" }
+          { key: "chinese",    name: "中文科（" + cntBySubj("chinese") + "題｜解釋・填充・拼詞）" },
+          { key: "english",    name: "英文科（" + engVocabCnt + "詞/" + cntBySubj("english") + "題｜串字・填充）" },
+          { key: "humanities", name: "人文科（" + cntBySubj("humanities") + "題｜全六大題型）" },
+          { key: "science",    name: "科學科（" + cntBySubj("science") + "題｜全六大題型）" }
         ];
 
         subjMeta.forEach(function(sm) {
           const subjOn = Boolean(s.activeSubjects[sm.key]);
           const lessons = Bridge.LESSON_CATALOG.filter(function(l) { return l.subject === sm.key; });
+          const activeCnt = lessons.filter(function(l) { return subjOn && Boolean(s.activeLessons[l.key]); }).length;
+          const isCollapsed = Boolean(s.collapsedSubjects[sm.key]);
 
           const card = document.createElement("div");
           card.className = "sys-card";
 
-          let lessonsHtml = lessons.map(function(les) {
-            const on = subjOn && Boolean(s.activeLessons[les.key]);
-            const mark = isSingle ? (on ? "◉ " : "○ ") : (on ? "☑ " : "☐ ");
-            return '<button class="na-btn ' + (on ? 'highlight' : '') + '" style="padding:5px 8px; font-size:12px; text-align:left;" ' +
-              'onclick="Aetheria.UI.toggleLessonUnit(\'' + les.key + '\', \'' + sm.key + '\')">' +
-              mark + les.name + ' <span style="opacity:0.8;font-size:11px;">(' + les.count + '題)</span>' +
-            '</button>';
-          }).join("");
+          let lessonsHtml = "";
+          if (!isCollapsed) {
+            lessonsHtml =
+              '<div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:6px; padding-top:6px; border-top:1px solid #3d3136;">' +
+              lessons.map(function(les) {
+                const on = subjOn && Boolean(s.activeLessons[les.key]);
+                const mark = isSingle ? (on ? "◉ " : "○ ") : (on ? "☑ " : "☐ ");
+                return '<button class="na-btn ' + (on ? 'highlight' : '') + '" style="padding:5px 8px; font-size:12px; text-align:left;" ' +
+                  'onclick="Aetheria.UI.toggleLessonUnit(\'' + les.key + '\', \'' + sm.key + '\')">' +
+                  mark + les.name + ' <span style="opacity:0.8;font-size:11px;">(' + les.count + '題)</span>' +
+                '</button>';
+              }).join("") +
+              '</div>';
+          }
 
           card.innerHTML =
-            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #3d3136;">' +
-              '<b style="color:var(--na-gold); font-size:12.5px;">' + sm.name + '</b>' +
-              '<div style="display:flex; gap:4px;">' +
-                '<button class="na-btn" style="padding:2px 7px; font-size:11px;" onclick="Aetheria.UI.selectAllLessonsInSubject(\'' + sm.key + '\', true)">全選</button>' +
-                '<button class="na-btn" style="padding:2px 7px; font-size:11px;" onclick="Aetheria.UI.selectAllLessonsInSubject(\'' + sm.key + '\', false)">全關</button>' +
+            '<div class="astro-subj-header" onclick="Aetheria.UI.toggleSubjectCollapse(\'' + sm.key + '\')">' +
+              '<div class="astro-subj-title">' +
+                '<span class="astro-subj-arrow">' + (isCollapsed ? '▶' : '▼') + '</span>' +
+                '<span>' + sm.name + '</span>' +
+              '</div>' +
+              '<div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">' +
+                '<span class="astro-subj-count">' + activeCnt + '/' + lessons.length + '</span>' +
+                '<button class="na-btn" style="padding:2px 6px; font-size:11px;" onclick="event.stopPropagation(); Aetheria.UI.selectAllLessonsInSubject(\'' + sm.key + '\', true)">全選</button>' +
+                '<button class="na-btn" style="padding:2px 6px; font-size:11px;" onclick="event.stopPropagation(); Aetheria.UI.selectAllLessonsInSubject(\'' + sm.key + '\', false)">全關</button>' +
               '</div>' +
             '</div>' +
-            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">' + lessonsHtml + '</div>';
+            lessonsHtml;
 
           body.appendChild(card);
         });
 
+        // 4. 可折疊題型開關篩選
+        const typesCollapsed = Boolean(s.collapsedSubjects._types);
+        const allTypes = Bridge.QUIZ_TYPE_CATALOG || [];
+        const activeTypesCnt = allTypes.filter(function(tp) { return s.activeQuizTypes[tp.key] !== false; }).length;
         const typeCard = document.createElement("div");
         typeCard.className = "sys-card";
-        const typeBtns = (Bridge.QUIZ_TYPE_CATALOG || []).map(function(tp) {
-          const on = s.activeQuizTypes[tp.key] !== false;
-          return '<button class="na-btn ' + (on ? 'highlight' : '') + '" style="padding:4px 6px; font-size:11px; text-align:left;" ' +
-            'onclick="Aetheria.UI.toggleQuizType(\'' + tp.key + '\')">' +
-            (on ? "☑ " : "☐ ") + tp.label +
-          '</button>';
-        }).join("");
+
+        let typesBodyHtml = "";
+        if (!typesCollapsed) {
+          typesBodyHtml =
+            '<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:6px; padding-top:6px; border-top:1px solid #3d3136;">' +
+            allTypes.map(function(tp) {
+              const on = s.activeQuizTypes[tp.key] !== false;
+              return '<button class="na-btn ' + (on ? 'highlight' : '') + '" style="padding:4px 6px; font-size:11px; text-align:left;" ' +
+                'onclick="Aetheria.UI.toggleQuizType(\'' + tp.key + '\')">' +
+                (on ? "☑ " : "☐ ") + tp.label +
+              '</button>';
+            }).join("") +
+            '</div>';
+        }
+
         typeCard.innerHTML =
-          '<div style="color:var(--na-gold); font-weight:900; font-size:12.5px; margin-bottom:5px;">🎯 題型開關篩選（可獨立開關字塊拼詞／串字）</div>' +
-          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:4px;">' + typeBtns + '</div>';
+          '<div class="astro-subj-header" onclick="Aetheria.UI.toggleSubjectCollapse(\'_types\')">' +
+            '<div class="astro-subj-title">' +
+              '<span class="astro-subj-arrow">' + (typesCollapsed ? '▶' : '▼') + '</span>' +
+              '<span>🎯 題型開關篩選（字塊拼詞／串字／分類等）</span>' +
+            '</div>' +
+            '<span class="astro-subj-count">' + activeTypesCnt + '/' + allTypes.length + '</span>' +
+          '</div>' +
+          typesBodyHtml;
         body.appendChild(typeCard);
       }
 
@@ -1302,7 +1403,7 @@ window.Aetheria = window.Aetheria || {};
       else if (tab === "report") {
         const topCard = document.createElement("div");
         topCard.className = "sys-card-scroll";
-        topCard.innerHTML = '<b>全題庫掌握度報告（最高連勝紀錄：' + (s.maxStreak || 0) + ' 題｜錯題本：' + ((s.wrongBook && s.wrongBook.length) || 0) + ' 題）</b>';
+        topCard.innerHTML = '<b>全題庫掌握度報告（最高連勝紀錄：' + (s.maxStreak || 0) + ' 題｜錯題本：' + validWrongs.length + ' 題）</b>';
         body.appendChild(topCard);
 
         Bridge.LESSON_CATALOG.forEach(function(les) {
